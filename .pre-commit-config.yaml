@@ -1,0 +1,33 @@
+repos:
+  - repo: https://github.com/psf/black
+    rev: 25.12.0
+    hooks:
+      - id: black
+        language_version: python3.12
+        additional_dependencies: []
+
+  - repo: https://github.com/charliermarsh/ruff-pre-commit
+    rev: v0.14.10
+    hooks:
+      - id: ruff
+        args: ["--fix"]
+
+  - repo: local
+    hooks:
+      - id: pytest
+        name: run unit tests
+        entry: bash -c 'cd "$(git rev-parse --show-toplevel)" && pytest --tb=short -v'
+        language: system
+        types: [python]
+        pass_filenames: false
+
+  # HOOK for OPC UA specific runs
+  - repo: local
+    hooks:
+      - id: opcua-tests
+        name: Run OPC UA tests first
+        entry: bash -c 'cd "$(git rev-parse --show-toplevel)" && python run_tests.py --opcua-only'
+        language: system
+        types: [python]
+        pass_filenames: false
+        stages: [push]  # Run on push, not on every commit
