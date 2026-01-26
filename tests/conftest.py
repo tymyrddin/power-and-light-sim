@@ -1,28 +1,45 @@
 # tests/conftest.py
 import pytest
+from unittest.mock import patch
+
+from components.time.simulation_time import SimulationTime
 
 
-def pytest_collection_modifyitems(config, items):
-    """Ensure OPC UA tests run first."""
-    # Sort by marker priority
-    marker_priority = {"first": 0, "second": 1, "third": 2}
+@pytest.fixture(autouse=True)
+def reset_simulation_time_singleton():
+    """
+    SimulationTime is a singleton. Reset between tests or enjoy chaos.
+    """
+    SimulationTime._instance = None
+    yield
+    SimulationTime._instance = None
 
-    def get_priority(item):
-        for marker in item.iter_markers():
-            if marker.name in marker_priority:
-                return marker_priority[marker.name]
-        return 999  # Default low priority
 
-    items.sort(key=get_priority)
+@pytest.fixture
+def mock_config_realtime():
+    with patch("components.time.simulation_time.ConfigLoader") as mock_loader:
+        mock_loader.return_value.load_all.return_value = {
+            "simulation": {
+                "runtime": {
+                    "update_interval": 0.01,
+                    "realtime": True,
+                    "time_acceleration": 1.0,
+                }
+            }
+        }
+        yield
 
-    # Also sort OPC UA tests to the front even without markers
-    opcua_items = []
-    other_items = []
 
-    for item in items:
-        if "opcua" in item.nodeid.lower():
-            opcua_items.append(item)
-        else:
-            other_items.append(item)
-
-    items[:] = opcua_items + other_items
+@pytest.fixture
+def mock_config_accelerated():
+    with patch("components.time.simulation_time.ConfigLoader") as mock_loader:
+        mock_loader.return_value.load_all.return_value = {
+            "simulation": {
+                "runtime": {
+                    "update_interval": 0.01,
+                    "realtime": False,
+                    "time_acceleration": 10.0,
+                }
+            }
+        }
+        yield

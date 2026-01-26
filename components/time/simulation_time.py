@@ -1,3 +1,4 @@
+# time/simulation_time.py
 import asyncio
 import logging
 import time
@@ -35,7 +36,7 @@ class TimeState:
     paused: bool = False
     update_interval: float = 0.01  # default, overridden by YAML
     total_pause_duration: float = 0.0
-    pause_start: Optional[float] = None
+    pause_start: float | None = None
 
 
 # ----------------------------------------------------------------
@@ -70,7 +71,7 @@ class SimulationTime:
             self.state: TimeState
             self._lock: asyncio.Lock
             self._running: bool = False
-            self._update_task: Optional[asyncio.Task] = None
+            self._update_task: asyncio.Task | None = None
 
             self._setup()
 
@@ -79,7 +80,7 @@ class SimulationTime:
         self.state = TimeState()
         self._lock = asyncio.Lock()
         self._running = False
-        self._update_task: Optional[asyncio.Task] = None
+        self._update_task: asyncio.Task | None = None
 
         # Load from YAML
         self._load_config()
@@ -291,9 +292,7 @@ class SimulationTime:
             ValueError: If multiplier is <= 0 or exceeds maximum
         """
         if multiplier <= 0:
-            raise ValueError(
-                f"Speed multiplier must be > 0, got {multiplier}"
-            )
+            raise ValueError(f"Speed multiplier must be > 0, got {multiplier}")
 
         if multiplier > self._MAX_SPEED_MULTIPLIER:
             raise ValueError(
@@ -306,9 +305,7 @@ class SimulationTime:
             self.state.speed_multiplier = multiplier
 
             # Adjust wall time start to maintain continuity
-            self.state.wall_time_start = time.time() - (
-                current_sim_time / multiplier
-            )
+            self.state.wall_time_start = time.time() - (current_sim_time / multiplier)
 
         logger.info(f"SimulationTime speed changed: {old_speed}x -> {multiplier}x")
 
@@ -323,9 +320,7 @@ class SimulationTime:
             RuntimeError: If not in STEPPED or PAUSED mode
         """
         if delta_seconds < 0:
-            raise ValueError(
-                f"Cannot step negative time: {delta_seconds}"
-            )
+            raise ValueError(f"Cannot step negative time: {delta_seconds}")
 
         async with self._lock:
             if self.state.mode not in [TimeMode.STEPPED, TimeMode.PAUSED]:
@@ -337,7 +332,9 @@ class SimulationTime:
             self.state.simulation_time += delta_seconds
             self.state.wall_time_elapsed = time.time() - self.state.wall_time_start
 
-        logger.debug(f"SimulationTime stepped by {delta_seconds}s to {self.state.simulation_time}s")
+        logger.debug(
+            f"SimulationTime stepped by {delta_seconds}s to {self.state.simulation_time}s"
+        )
 
     # ----------------------------------------------------------------
     # Internal time loop
@@ -365,7 +362,9 @@ class SimulationTime:
                 sim_delta = wall_delta * self.state.speed_multiplier
                 self.state.simulation_time += sim_delta
                 self.state.wall_time_elapsed = (
-                    current_time - self.state.wall_time_start - self.state.total_pause_duration
+                    current_time
+                    - self.state.wall_time_start
+                    - self.state.total_pause_duration
                 )
 
     # ----------------------------------------------------------------
@@ -432,10 +431,7 @@ async def wait_simulation_time(seconds: float):
 
             # Calculate appropriate sleep time
             if speed > 0:
-                sleep_time = min(
-                    sim_time.state.update_interval,
-                    remaining / speed
-                )
+                sleep_time = min(sim_time.state.update_interval, remaining / speed)
             else:
                 sleep_time = sim_time.state.update_interval
 

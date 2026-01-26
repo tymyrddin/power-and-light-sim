@@ -1,23 +1,25 @@
-# Simulation Time Management
+# Simulation time management
 
-This directory contains the time management system for the ICS simulator. Because industrial control systems operate on precise timing—PLCs scan at millisecond intervals, turbines spin at exact RPMs, and safety systems must respond within defined time windows—the simulator needs robust time control.
+This directory contains the time management system for the ICS simulator. Industrial control systems operate 
+on precise timing. PLCs scan at millisecond intervals, turbines spin at exact RPMs, and safety systems must respond 
+within defined time windows—the simulator needs robust time control.
 
 ## Overview
 
-The `simulation_time.py` module provides a singleton time manager that can run in multiple modes, allowing you to:
+The `simulation_time.py` module provides a singleton time manager that can run in multiple modes, allowing for:
 
-- **Test in real-time** - Match real-world timing for realistic behavior
-- **Accelerate testing** - Run scenarios faster than real-time (e.g., 10x speed)
-- **Step through time** - Manually advance time for deterministic testing
-- **Pause and resume** - Freeze the simulation without losing state
+- **Testing in real-time** - Match real-world timing for realistic behaviour
+- **Accelerating testing** - Run scenarios faster than real-time (e.g., 10x speed)
+- **Stepping through time** - Manually advance time for deterministic testing
+- **Pausing and resuming** - Freeze the simulation without losing state
 
 ## Architecture
 
-### Core Components
+### Core components
 
 **`SimulationTime` (Singleton)**
 - Central time authority for the entire simulation
-- Manages simulation time independently from wall-clock time
+- Manages simulation time independently of wall-clock time
 - Thread-safe with asyncio locks
 - Configured from `config/simulation.yml`
 
@@ -34,7 +36,7 @@ The `simulation_time.py` module provides a singleton time manager that can run i
 
 ## Usage
 
-### Basic Time Queries
+### Basic time queries
 
 ```python
 from components.time.simulation_time import SimulationTime
@@ -56,7 +58,7 @@ elapsed = sim_time.elapsed()
 wall_elapsed = sim_time.wall_elapsed()
 ```
 
-### Running the Time System
+### Running the time system
 
 ```python
 import asyncio
@@ -76,7 +78,7 @@ async def main():
 asyncio.run(main())
 ```
 
-### Time Control
+### Time control
 
 ```python
 # Pause the simulation
@@ -92,7 +94,7 @@ await sim_time.set_speed(2.0)
 await sim_time.reset()
 ```
 
-### Stepped Mode
+### Stepped mode
 
 For deterministic testing where you need complete control:
 
@@ -107,7 +109,7 @@ await sim_time.step(0.1)  # Advance 100ms
 await sim_time.step(1.0)  # Advance 1 second
 ```
 
-### Waiting for Simulation Time
+### Waiting for simulation time
 
 Use the convenience function to wait for simulation time (not wall-clock time):
 
@@ -148,9 +150,9 @@ simulation:
   - `10.0` = 10x faster (useful for long-duration tests)
   - `0.5` = Half speed (useful for debugging)
 
-## Time Modes Explained
+## Time modes explained
 
-### REALTIME Mode
+### REALTIME mode
 
 Simulation time progresses at the same rate as wall-clock time.
 
@@ -175,7 +177,7 @@ async def plc_scan_loop():
         await wait_simulation_time(0.1 - elapsed)
 ```
 
-### ACCELERATED Mode
+### ACCELERATED mode
 
 Simulation time runs faster than wall-clock time.
 
@@ -197,7 +199,7 @@ await wait_simulation_time(86400)  # 24 hours simulation time
 
 **Caution:** External protocols don't speed up. If running at 10x speed and a real Modbus client connects, it will experience the accelerated behavior.
 
-### STEPPED Mode
+### STEPPED mode
 
 Time only advances when explicitly commanded.
 
@@ -222,7 +224,7 @@ await sim_time.step(5.0)   # Advance 5 more seconds
 assert turbine.rpm == expected_rpm_at_6s
 ```
 
-### PAUSED Mode
+### PAUSED mode
 
 Time is frozen but simulation maintains state.
 
@@ -232,9 +234,9 @@ Time is frozen but simulation maintains state.
 - Waiting for operator input
 - Debugging live issues
 
-## Implementation Details
+## Implementation details
 
-### Singleton Pattern
+### Singleton pattern
 
 `SimulationTime` uses a singleton to ensure there's only one time authority:
 
@@ -256,7 +258,7 @@ time2 = SimulationTime()
 assert time1 is time2
 ```
 
-### Thread Safety
+### Thread safety
 
 All state modifications use an asyncio lock:
 
@@ -269,7 +271,7 @@ async def set_speed(self, multiplier: float):
 
 This ensures multiple coroutines can safely query and modify time.
 
-### Time Loop
+### Time loop
 
 In REALTIME and ACCELERATED modes, an internal loop updates time:
 
@@ -288,7 +290,7 @@ async def _time_loop(self):
         self.state.simulation_time += sim_delta
 ```
 
-### Pause Handling
+### Pause handling
 
 When paused, the loop continues running but doesn't advance time:
 
@@ -300,9 +302,9 @@ if self.state.paused:
 
 When resumed, the wall-clock start time is adjusted to account for the pause.
 
-## Practical Examples
+## Practical examples
 
-### PLC Scan Cycle
+### PLC scan cycle
 
 ```python
 class TurbinePLC:
@@ -332,7 +334,7 @@ class TurbinePLC:
             await wait_simulation_time(self.scan_interval)
 ```
 
-### Protocol Timeout Testing
+### Protocol timeout testing
 
 ```python
 async def test_modbus_timeout():
@@ -352,7 +354,7 @@ async def test_modbus_timeout():
         assert 2.9 < elapsed < 3.1  # Verify timeout timing
 ```
 
-### Long-Duration Scenario
+### Long-duration scenario
 
 ```python
 async def test_daily_operations():
@@ -373,7 +375,7 @@ async def test_daily_operations():
     await plant.shutdown()
 ```
 
-### Deterministic Testing
+### Deterministic testing
 
 ```python
 async def test_state_machine():
@@ -397,7 +399,7 @@ async def test_state_machine():
     assert 3590 < turbine.rpm < 3610  # 3600 RPM target
 ```
 
-## Status Monitoring
+## Status monitoring
 
 Get comprehensive time status:
 
@@ -416,9 +418,9 @@ print(status)
 
 The `ratio` field shows the actual simulation-to-wall-clock ratio, useful for verifying acceleration is working correctly.
 
-## Integration with Other Components
+## Integration with other components
 
-### Physics Engines
+### Physics engines
 
 ```python
 class TurbinePhysics:
@@ -428,7 +430,7 @@ class TurbinePhysics:
         self.temperature += self.heat_rate * delta_time
 ```
 
-### Network Protocols
+### Network protocols
 
 ```python
 class ModbusServer:
@@ -442,7 +444,7 @@ class ModbusServer:
             raise TimeoutError("Request processing timeout")
 ```
 
-### Event Scheduling
+### Event scheduling
 
 ```python
 class EventScheduler:
@@ -452,7 +454,7 @@ class EventScheduler:
         await callback()
 ```
 
-## Best Practices
+## TL;DR
 
 1. **Always use simulation time** - Never use `time.time()` or `asyncio.sleep()` directly in simulation code
 2. **Use `wait_simulation_time()`** - For waiting periods in simulation code
@@ -461,9 +463,9 @@ class EventScheduler:
 5. **Monitor time ratio** - Use `get_status()` to verify acceleration is working
 6. **Handle mode transitions** - Be prepared for speed changes during operation
 
-## Common Pitfalls
+## Common pitfalls
 
-### Mixing Time Systems
+### Mixing time systems
 
 ❌ **Wrong:**
 ```python
@@ -476,7 +478,7 @@ await asyncio.sleep(1.0)  # Wall-clock sleep, not simulation time
 await wait_simulation_time(1.0)  # Simulation time aware
 ```
 
-### External Protocol Timing
+### External protocol timing
 
 When real external clients connect, they experience accelerated time:
 
@@ -491,7 +493,7 @@ if external_clients_connected:
     await sim_time.set_speed(1.0)
 ```
 
-### Update Interval Too Large
+### Update interval too large
 
 If `update_interval` is too large, time advancement becomes choppy:
 
@@ -542,7 +544,7 @@ async def test_time_acceleration():
     assert 9.5 < sim_elapsed < 10.5
 ```
 
-## Future Enhancements
+## Future enhancements
 
 Potential improvements to consider:
 

@@ -140,6 +140,6 @@ exclude = [
 # Match Black's formatting style
 profile = "black"
 # Python version
-py_version = "3.12"
+py_version = "312"
 # Project's source directories for proper import classification
 src_paths = ["components", "config", "tests", "tools"]
