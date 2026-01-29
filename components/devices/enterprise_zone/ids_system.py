@@ -1,7 +1,7 @@
-# components/devices/ids_system.py
+# components/devices/enterprise_zone/ids_system.py
 """Industrial IDS/IPS system."""
 
-from components.devices.base_device import BaseDevice
+from components.devices.core.base_device import BaseDevice
 
 
 class IDSSystem(BaseDevice):

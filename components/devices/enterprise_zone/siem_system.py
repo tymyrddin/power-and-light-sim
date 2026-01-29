@@ -1,7 +1,7 @@
 # components/devices/siem_system.py
 """Security Information and Event Management system."""
 
-from components.devices.base_device import BaseDevice
+from components.devices.core.base_device import BaseDevice
 
 
 class SIEMSystem(BaseDevice):

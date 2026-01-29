@@ -1,7 +1,7 @@
-# components/devices/plc/s7_plc.py
+# components/devices/control_zone/plc/vendor_specific/s7_plc.py
 """Siemens S7 PLC device."""
 
-from components.devices.plc.base_plc import BasePLC
+from components.devices.control_zone.plc.generic.base_plc import BasePLC
 
 
 class S7PLC(BasePLC):

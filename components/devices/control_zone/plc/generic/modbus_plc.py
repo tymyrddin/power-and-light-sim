@@ -1,7 +1,7 @@
-# components/devices/plc/modbus_plc.py
+# components/devices/control_zone/plc/generic/modbus_plc.py
 """Generic Modbus PLC device."""
 
-from components.devices.plc.base_plc import BasePLC
+from components.devices.control_zone.plc.generic.base_plc import BasePLC
 
 
 class ModbusPLC(BasePLC):

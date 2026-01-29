@@ -1,7 +1,7 @@
 # components/devices/substation_controller.py
 """Substation automation controller."""
 
-from components.devices.base_device import BaseDevice
+from components.devices.core.base_device import BaseDevice
 
 
 class SubstationController(BaseDevice):

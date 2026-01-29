@@ -26,23 +26,20 @@ import sys
 from pathlib import Path
 from typing import Any
 
-from config.config_loader import ConfigLoader
-from components.state.system_state import SystemState
-from components.state.data_store import DataStore
-from components.time.simulation_time import SimulationTime, wait_simulation_time
 from components.network.network_simulator import NetworkSimulator
-from components.physics.turbine_physics import TurbinePhysics, TurbineParameters
-from components.physics.grid_physics import GridPhysics, GridParameters
+from components.physics.grid_physics import GridParameters, GridPhysics
 from components.physics.power_flow import PowerFlow
+from components.physics.turbine_physics import TurbineParameters, TurbinePhysics
+from components.state.data_store import DataStore
+from components.state.system_state import SystemState
+from components.time.simulation_time import SimulationTime, wait_simulation_time
+from config.config_loader import ConfigLoader
 
 # Configure logging
 logging.basicConfig(
     level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.StreamHandler(),
-        logging.FileHandler('logs/simulation.log')
-    ]
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    handlers=[logging.StreamHandler(), logging.FileHandler("logs/simulation.log")],
 )
 logger = logging.getLogger(__name__)
 
@@ -190,7 +187,7 @@ class SimulatorManager:
                 device_type=device_type,
                 device_id=device_id,
                 protocols=protocols,
-                metadata=metadata
+                metadata=metadata,
             )
 
             # Set device online (in real implementation, protocols would do this)
@@ -215,9 +212,7 @@ class SimulatorManager:
             # Get turbine-specific parameters from metadata if available
             # For now, use defaults
             params = TurbineParameters(
-                rated_speed_rpm=3600,
-                rated_power_mw=50.0,
-                max_safe_speed_rpm=3960
+                rated_speed_rpm=3600, rated_power_mw=50.0, max_safe_speed_rpm=3960
             )
 
             # Create physics engine
@@ -234,7 +229,7 @@ class SimulatorManager:
                 nominal_frequency_hz=50.0,
                 inertia_constant=5000.0,
                 min_frequency_hz=49.0,
-                max_frequency_hz=51.0
+                max_frequency_hz=51.0,
             )
             self.grid_physics = GridPhysics(self.data_store, grid_params)
             await self.grid_physics.initialise()
@@ -264,13 +259,9 @@ class SimulatorManager:
                     continue
 
                 # Expose service in network simulator
-                await self.network_sim.expose_service(
-                    device_name, proto_name, port
-                )
+                await self.network_sim.expose_service(device_name, proto_name, port)
 
-                logger.info(
-                    f"Exposed {proto_name} service: {device_name}:{port}"
-                )
+                logger.info(f"Exposed {proto_name} service: {device_name}:{port}")
 
     async def _log_summary(self) -> None:
         """Log initialisation summary."""
@@ -321,7 +312,9 @@ class SimulatorManager:
         self._simulation_task = asyncio.create_task(self._simulation_loop())
 
         logger.info("Simulation started - physics engines active")
-        logger.info("NOTE: Protocol listeners not implemented yet - devices accessible via state only")
+        logger.info(
+            "NOTE: Protocol listeners not implemented yet - devices accessible via state only"
+        )
 
     async def stop(self) -> None:
         """Stop the simulation gracefully.
@@ -529,7 +522,7 @@ class SimulatorManager:
                 "grid": physics_status.get("grid"),
                 "turbines": turbine_status,
                 "power_flow": self.power_flow is not None,
-            }
+            },
         }
 
     async def _log_status(self) -> None:
@@ -545,8 +538,8 @@ class SimulatorManager:
         )
 
         # Log grid status if available
-        if status['physics']['grid']:
-            grid = status['physics']['grid']
+        if status["physics"]["grid"]:
+            grid = status["physics"]["grid"]
             logger.debug(
                 f"Grid: {grid['frequency_hz']:.3f}Hz, "
                 f"Gen={grid['total_generation_mw']:.1f}MW, "
@@ -633,6 +626,7 @@ class SimulatorManager:
 # ----------------------------------------------------------------
 # Command-line interface
 # ----------------------------------------------------------------
+
 
 async def main():
     """Main entry point."""

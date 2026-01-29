@@ -1,7 +1,7 @@
-# components/devices/plc/ab_logix_plc.py
+# components/devices/control_zone/plc/vendor_specific/ab_logix_plc.py
 """Allen-Bradley (Rockwell) Logix PLC device."""
 
-from components.devices.plc.base_plc import BasePLC
+from components.devices.control_zone.plc.generic.base_plc import BasePLC
 
 
 class ABLogixPLC(BasePLC):
