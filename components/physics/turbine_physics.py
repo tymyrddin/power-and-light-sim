@@ -128,6 +128,7 @@ class TurbinePhysics:
 
         self._last_update_time: float = 0.0
         self._initialised = False
+        self._control_cache: dict[str, Any] = {}  # Cache for control inputs
 
         logger.info(
             f"Turbine physics created: {device_name} "
@@ -165,11 +166,52 @@ class TurbinePhysics:
     # Physics simulation
     # ----------------------------------------------------------------
 
+    async def read_control_inputs(self) -> None:
+        """Read control inputs from DataStore and cache them.
+
+        Should be called before update() to populate the control cache.
+        This allows update() to be synchronous while still accessing
+        async DataStore data.
+        """
+        # Read control inputs from device memory map
+        # These map to specific addresses that protocol handlers write to
+        try:
+            speed_setpoint = await self.data_store.read_memory(
+                self.device_name, "holding_registers[10]"
+            )
+            governor_enabled = await self.data_store.read_memory(
+                self.device_name, "coils[10]"
+            )
+            emergency_trip = await self.data_store.read_memory(
+                self.device_name, "coils[11]"
+            )
+
+            self._control_cache = {
+                "speed_setpoint_rpm": float(speed_setpoint) if speed_setpoint else 0.0,
+                "governor_enabled": (
+                    bool(governor_enabled) if governor_enabled else False
+                ),
+                "emergency_trip": bool(emergency_trip) if emergency_trip else False,
+            }
+        except Exception as e:
+            logger.warning(
+                f"Failed to read control inputs for {self.device_name}: {e}. Using defaults."
+            )
+            self._control_cache = {
+                "speed_setpoint_rpm": 0.0,
+                "governor_enabled": False,
+                "emergency_trip": False,
+            }
+
     def update(self, dt: float) -> None:
         """Update turbine physics for one simulation step.
 
         Called by main simulation loop each update cycle.
-        Reads control inputs, updates physics, writes telemetry.
+        Reads control inputs from cache (populated by read_control_inputs()),
+        updates physics, and modifies internal state.
+
+        Note: Call read_control_inputs() before this method to populate
+        the control cache with current values from DataStore.
 
         Args:
             dt: Time delta in simulation seconds
@@ -219,21 +261,20 @@ class TurbinePhysics:
         await self._write_telemetry()
 
     def _read_control_input(self, name: str, default: Any) -> Any:
-        """Read control input from device memory map (synchronous helper).
+        """Read control input from device memory map.
 
-        Note: This is a synchronous wrapper for reading. In real implementation,
-        you'd cache control inputs read async at start of update cycle.
+        This is a synchronous helper that reads from the cached control inputs
+        that should be populated at the start of each update cycle.
 
         Args:
-            name: Control input name
-            default: Default value if not found
+            name: Control input name (e.g., 'speed_setpoint_rpm', 'governor_enabled')
+            default: Default value if control input not found
 
         Returns:
-            Control input value
+            Control input value from cache or default
         """
-        # For now, return defaults - in full implementation,
-        # main loop would read all inputs async before calling update()
-        return default
+        # Read from control cache (populated by async read before update())
+        return self._control_cache.get(name, default)
 
     def _update_with_governor(self, dt: float, setpoint_rpm: float) -> None:
         """Update shaft speed with governor control active.

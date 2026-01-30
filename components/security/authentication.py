@@ -39,8 +39,10 @@ logger = logging.getLogger(__name__)
 # User roles and permissions
 # ----------------------------------------------------------------
 
+
 class UserRole(Enum):
     """ICS user roles with increasing privilege levels."""
+
     VIEWER = 1  # Read-only access
     OPERATOR = 2  # Normal operations, no configuration
     ENGINEER = 3  # Configuration, programming
@@ -50,6 +52,7 @@ class UserRole(Enum):
 
 class PermissionType(Enum):
     """Types of actions requiring authorisation."""
+
     # Read operations
     VIEW_DATA = "view_data"
     VIEW_ALARMS = "view_alarms"
@@ -120,9 +123,11 @@ ROLE_PERMISSIONS = {
 # User and session management
 # ----------------------------------------------------------------
 
+
 @dataclass
 class User:
     """ICS user account."""
+
     username: str
     role: UserRole
     full_name: str = ""
@@ -135,6 +140,7 @@ class User:
 @dataclass
 class AuthSession:
     """Active authentication session."""
+
     session_id: str
     user: User
     created_at: float  # Simulation time
@@ -151,6 +157,7 @@ class AuthSession:
 @dataclass
 class AuditLogEntry:
     """Audit log entry for security events."""
+
     timestamp: float  # Simulation time
     user: str
     action: str
@@ -163,6 +170,7 @@ class AuditLogEntry:
 # ----------------------------------------------------------------
 # Authentication Manager (Singleton)
 # ----------------------------------------------------------------
+
 
 class AuthenticationManager:
     """
@@ -222,12 +230,41 @@ class AuthenticationManager:
         current_time = self.sim_time.now()
 
         default_users = [
-            User("operator1", UserRole.OPERATOR, "John Operator", "operator1@example.com", created_at=current_time),
-            User("engineer1", UserRole.ENGINEER, "Jane Engineer", "engineer1@example.com", created_at=current_time),
-            User("supervisor1", UserRole.SUPERVISOR, "Bob Supervisor", "supervisor1@example.com",
-                 created_at=current_time),
-            User("admin", UserRole.ADMIN, "Admin User", "admin@example.com", created_at=current_time),
-            User("viewer1", UserRole.VIEWER, "View Only", "viewer1@example.com", created_at=current_time),
+            User(
+                "operator1",
+                UserRole.OPERATOR,
+                "John Operator",
+                "operator1@example.com",
+                created_at=current_time,
+            ),
+            User(
+                "engineer1",
+                UserRole.ENGINEER,
+                "Jane Engineer",
+                "engineer1@example.com",
+                created_at=current_time,
+            ),
+            User(
+                "supervisor1",
+                UserRole.SUPERVISOR,
+                "Bob Supervisor",
+                "supervisor1@example.com",
+                created_at=current_time,
+            ),
+            User(
+                "admin",
+                UserRole.ADMIN,
+                "Admin User",
+                "admin@example.com",
+                created_at=current_time,
+            ),
+            User(
+                "viewer1",
+                UserRole.VIEWER,
+                "View Only",
+                "viewer1@example.com",
+                created_at=current_time,
+            ),
         ]
 
         for user in default_users:
@@ -240,11 +277,11 @@ class AuthenticationManager:
     # ----------------------------------------------------------------
 
     async def create_user(
-            self,
-            username: str,
-            role: UserRole,
-            full_name: str = "",
-            email: str = "",
+        self,
+        username: str,
+        role: UserRole,
+        full_name: str = "",
+        email: str = "",
     ) -> User:
         """Create a new user account."""
         async with self._lock:
@@ -288,10 +325,10 @@ class AuthenticationManager:
     # ----------------------------------------------------------------
 
     async def authenticate(
-            self,
-            username: str,
-            password: str = "",  # Not validated in simulation
-            source_ip: str = "127.0.0.1",
+        self,
+        username: str,
+        password: str = "",  # Not validated in simulation
+        source_ip: str = "127.0.0.1",
     ) -> str | None:
         """
         Authenticate user and create session.
@@ -310,8 +347,12 @@ class AuthenticationManager:
             user = self.users.get(username)
 
             if not user or not user.active:
-                logger.warning(f"Authentication failed for '{username}' from {source_ip}")
-                self._audit_log("AUTHENTICATION", username, "DENIED", "User not found or inactive")
+                logger.warning(
+                    f"Authentication failed for '{username}' from {source_ip}"
+                )
+                self._audit_log(
+                    "AUTHENTICATION", username, "DENIED", "User not found or inactive"
+                )
                 return None
 
             # NOTE: Password validation intentionally skipped in simulation
@@ -319,6 +360,7 @@ class AuthenticationManager:
 
             # Create session
             import uuid
+
             session_id = str(uuid.uuid4())
 
             current_time = self.sim_time.now()
@@ -369,11 +411,11 @@ class AuthenticationManager:
     # ----------------------------------------------------------------
 
     async def authorize(
-            self,
-            session_id: str,
-            action: PermissionType | str,
-            resource: str = "",
-            reason: str = "",
+        self,
+        session_id: str,
+        action: PermissionType | str,
+        resource: str = "",
+        reason: str = "",
     ) -> bool:
         """
         Check if user is authorised for an action.
@@ -428,12 +470,12 @@ class AuthenticationManager:
         return authorized
 
     async def authorize_with_dual_auth(
-            self,
-            session_id_1: str,
-            session_id_2: str,
-            action: PermissionType,
-            resource: str = "",
-            reason: str = "",
+        self,
+        session_id_1: str,
+        session_id_2: str,
+        action: PermissionType,
+        resource: str = "",
+        reason: str = "",
     ) -> bool:
         """
         Dual authorisation (two-person rule) for critical operations.
@@ -490,22 +532,23 @@ class AuthenticationManager:
             return
 
         # Convert audit logs to JSON
-        logs_json = json.dumps([
-            {
-                "timestamp": entry.timestamp,
-                "user": entry.user,
-                "action": entry.action,
-                "resource": entry.resource,
-                "result": entry.result,
-                "reason": entry.reason,
-                "source_ip": entry.source_ip,
-            }
-            for entry in self.audit_log[-1000:]  # Last 1000 entries
-        ])
+        logs_json = json.dumps(
+            [
+                {
+                    "timestamp": entry.timestamp,
+                    "user": entry.user,
+                    "action": entry.action,
+                    "resource": entry.resource,
+                    "result": entry.result,
+                    "reason": entry.reason,
+                    "source_ip": entry.source_ip,
+                }
+                for entry in self.audit_log[-1000:]  # Last 1000 entries
+            ]
+        )
 
         await self.data_store.update_metadata(
-            "authentication_manager",
-            {"audit_logs": logs_json}
+            "authentication_manager", {"audit_logs": logs_json}
         )
 
     # ----------------------------------------------------------------
@@ -513,11 +556,11 @@ class AuthenticationManager:
     # ----------------------------------------------------------------
 
     def _audit_log(
-            self,
-            action: str,
-            user: str,
-            result: str,
-            reason: str = "",
+        self,
+        action: str,
+        user: str,
+        result: str,
+        reason: str = "",
     ) -> None:
         """Add entry to audit log."""
         entry = AuditLogEntry(
@@ -532,12 +575,12 @@ class AuthenticationManager:
 
         # Keep last N entries
         if len(self.audit_log) > self.max_audit_entries:
-            self.audit_log = self.audit_log[-self.max_audit_entries:]
+            self.audit_log = self.audit_log[-self.max_audit_entries :]
 
     async def get_audit_log(
-            self,
-            limit: int = 100,
-            user: str | None = None,
+        self,
+        limit: int = 100,
+        user: str | None = None,
     ) -> list[AuditLogEntry]:
         """Get audit log entries."""
         async with self._lock:
@@ -551,10 +594,11 @@ class AuthenticationManager:
 # Convenience functions for device use
 # ----------------------------------------------------------------
 
+
 async def verify_authorization(
-        authorization: str,
-        action: str | PermissionType,
-        resource: str = "",
+    authorization: str,
+    action: str | PermissionType,
+    resource: str = "",
 ) -> bool:
     """
     Verify authorisation for an action.

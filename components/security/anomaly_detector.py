@@ -36,13 +36,14 @@ from components.state.system_state import SystemState
 from components.time.simulation_time import SimulationTime
 from config.config_loader import ConfigLoader
 
-
 # ----------------------------------------------------------------
 # Anomaly Classification
 # ----------------------------------------------------------------
 
+
 class AnomalyType(Enum):
     """Types of anomalies detected."""
+
     STATISTICAL = "statistical"  # Value outside statistical bounds
     RANGE = "range"  # Value outside allowed range
     RATE_OF_CHANGE = "rate_of_change"  # Value changing too fast
@@ -55,6 +56,7 @@ class AnomalyType(Enum):
 
 class AnomalySeverity(Enum):
     """Severity of detected anomaly."""
+
     LOW = 1  # Minor deviation, informational
     MEDIUM = 2  # Moderate deviation, investigate
     HIGH = 3  # Significant deviation, likely issue
@@ -64,6 +66,7 @@ class AnomalySeverity(Enum):
 # ----------------------------------------------------------------
 # Anomaly Event
 # ----------------------------------------------------------------
+
 
 @dataclass
 class AnomalyEvent:
@@ -99,7 +102,9 @@ class AnomalyEvent:
             "device": self.device,
             "parameter": self.parameter,
             "observed_value": str(self.observed_value),
-            "expected_value": str(self.expected_value) if self.expected_value is not None else None,
+            "expected_value": (
+                str(self.expected_value) if self.expected_value is not None else None
+            ),
             "baseline_mean": self.baseline_mean,
             "baseline_std": self.baseline_std,
             "deviation_magnitude": self.deviation_magnitude,
@@ -112,6 +117,7 @@ class AnomalyEvent:
 # Statistical Baseline
 # ----------------------------------------------------------------
 
+
 @dataclass
 class StatisticalBaseline:
     """Statistical baseline for a parameter."""
@@ -122,8 +128,8 @@ class StatisticalBaseline:
     # Statistical measures
     mean: float = 0.0
     std: float = 0.0
-    min_value: float = float('inf')
-    max_value: float = float('-inf')
+    min_value: float = float("inf")
+    max_value: float = float("-inf")
 
     # Learning
     sample_count: int = 0
@@ -188,6 +194,7 @@ class StatisticalBaseline:
 # Anomaly Detector
 # ----------------------------------------------------------------
 
+
 class AnomalyDetector:
     """
     Multi-method anomaly detection for ICS systems.
@@ -200,9 +207,9 @@ class AnomalyDetector:
     """
 
     def __init__(
-            self,
-            data_store: DataStore,
-            system_state: SystemState,
+        self,
+        data_store: DataStore,
+        system_state: SystemState,
     ):
         """
         Initialise anomaly detector.
@@ -232,7 +239,9 @@ class AnomalyDetector:
         self.roc_limits: dict[tuple[str, str], float] = {}
 
         # Last values (for rate of change detection)
-        self.last_values: dict[tuple[str, str], tuple[float, float]] = {}  # (value, timestamp)
+        self.last_values: dict[tuple[str, str], tuple[float, float]] = (
+            {}
+        )  # (value, timestamp)
 
         # Alarm flood detection
         self.alarm_counts: dict[str, deque] = {}  # device -> timestamps
@@ -252,7 +261,9 @@ class AnomalyDetector:
         self.learning_window = anomaly_cfg.get("learning_window", 1000)
 
         # Alarm flood detection
-        self.alarm_flood_threshold = anomaly_cfg.get("alarm_flood_threshold", 10)  # alarms per minute
+        self.alarm_flood_threshold = anomaly_cfg.get(
+            "alarm_flood_threshold", 10
+        )  # alarms per minute
         self.alarm_flood_window = anomaly_cfg.get("alarm_flood_window", 60.0)  # seconds
 
         # Enable/disable
@@ -263,10 +274,10 @@ class AnomalyDetector:
     # ----------------------------------------------------------------
 
     def add_baseline(
-            self,
-            device: str,
-            parameter: str,
-            learning_window: int | None = None,
+        self,
+        device: str,
+        parameter: str,
+        learning_window: int | None = None,
     ) -> None:
         """
         Add parameter to baseline monitoring.
@@ -286,11 +297,11 @@ class AnomalyDetector:
             self.baselines[key] = baseline
 
     def set_range_limit(
-            self,
-            device: str,
-            parameter: str,
-            min_value: float,
-            max_value: float,
+        self,
+        device: str,
+        parameter: str,
+        min_value: float,
+        max_value: float,
     ) -> None:
         """
         Set allowed range for a parameter.
@@ -305,10 +316,10 @@ class AnomalyDetector:
         self.range_limits[key] = (min_value, max_value)
 
     def set_rate_of_change_limit(
-            self,
-            device: str,
-            parameter: str,
-            max_rate: float,
+        self,
+        device: str,
+        parameter: str,
+        max_rate: float,
     ) -> None:
         """
         Set maximum rate of change for a parameter.
@@ -326,10 +337,10 @@ class AnomalyDetector:
     # ----------------------------------------------------------------
 
     async def check_value(
-            self,
-            device: str,
-            parameter: str,
-            value: float,
+        self,
+        device: str,
+        parameter: str,
+        value: float,
     ) -> list[AnomalyEvent]:
         """
         Check a value for anomalies using multiple detection methods.
@@ -358,7 +369,9 @@ class AnomalyDetector:
                 baseline.update(value)
 
                 # Check for anomaly (only if learned)
-                if baseline.is_learned and baseline.is_anomalous(value, self.sigma_threshold):
+                if baseline.is_learned and baseline.is_anomalous(
+                    value, self.sigma_threshold
+                ):
                     deviation = baseline.get_deviation_magnitude(value)
 
                     # Determine severity based on deviation magnitude
@@ -431,7 +444,11 @@ class AnomalyDetector:
                         max_rate = self.roc_limits[key]
 
                         if rate > max_rate:
-                            severity = AnomalySeverity.HIGH if rate > (max_rate * 2) else AnomalySeverity.MEDIUM
+                            severity = (
+                                AnomalySeverity.HIGH
+                                if rate > (max_rate * 2)
+                                else AnomalySeverity.MEDIUM
+                            )
 
                             anomaly = AnomalyEvent(
                                 timestamp=current_time,
@@ -442,7 +459,11 @@ class AnomalyDetector:
                                 observed_value=value,
                                 expected_value=None,
                                 description=f"{parameter} rate of change {rate:.2f}/s exceeds limit {max_rate:.2f}/s",
-                                data={"rate": rate, "max_rate": max_rate, "time_delta": time_delta},
+                                data={
+                                    "rate": rate,
+                                    "max_rate": max_rate,
+                                    "time_delta": time_delta,
+                                },
                             )
                             anomalies.append(anomaly)
 
@@ -480,7 +501,10 @@ class AnomalyDetector:
 
             # Remove old alarms outside the window
             window_start = current_time - self.alarm_flood_window
-            while self.alarm_counts[device] and self.alarm_counts[device][0] < window_start:
+            while (
+                self.alarm_counts[device]
+                and self.alarm_counts[device][0] < window_start
+            ):
                 self.alarm_counts[device].popleft()
 
             # Check if threshold exceeded
@@ -508,10 +532,10 @@ class AnomalyDetector:
         return None
 
     async def check_communication_pattern(
-            self,
-            device: str,
-            expected_interval: float,
-            tolerance: float = 0.2,
+        self,
+        device: str,
+        expected_interval: float,
+        tolerance: float = 0.2,
     ) -> AnomalyEvent | None:
         """
         Check if device is communicating at expected interval.
@@ -533,7 +557,9 @@ class AnomalyDetector:
             return None
 
         current_time = self.sim_time.now()
-        last_update_time = device_state.last_update.timestamp() if device_state.last_update else 0
+        last_update_time = (
+            device_state.last_update.timestamp() if device_state.last_update else 0
+        )
 
         # Calculate actual interval
         # Note: In real system, would track multiple intervals
@@ -546,10 +572,10 @@ class AnomalyDetector:
     # ----------------------------------------------------------------
 
     async def get_recent_anomalies(
-            self,
-            limit: int = 100,
-            device: str | None = None,
-            severity: AnomalySeverity | None = None,
+        self,
+        limit: int = 100,
+        device: str | None = None,
+        severity: AnomalySeverity | None = None,
     ) -> list[AnomalyEvent]:
         """
         Get recent anomalies.
@@ -605,7 +631,9 @@ class AnomalyDetector:
                 "by_type": by_type,
                 "by_severity": by_severity,
                 "by_device": by_device,
-                "baselines_learned": sum(1 for b in self.baselines.values() if b.is_learned),
+                "baselines_learned": sum(
+                    1 for b in self.baselines.values() if b.is_learned
+                ),
                 "total_baselines": len(self.baselines),
             }
 
@@ -646,7 +674,9 @@ class AnomalyDetector:
                     }
             return baselines_export
 
-    async def store_baselines_in_datastore(self, device: str = "anomaly_detector") -> None:
+    async def store_baselines_in_datastore(
+        self, device: str = "anomaly_detector"
+    ) -> None:
         """
         Store baselines in DataStore for persistence.
 
@@ -657,6 +687,7 @@ class AnomalyDetector:
 
         # Convert to JSON-serialisable format
         import json
+
         baselines_json = json.dumps(baselines_data)
 
         await self.data_store.update_metadata(
