@@ -1,5 +1,4 @@
 # components/devices/control_zone/rtu/base_rtu.py
-# components/devices/control_zone/rtu/base_rtu.py
 """
 Base class for Remote Telemetry Units (RTUs).
 
@@ -16,13 +15,11 @@ Unlike PLCs which focus on control logic, RTUs focus on:
 - Time-stamped data logging
 """
 
-import logging
 from abc import abstractmethod
 from typing import Any
 
 from components.devices.core.base_device import BaseDevice
-
-logger = logging.getLogger(__name__)
+from components.state.data_store import DataStore
 
 
 class BaseRTU(BaseDevice):
@@ -50,7 +47,7 @@ class BaseRTU(BaseDevice):
         self,
         device_name: str,
         device_id: int,
-        data_store: Any,
+        data_store: DataStore,
         description: str = "",
         scan_interval: float = 1.0,  # RTUs typically scan slower than PLCs (1s)
         report_by_exception: bool = True,
@@ -77,15 +74,15 @@ class BaseRTU(BaseDevice):
         self.report_by_exception = report_by_exception
 
         # RTU-specific state
-        self.poll_count = 0
-        self.event_count = 0
-        self.last_report_time = 0.0
+        # Note: BaseDevice.metadata["scan_count"] tracks poll count
+        self.event_count = 0  # RTU-specific: number of events detected
+        self.last_report_time = 0.0  # RTU-specific: last report to master
 
         # Event detection (for report-by-exception)
         self.previous_values: dict[str, Any] = {}
-        self.deadbands: dict[str, float] = {}  # Analog deadbands
+        self.deadbands: dict[str, float] = {}  # Analogue deadbands
 
-        logger.info(
+        self.logger.info(
             f"BaseRTU '{device_name}' initialised "
             f"(report-by-exception: {report_by_exception})"
         )
@@ -107,31 +104,29 @@ class BaseRTU(BaseDevice):
         2. Process data (scaling, validation, alarming)
         3. Detect events (if report-by-exception)
         4. Report to SCADA master (if needed)
+
+        Note: BaseDevice._scan_loop() already handles:
+        - Incrementing scan_count (our poll count)
+        - Updating last_scan_time
+        - Incrementing error_count on exceptions
+        - Writing memory_map to DataStore
         """
-        try:
-            # Read field data
-            await self._read_inputs()
+        # Read field data
+        await self._read_inputs()
 
-            # Process and validate
-            await self._process_data()
+        # Process and validate
+        await self._process_data()
 
-            # Detect changes for event reporting
-            events_detected = self._detect_events()
+        # Detect changes for event reporting
+        events_detected = self._detect_events()
 
-            # Report to master if needed
-            if events_detected or not self.report_by_exception:
-                await self._report_to_master()
-                self.last_report_time = self.sim_time.now()
+        # Report to master if needed
+        if events_detected or not self.report_by_exception:
+            await self._report_to_master()
+            self.last_report_time = self.sim_time.now()
 
-            # Update diagnostics
-            self.poll_count += 1
-            self._update_diagnostics()
-
-        except Exception as e:
-            logger.error(
-                f"Error in RTU scan cycle for '{self.device_name}': {e}",
-                exc_info=True,
-            )
+        # BaseDevice handles scan_count increment automatically
+        # We only track RTU-specific event_count
 
     # ----------------------------------------------------------------
     # Abstract methods for RTU cycle - must be implemented
@@ -202,7 +197,7 @@ class BaseRTU(BaseDevice):
                 if current_value != previous_value:
                     events = True
                     self.event_count += 1
-                    logger.debug(
+                    self.logger.debug(
                         f"RTU '{self.device_name}': Digital event on {key}: "
                         f"{previous_value} → {current_value}"
                     )
@@ -214,8 +209,8 @@ class BaseRTU(BaseDevice):
                     if abs(current_value - previous_value) > deadband:
                         events = True
                         self.event_count += 1
-                        logger.debug(
-                            f"RTU '{self.device_name}': Analog event on {key}: "
+                        self.logger.debug(
+                            f"RTU '{self.device_name}': Analogue event on {key}: "
                             f"{previous_value} → {current_value} (deadband: {deadband})"
                         )
 
@@ -233,24 +228,18 @@ class BaseRTU(BaseDevice):
             deadband: Minimum change to trigger event
         """
         self.deadbands[point] = deadband
-        logger.debug(f"RTU '{self.device_name}': Set deadband {point} = {deadband}")
+        self.logger.debug(f"RTU '{self.device_name}': Set deadband {point} = {deadband}")
 
     # ----------------------------------------------------------------
-    # RTU diagnostics
+    # RTU status and diagnostics
     # ----------------------------------------------------------------
-
-    def _update_diagnostics(self) -> None:
-        """Update diagnostic values in memory map."""
-        self.memory_map["_poll_count"] = self.poll_count
-        self.memory_map["_event_count"] = self.event_count
-        self.memory_map["_last_report_time"] = self.last_report_time
 
     async def get_rtu_status(self) -> dict[str, Any]:
         """Get RTU-specific status information."""
         base_status = await self.get_status()
         rtu_status = {
             **base_status,
-            "poll_count": self.poll_count,
+            # base_status already includes scan_count (our poll count)
             "event_count": self.event_count,
             "last_report_time": self.last_report_time,
             "report_by_exception": self.report_by_exception,
@@ -258,8 +247,7 @@ class BaseRTU(BaseDevice):
         }
         return rtu_status
 
-    def reset_counters(self) -> None:
-        """Reset RTU counters."""
-        self.poll_count = 0
+    def reset_event_count(self) -> None:
+        """Reset RTU event counter."""
         self.event_count = 0
-        logger.info(f"RTU '{self.device_name}' counters reset")
+        self.logger.info(f"RTU '{self.device_name}' event counter reset")

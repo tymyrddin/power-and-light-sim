@@ -4,7 +4,6 @@ Protocol-agnostic base class for all PLC devices.
 
 Extends BaseDevice with PLC-specific functionality:
 - Standard PLC scan cycle (read inputs → execute logic → write outputs)
-- Scan metrics and diagnostics
 - Control logic orchestration
 
 This class does NOT define any specific memory structure (Modbus registers, S7 DBs, AB tags).
@@ -12,9 +11,9 @@ Subclasses define their own memory structures appropriate to their protocol.
 """
 
 from abc import abstractmethod
-from typing import Any
 
 from components.devices.core.base_device import BaseDevice
+from components.state.data_store import DataStore
 
 
 class BasePLC(BaseDevice):
@@ -41,7 +40,7 @@ class BasePLC(BaseDevice):
         self,
         device_name: str,
         device_id: int,
-        data_store: Any,
+        data_store: DataStore,
         description: str = "",
         scan_interval: float = 0.1,  # 100ms typical PLC scan rate
     ):
@@ -63,10 +62,8 @@ class BasePLC(BaseDevice):
             scan_interval=scan_interval,
         )
 
-        # PLC scan diagnostics
-        self.scan_count = 0
-        self.error_count = 0
-        self.last_scan_time = 0.0
+        # Note: BaseDevice already tracks scan_count, error_count, last_scan_time
+        # in metadata dictionary. No need to duplicate here.
 
         self.logger.info(f"BasePLC '{device_name}' initialised")
 
@@ -86,27 +83,20 @@ class BasePLC(BaseDevice):
         1. Read inputs from process/physics
         2. Execute control logic
         3. Write outputs to process/physics
-        4. Update diagnostics
+
+        Note: BaseDevice._scan_loop() already handles:
+        - Incrementing scan_count
+        - Updating last_scan_time
+        - Incrementing error_count on exceptions
+        - Writing memory_map to DataStore
         """
-        try:
-            # Standard PLC scan cycle
-            await self._read_inputs()
-            await self._execute_logic()
-            await self._write_outputs()
+        # Standard PLC scan cycle
+        await self._read_inputs()
+        await self._execute_logic()
+        await self._write_outputs()
 
-            # Update scan metrics
-            self.scan_count += 1
-            self.last_scan_time = self.sim_time.now()
-
-            # Add diagnostics to memory map
-            self._update_diagnostics()
-
-        except Exception as e:
-            self.error_count += 1
-            self.logger.error(
-                f"Error in PLC scan cycle for '{self.device_name}': {e}",
-                exc_info=True,
-            )
+        # BaseDevice handles all diagnostic updates automatically
+        # No need to update counters here
 
     # ----------------------------------------------------------------
     # Abstract methods for PLC scan cycle - must be implemented
@@ -145,32 +135,3 @@ class BasePLC(BaseDevice):
         - Write control commands to physics engines via DataStore
         """
         pass
-
-    # ----------------------------------------------------------------
-    # PLC diagnostics
-    # ----------------------------------------------------------------
-
-    def _update_diagnostics(self) -> None:
-        """Update diagnostic values in memory map."""
-        # Add standard diagnostics to memory map
-        # Subclasses can add protocol-specific diagnostics
-        self.memory_map["_scan_count"] = self.scan_count
-        self.memory_map["_error_count"] = self.error_count
-        self.memory_map["_last_scan_time"] = self.last_scan_time
-
-    async def get_plc_status(self) -> dict[str, Any]:
-        """Get PLC-specific status information."""
-        base_status = await self.get_status()
-        plc_status = {
-            **base_status,
-            "scan_count": self.scan_count,
-            "error_count": self.error_count,
-            "last_scan_time": self.last_scan_time,
-        }
-        return plc_status
-
-    def reset_scan_count(self) -> None:
-        """Reset scan counter (useful for diagnostics)."""
-        self.scan_count = 0
-        self.error_count = 0
-        self.logger.info(f"PLC '{self.device_name}' scan counters reset")

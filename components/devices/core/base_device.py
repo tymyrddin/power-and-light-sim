@@ -240,6 +240,11 @@ class BaseDevice(ABC):
         Main scan loop - executes scan cycles at regular intervals.
 
         Uses simulation time for timing, so it's time-mode aware.
+
+        Order of operations:
+        1. Read from DataStore (get any protocol writes)
+        2. Execute scan cycle (device logic can see protocol writes)
+        3. Write to DataStore (publish device outputs)
         """
         self.logger.debug(
             f"Scan loop started for '{self.device_name}' "
@@ -255,6 +260,21 @@ class BaseDevice(ABC):
                 if self.sim_time.is_paused():
                     continue
 
+                # Read from DataStore BEFORE scan (get protocol writes)
+                try:
+                    datastore_memory = await self.data_store.bulk_read_memory(
+                        self.device_name
+                    )
+                    # Update local memory with DataStore values
+                    # This allows protocol writes to be visible to device logic
+                    if datastore_memory:
+                        self.memory_map.update(datastore_memory)
+                except Exception as e:
+                    self.logger.error(
+                        f"Failed to read memory map for '{self.device_name}': {e}"
+                    )
+                    self.metadata["error_count"] += 1
+
                 # Execute scan cycle
                 current_time = self.sim_time.now()
 
@@ -264,7 +284,7 @@ class BaseDevice(ABC):
                 self.metadata["last_scan_time"] = current_time
                 self.metadata["scan_count"] += 1
 
-                # Update DataStore with new memory map
+                # Update DataStore with new memory map (publish outputs)
                 try:
                     await self.data_store.bulk_write_memory(
                         self.device_name,
