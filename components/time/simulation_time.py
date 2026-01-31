@@ -184,6 +184,13 @@ class SimulationTime:
 
         logger.info("SimulationTime reset to zero")
 
+    def reset_for_testing(self) -> None:
+        """Fully reinitialise the SimulationTime singleton.
+
+        This is intended for test use only.
+        """
+        self._setup()
+
     # ----------------------------------------------------------------
     # Time queries
     # ----------------------------------------------------------------
