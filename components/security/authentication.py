@@ -13,6 +13,7 @@ Integrations:
 - SimulationTime: Use simulation time for sessions/audit logs
 - DataStore: Store audit logs and session data
 - ConfigLoader: Load security settings from YAML
+- ICSLogger: Structured security and audit logging
 
 This is a SIMULATION of ICS security - simplified for PoC purposes.
 Real ICS security would integrate with:
@@ -23,16 +24,21 @@ Real ICS security would integrate with:
 """
 
 import asyncio
-import json
-import logging
+import threading
+import uuid
 from dataclasses import dataclass
+
 from enum import Enum
 
+from components.security.logging_system import (
+    EventCategory,
+    EventSeverity,
+    ICSLogger,
+    get_logger,
+)
 from components.state.data_store import DataStore
 from components.time.simulation_time import SimulationTime
 from config.config_loader import ConfigLoader
-
-logger = logging.getLogger(__name__)
 
 
 # ----------------------------------------------------------------
@@ -154,19 +160,6 @@ class AuthSession:
         return current_time > self.expires_at
 
 
-@dataclass
-class AuditLogEntry:
-    """Audit log entry for security events."""
-
-    timestamp: float  # Simulation time
-    user: str
-    action: str
-    resource: str
-    result: str  # "ALLOWED" or "DENIED"
-    reason: str = ""
-    source_ip: str = "127.0.0.1"
-
-
 # ----------------------------------------------------------------
 # Authentication Manager (Singleton)
 # ----------------------------------------------------------------
@@ -180,11 +173,13 @@ class AuthenticationManager:
     """
 
     _instance: "AuthenticationManager | None" = None
+    _instance_lock = threading.Lock()  # Thread-safe singleton creation
 
     def __new__(cls):
-        if cls._instance is None:
-            cls._instance = super().__new__(cls)
-        return cls._instance
+        with cls._instance_lock:
+            if cls._instance is None:
+                cls._instance = super().__new__(cls)
+            return cls._instance
 
     def __init__(self):
         if not hasattr(self, "_initialized"):
@@ -195,14 +190,14 @@ class AuthenticationManager:
             self.data_store: DataStore | None = None
             self.config = ConfigLoader().load_all()
 
+            # ICS Logger for structured security logging
+            self.logger: ICSLogger = get_logger(__name__, device="auth_manager")
+
             # User database (simulated)
             self.users: dict[str, User] = {}
 
             # Active sessions
             self.sessions: dict[str, AuthSession] = {}
-
-            # Audit log
-            self.audit_log: list[AuditLogEntry] = []
 
             # Lock for thread safety
             self._lock = asyncio.Lock()
@@ -213,7 +208,7 @@ class AuthenticationManager:
             # Initialise default users
             self._create_default_users()
 
-            logger.info("AuthenticationManager initialised")
+            self.logger.info("AuthenticationManager initialised")
 
     def _load_config(self) -> None:
         """Load authentication settings from YAML."""
@@ -221,9 +216,6 @@ class AuthenticationManager:
 
         # Session timeout in simulation hours (None = no timeout)
         self.session_timeout_hours = auth_cfg.get("session_timeout_hours", None)
-
-        # Max audit log entries
-        self.max_audit_entries = auth_cfg.get("max_audit_entries", 10000)
 
     def _create_default_users(self) -> None:
         """Create default simulation users."""
@@ -270,7 +262,7 @@ class AuthenticationManager:
         for user in default_users:
             self.users[user.username] = user
 
-        logger.info(f"Created {len(default_users)} default users")
+        self.logger.info(f"Created {len(default_users)} default users")
 
     # ----------------------------------------------------------------
     # User management
@@ -297,7 +289,7 @@ class AuthenticationManager:
             )
             self.users[username] = user
 
-            logger.info(f"Created user '{username}' with role {role.name}")
+            self.logger.info(f"Created user '{username}' with role {role.name}")
             return user
 
     async def get_user(self, username: str) -> User | None:
@@ -315,7 +307,7 @@ class AuthenticationManager:
             old_role = user.role
             user.role = new_role
 
-            logger.info(
+            self.logger.info(
                 f"Updated user '{username}' role: {old_role.name} → {new_role.name}"
             )
             return True
@@ -347,7 +339,7 @@ class AuthenticationManager:
             user = self.users.get(username)
 
             if not user or not user.active:
-                logger.warning(
+                self.logger.warning(
                     f"Authentication failed for '{username}' from {source_ip}"
                 )
                 self._audit_log(
@@ -359,8 +351,6 @@ class AuthenticationManager:
             _ = password  # Explicitly mark as intentionally unused
 
             # Create session
-            import uuid
-
             session_id = str(uuid.uuid4())
 
             current_time = self.sim_time.now()
@@ -381,7 +371,7 @@ class AuthenticationManager:
             self.sessions[session_id] = session
             user.last_login = current_time
 
-            logger.info(
+            self.logger.info(
                 f"User '{username}' authenticated from {source_ip} (session: {session_id[:8]}...)"
             )
             self._audit_log("AUTHENTICATION", username, "ALLOWED", f"From {source_ip}")
@@ -393,7 +383,7 @@ class AuthenticationManager:
         async with self._lock:
             session = self.sessions.pop(session_id, None)
             if session:
-                logger.info(f"User '{session.user.username}' logged out")
+                self.logger.info(f"User '{session.user.username}' logged out")
                 return True
             return False
 
@@ -434,12 +424,12 @@ class AuthenticationManager:
             try:
                 action = PermissionType(action)
             except ValueError:
-                logger.warning(f"Unknown permission type: {action}")
+                self.logger.warning(f"Unknown permission type: {action}")
                 return False
 
         session = await self.get_session(session_id)
         if not session:
-            logger.warning("Authorisation failed: Invalid or expired session")
+            self.logger.warning("Authorisation failed: Invalid or expired session")
             return False
 
         user = session.user
@@ -453,16 +443,17 @@ class AuthenticationManager:
             action.value,
             user.username,
             result,
-            f"Resource: {resource}, Reason: {reason}",
+            reason=reason,
+            resource=resource,
         )
 
         if authorized:
-            logger.info(
+            self.logger.info(
                 f"AUTHORISED: User '{user.username}' ({user.role.name}) - "
                 f"{action.value} on {resource}"
             )
         else:
-            logger.warning(
+            self.logger.warning(
                 f"DENIED: User '{user.username}' ({user.role.name}) - "
                 f"{action.value} on {resource} (insufficient permissions)"
             )
@@ -492,26 +483,28 @@ class AuthenticationManager:
         Returns:
             True if both users authorised
         """
-        # Check both sessions
-        auth1 = await self.authorize(session_id_1, action, resource, reason)
-        auth2 = await self.authorize(session_id_2, action, resource, reason)
-
+        # Get sessions first to avoid redundant lookups after authorize()
         session1 = await self.get_session(session_id_1)
         session2 = await self.get_session(session_id_2)
 
         if not (session1 and session2):
+            self.logger.warning("Dual authorisation failed: Invalid or expired session")
             return False
+
+        # Check both users have permission
+        auth1 = await self.authorize(session_id_1, action, resource, reason)
+        auth2 = await self.authorize(session_id_2, action, resource, reason)
 
         # Both must be authorised and be different users
         if auth1 and auth2 and session1.user.username != session2.user.username:
-            logger.warning(
+            self.logger.info(
                 f"DUAL AUTHORISATION GRANTED: "
                 f"{session1.user.username} + {session2.user.username} - "
                 f"{action.value} on {resource}"
             )
             return True
 
-        logger.warning(
+        self.logger.warning(
             f"DUAL AUTHORISATION DENIED: "
             f"{session1.user.username} + {session2.user.username} - "
             f"{action.value} on {resource}"
@@ -525,34 +518,11 @@ class AuthenticationManager:
     async def set_data_store(self, data_store: DataStore) -> None:
         """Set DataStore for persistent audit logging."""
         self.data_store = data_store
-
-    async def store_audit_logs(self) -> None:
-        """Store audit logs in DataStore."""
-        if not self.data_store:
-            return
-
-        # Convert audit logs to JSON
-        logs_json = json.dumps(
-            [
-                {
-                    "timestamp": entry.timestamp,
-                    "user": entry.user,
-                    "action": entry.action,
-                    "resource": entry.resource,
-                    "result": entry.result,
-                    "reason": entry.reason,
-                    "source_ip": entry.source_ip,
-                }
-                for entry in self.audit_log[-1000:]  # Last 1000 entries
-            ]
-        )
-
-        await self.data_store.update_metadata(
-            "authentication_manager", {"audit_logs": logs_json}
-        )
+        # Also set on the logger for centralised storage
+        self.logger.data_store = data_store
 
     # ----------------------------------------------------------------
-    # Audit log management
+    # Audit log management (via ICSLogger)
     # ----------------------------------------------------------------
 
     def _audit_log(
@@ -561,33 +531,52 @@ class AuthenticationManager:
         user: str,
         result: str,
         reason: str = "",
+        resource: str = "",
     ) -> None:
-        """Add entry to audit log."""
-        entry = AuditLogEntry(
-            timestamp=self.sim_time.now(),
-            user=user,
-            action=action,
-            resource="",
-            result=result,
-            reason=reason,
-        )
-        self.audit_log.append(entry)
+        """
+        Add entry to audit log via ICSLogger.
 
-        # Keep last N entries
-        if len(self.audit_log) > self.max_audit_entries:
-            self.audit_log = self.audit_log[-self.max_audit_entries :]
+        Uses ICSLogger.log_security for structured, ICS-compliant audit logging.
+        """
+        severity = EventSeverity.NOTICE if result == "ALLOWED" else EventSeverity.WARNING
+
+        async def _log():
+            await self.logger.log_security(
+                message=f"{action}: {result} - {reason}",
+                severity=severity,
+                user=user,
+                data={"action": action, "result": result, "resource": resource},
+            )
+
+        try:
+            loop = asyncio.get_running_loop()
+            loop.create_task(_log())
+        except RuntimeError:
+            # No event loop running, skip async logging
+            # The synchronous logger.info/warning calls provide basic logging
+            pass
 
     async def get_audit_log(
         self,
         limit: int = 100,
         user: str | None = None,
-    ) -> list[AuditLogEntry]:
-        """Get audit log entries."""
-        async with self._lock:
-            logs = self.audit_log[-limit:]
-            if user:
-                logs = [log for log in logs if log.user == user]
-            return logs
+    ) -> list:
+        """
+        Get audit log entries from ICSLogger.
+
+        Returns list of LogEntry objects from the structured logging system.
+        Filters are applied before limiting to ensure accurate results.
+        """
+        # Get entries from ICSLogger, filtering first then limiting (fix #7)
+        entries = await self.logger.get_audit_trail(
+            limit=limit * 10 if user else limit,  # Get more if filtering
+            category=EventCategory.SECURITY,
+        )
+
+        if user:
+            entries = [e for e in entries if e.user == user]
+
+        return entries[-limit:]
 
 
 # ----------------------------------------------------------------
@@ -637,7 +626,7 @@ async def verify_authorization(
         if session_id:
             return await auth_mgr.authorize(session_id, action, resource)
 
-    logger.warning(f"Invalid authorization token: {authorization}")
+    auth_mgr.logger.warning(f"Invalid authorization token: {authorization}")
     return False
 
 

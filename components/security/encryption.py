@@ -24,9 +24,11 @@ ICS-specific features:
 import asyncio
 import base64
 import hashlib
+import hmac
 import secrets
+import threading
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from enum import Enum
 from pathlib import Path
 
@@ -36,9 +38,29 @@ from cryptography.hazmat.primitives.asymmetric import padding, rsa
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 from cryptography.x509.oid import NameOID
 
+from components.security.logging_system import (
+    ICSLogger,
+    get_logger,
+)
 from components.state.data_store import DataStore
 from components.time.simulation_time import SimulationTime
 from config.config_loader import ConfigLoader
+
+__all__ = [
+    "SecurityLevel",
+    "OPCUASecurityPolicy",
+    "DNP3AuthMode",
+    "CertificateInfo",
+    "CertificateManager",
+    "AESEncryption",
+    "DNP3Crypto",
+    "OPCUACrypto",
+    "SecureKeyStore",
+    "SIMULATION_EPOCH",
+]
+
+# Epoch for simulation time to datetime conversion (UTC)
+SIMULATION_EPOCH = datetime(2024, 1, 1, 0, 0, 0, tzinfo=timezone.utc)
 
 # ----------------------------------------------------------------
 # Security Levels and Policies
@@ -115,6 +137,7 @@ class CertificateManager:
     - SimulationTime: Certificate validity periods use simulation time
     - DataStore: Store certificates and keys
     - ConfigLoader: Load certificate settings from YAML
+    - ICSLogger: Security event logging
     """
 
     def __init__(
@@ -135,13 +158,17 @@ class CertificateManager:
 
         self.sim_time = SimulationTime()
         self.config = ConfigLoader().load_all()
+        self.logger: ICSLogger = get_logger(__name__, device="cert_manager")
 
-        # Certificate cache
+        # Certificate cache (protected by lock)
         self._certificates: dict[str, x509.Certificate] = {}
         self._private_keys: dict[str, rsa.RSAPrivateKey] = {}
+        self._lock = threading.Lock()
 
         # Load settings from config
         self._load_config()
+
+        self.logger.info("CertificateManager initialised")
 
     def _load_config(self) -> None:
         """Load encryption settings from YAML configuration."""
@@ -224,9 +251,8 @@ class CertificateManager:
         sim_time_now = self.sim_time.now()
 
         # Convert to datetime for certificate (use epoch + sim time)
-        epoch = datetime(2024, 1, 1, 0, 0, 0)
-        not_valid_before = epoch + timedelta(seconds=sim_time_now)
-        not_valid_after = epoch + timedelta(
+        not_valid_before = SIMULATION_EPOCH + timedelta(seconds=sim_time_now)
+        not_valid_after = SIMULATION_EPOCH + timedelta(
             seconds=sim_time_now + (validity_hours * 3600)
         )
 
@@ -251,9 +277,15 @@ class CertificateManager:
             .sign(private_key, hashes.SHA256())
         )
 
-        # Cache certificate and key
-        self._certificates[common_name] = cert
-        self._private_keys[common_name] = private_key
+        # Cache certificate and key (thread-safe)
+        with self._lock:
+            self._certificates[common_name] = cert
+            self._private_keys[common_name] = private_key
+
+        self.logger.info(
+            f"Generated self-signed certificate for '{common_name}' "
+            f"(valid for {validity_hours} hours, key size: {key_size})"
+        )
 
         return cert, private_key
 
@@ -287,6 +319,8 @@ class CertificateManager:
                 )
             )
 
+        self.logger.info(f"Saved certificate and key for '{name}' to {self.cert_dir}")
+
     def load_certificate(
         self, name: str
     ) -> tuple[x509.Certificate, rsa.RSAPrivateKey] | None:
@@ -303,24 +337,40 @@ class CertificateManager:
         key_path = self.cert_dir / f"{name}.key"
 
         if not (cert_path.exists() and key_path.exists()):
+            self.logger.debug(f"Certificate '{name}' not found in {self.cert_dir}")
             return None
 
-        # Load certificate
-        with open(cert_path, "rb") as f:
-            cert = x509.load_pem_x509_certificate(f.read())
+        try:
+            # Load certificate
+            with open(cert_path, "rb") as f:
+                cert = x509.load_pem_x509_certificate(f.read())
 
-        # Load private key
-        with open(key_path, "rb") as f:
-            private_key = serialization.load_pem_private_key(
-                f.read(),
-                password=None,
-            )
+            # Load private key
+            with open(key_path, "rb") as f:
+                private_key = serialization.load_pem_private_key(
+                    f.read(),
+                    password=None,
+                )
 
-        return cert, private_key
+            # Verify key type is RSA
+            if not isinstance(private_key, rsa.RSAPrivateKey):
+                self.logger.error(
+                    f"Expected RSA key for '{name}', got {type(private_key).__name__}"
+                )
+                return None
+
+            self.logger.info(f"Loaded certificate and key for '{name}'")
+            return cert, private_key
+
+        except Exception:
+            self.logger.exception(f"Failed to load certificate '{name}'")
+            return None
 
     def validate_certificate(self, cert: x509.Certificate) -> bool:
         """
         Validate certificate against simulation time.
+
+        Note: Only validates time period, not chain of trust or revocation.
 
         Args:
             cert: X.509 certificate
@@ -330,14 +380,18 @@ class CertificateManager:
         """
         # Get current simulation time as datetime
         sim_time_now = self.sim_time.now()
-        epoch = datetime(2024, 1, 1, 0, 0, 0)
-        current_datetime = epoch + timedelta(seconds=sim_time_now)
+        current_datetime = SIMULATION_EPOCH + timedelta(seconds=sim_time_now)
+
+        cert_cn = cert.subject.get_attributes_for_oid(NameOID.COMMON_NAME)
+        cert_name = cert_cn[0].value if cert_cn else "unknown"
 
         # Check validity period
         if current_datetime < cert.not_valid_before_utc:
-            return False  # Not yet valid
+            self.logger.warning(f"Certificate '{cert_name}' not yet valid")
+            return False
         if current_datetime > cert.not_valid_after_utc:
-            return False  # Expired
+            self.logger.warning(f"Certificate '{cert_name}' has expired")
+            return False
 
         return True
 
@@ -351,13 +405,16 @@ class CertificateManager:
         Returns:
             CertificateInfo or None if not found
         """
-        cert = self._certificates.get(name)
+        with self._lock:
+            cert = self._certificates.get(name)
+
         if not cert:
             # Try loading from file
             loaded = self.load_certificate(name)
             if loaded:
                 cert, _ = loaded
-                self._certificates[name] = cert
+                with self._lock:
+                    self._certificates[name] = cert
             else:
                 return None
 
@@ -501,8 +558,6 @@ class DNP3Crypto:
     @staticmethod
     def hmac_sha256(key: bytes, data: bytes) -> bytes:
         """Compute HMAC-SHA256 for DNP3 SAv5."""
-        import hmac
-
         return hmac.new(key, data, hashlib.sha256).digest()
 
     @staticmethod
@@ -578,13 +633,17 @@ class SecureKeyStore:
             master_key: Master encryption key (generated if None)
         """
         self.data_store = data_store
+        self.logger: ICSLogger = get_logger(__name__, device="key_store")
 
         # Master key for encrypting stored keys
         if master_key is None:
             master_key = AESEncryption.generate_key(256)
+            self.logger.info("Generated new master key for SecureKeyStore")
         self.master_key = master_key
 
         self._lock = asyncio.Lock()
+
+        self.logger.info("SecureKeyStore initialised")
 
     async def store_key(self, name: str, key: bytes, device: str = "system") -> None:
         """
@@ -608,6 +667,8 @@ class SecureKeyStore:
                 {f"key_{name}": encrypted},
             )
 
+        self.logger.info(f"Stored key '{name}' for device '{device}'")
+
     async def retrieve_key(self, name: str, device: str = "system") -> bytes | None:
         """
         Retrieve key from DataStore.
@@ -622,15 +683,21 @@ class SecureKeyStore:
         async with self._lock:
             metadata = await self.data_store.read_metadata(device)
             if not metadata:
+                self.logger.debug(f"No metadata found for device '{device}'")
                 return None
 
             encrypted = metadata.get(f"key_{name}")
             if not encrypted:
+                self.logger.debug(f"Key '{name}' not found for device '{device}'")
                 return None
 
             # Decrypt key
             try:
                 decrypted = AESEncryption.decrypt_string(encrypted, self.master_key)
+                self.logger.info(f"Retrieved key '{name}' for device '{device}'")
                 return base64.b64decode(decrypted)
             except Exception:
+                self.logger.exception(
+                    f"Failed to decrypt key '{name}' for device '{device}'"
+                )
                 return None

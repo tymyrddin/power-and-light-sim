@@ -22,6 +22,8 @@ import asyncio
 import json
 import logging
 import logging.handlers
+import threading
+import uuid
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
@@ -29,6 +31,19 @@ from typing import Any
 
 from components.state.data_store import DataStore
 from components.time.simulation_time import SimulationTime
+
+__all__ = [
+    "EventSeverity",
+    "EventCategory",
+    "AlarmPriority",
+    "AlarmState",
+    "LogEntry",
+    "SimTimeFormatter",
+    "JSONFormatter",
+    "ICSLogger",
+    "configure_logging",
+    "get_logger",
+]
 
 # ----------------------------------------------------------------
 # ICS Event Classification
@@ -73,6 +88,15 @@ class AlarmPriority(Enum):
     LOW = 4  # Minor impact, for awareness
 
 
+class AlarmState(Enum):
+    """Alarm states per ISA 18.2."""
+
+    ACTIVE = "ACTIVE"  # Alarm condition present
+    ACKNOWLEDGED = "ACKNOWLEDGED"  # Operator acknowledged
+    CLEARED = "CLEARED"  # Alarm condition no longer present
+    SUPPRESSED = "SUPPRESSED"  # Temporarily suppressed
+
+
 # Map Python logging levels to ICS severity
 LOGGING_TO_SEVERITY = {
     logging.CRITICAL: EventSeverity.CRITICAL,
@@ -113,7 +137,7 @@ class LogEntry:
 
     # Alarm-specific
     alarm_priority: AlarmPriority | None = None
-    alarm_state: str = ""  # "ACTIVE", "ACKNOWLEDGED", "CLEARED"
+    alarm_state: AlarmState | None = None
 
     def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary for JSON serialisation."""
@@ -144,7 +168,7 @@ class LogEntry:
         if self.alarm_priority:
             entry_dict["alarm_priority"] = self.alarm_priority.name
         if self.alarm_state:
-            entry_dict["alarm_state"] = self.alarm_state
+            entry_dict["alarm_state"] = self.alarm_state.value
 
         return entry_dict
 
@@ -167,6 +191,21 @@ class LogEntry:
 # ----------------------------------------------------------------
 # JSON Formatter for Python logging (with SimulationTime)
 # ----------------------------------------------------------------
+
+
+class SimTimeFormatter(logging.Formatter):
+    """Format log records with simulation time prefix."""
+
+    def __init__(self, sim_time: SimulationTime):
+        super().__init__(
+            fmt="[SIM:%(sim_time)8.2fs] [%(levelname)8s] %(name)s: %(message)s"
+        )
+        self.sim_time = sim_time
+
+    def format(self, record: logging.LogRecord) -> str:
+        """Format with simulation time."""
+        record.sim_time = self.sim_time.now()
+        return super().format(record)
 
 
 class JSONFormatter(logging.Formatter):
@@ -224,6 +263,7 @@ class ICSLogger:
         enable_json: bool = True,
         enable_console: bool = True,
         data_store: DataStore | None = None,
+        max_audit_entries: int = 10000,
     ):
         """
         Initialise ICS logger.
@@ -232,9 +272,10 @@ class ICSLogger:
             name: Logger name (typically module name)
             device: Device name for context
             log_dir: Directory for log files (None = no file logging)
-            enable_json: Enable JSON formatted logs
+            enable_json: Enable JSON formatted logs (requires log_dir)
             enable_console: Enable console output
             data_store: Optional DataStore for centralised logging
+            max_audit_entries: Maximum audit trail entries to retain
         """
         self.name = name
         self.device = device
@@ -262,25 +303,12 @@ class ICSLogger:
         # Audit trail storage (in-memory)
         self.audit_trail: list[LogEntry] = []
         self._audit_lock = asyncio.Lock()
-        self._max_audit_entries = 10000  # Keep last 10k entries
+        self._max_audit_entries = max_audit_entries
 
     def _add_console_handler(self) -> None:
         """Add console handler with simulation time."""
         handler = logging.StreamHandler()
         handler.setLevel(logging.DEBUG)
-
-        # Custom formatter with simulation time
-        class SimTimeFormatter(logging.Formatter):
-            def __init__(self, sim_time: SimulationTime):
-                super().__init__(
-                    fmt="[SIM:%(sim_time)8.2fs] [%(levelname)8s] %(name)s: %(message)s"
-                )
-                self.sim_time = sim_time
-
-            def format(self, record):
-                record.sim_time = self.sim_time.now()
-                return super().format(record)
-
         handler.setFormatter(SimTimeFormatter(self.sim_time))
         self.logger.addHandler(handler)
 
@@ -355,13 +383,16 @@ class ICSLogger:
         Returns:
             LogEntry that was created
         """
+        # Allow kwargs to override default device
+        device = kwargs.pop("device", self.device)
+
         entry = LogEntry(
             simulation_time=self.sim_time.now(),
             wall_time=self.sim_time.wall_elapsed(),
             severity=severity,
             category=category,
             message=message,
-            device=self.device,
+            device=device,
             **kwargs,
         )
 
@@ -395,16 +426,16 @@ class ICSLogger:
     async def _store_in_datastore(self, entry: LogEntry) -> None:
         """Store log entry in DataStore for centralised access."""
         try:
-            # Store as device metadata - convert to JSON string for compatibility
+            # Store as device metadata with unique suffix to prevent collisions
             log_key = (
-                f"log_{int(entry.simulation_time * 1000)}"  # millisecond precision
+                f"log_{int(entry.simulation_time * 1000)}_{uuid.uuid4().hex[:8]}"
             )
             await self.data_store.update_metadata(
                 self.device,
-                {log_key: entry.to_json()},  # Store as JSON string, not dict
+                {log_key: entry.to_json()},
             )
-        except Exception as e:
-            self.logger.error(f"Failed to store log in DataStore: {e}")
+        except Exception:
+            self.logger.exception("Failed to store log in DataStore")
 
     async def log_audit(
         self, message: str, user: str = "", action: str = "", result: str = "", **kwargs
@@ -441,7 +472,11 @@ class ICSLogger:
         )
 
     async def log_alarm(
-        self, message: str, priority: AlarmPriority, state: str = "ACTIVE", **kwargs
+        self,
+        message: str,
+        priority: AlarmPriority,
+        state: AlarmState = AlarmState.ACTIVE,
+        **kwargs,
     ) -> LogEntry:
         """
         Log alarm event.
@@ -449,7 +484,7 @@ class ICSLogger:
         Args:
             message: Alarm message
             priority: Alarm priority
-            state: Alarm state (ACTIVE, ACKNOWLEDGED, CLEARED)
+            state: Alarm state
             **kwargs: Additional context
 
         Returns:
@@ -515,18 +550,18 @@ class ICSLogger:
             category: Filter by category
 
         Returns:
-            List of log entries
+            List of log entries (most recent last)
         """
         async with self._audit_lock:
-            entries = self.audit_trail[-limit:]
+            entries = self.audit_trail
 
-            # Apply filters
+            # Apply filters first, then limit
             if severity:
                 entries = [e for e in entries if e.severity == severity]
             if category:
                 entries = [e for e in entries if e.category == category]
 
-            return entries
+            return entries[-limit:]
 
     async def clear_audit_trail(self) -> int:
         """
@@ -546,6 +581,7 @@ class ICSLogger:
 # ----------------------------------------------------------------
 
 _loggers: dict[str, ICSLogger] = {}
+_loggers_lock = threading.Lock()
 _default_log_dir: Path | None = None
 _default_data_store: DataStore | None = None
 
@@ -574,6 +610,8 @@ def get_logger(name: str, device: str = "", **kwargs) -> ICSLogger:
     """
     Get or create an ICS logger.
 
+    Thread-safe logger factory.
+
     Args:
         name: Logger name (typically __name__)
         device: Device name for context
@@ -584,13 +622,14 @@ def get_logger(name: str, device: str = "", **kwargs) -> ICSLogger:
     """
     logger_key = f"{name}:{device}"
 
-    if logger_key not in _loggers:
-        # Use global defaults if not specified
-        if "log_dir" not in kwargs and _default_log_dir:
-            kwargs["log_dir"] = _default_log_dir
-        if "data_store" not in kwargs and _default_data_store:
-            kwargs["data_store"] = _default_data_store
+    with _loggers_lock:
+        if logger_key not in _loggers:
+            # Use global defaults if not specified
+            if "log_dir" not in kwargs and _default_log_dir:
+                kwargs["log_dir"] = _default_log_dir
+            if "data_store" not in kwargs and _default_data_store:
+                kwargs["data_store"] = _default_data_store
 
-        _loggers[logger_key] = ICSLogger(name, device, **kwargs)
+            _loggers[logger_key] = ICSLogger(name, device, **kwargs)
 
-    return _loggers[logger_key]
+        return _loggers[logger_key]

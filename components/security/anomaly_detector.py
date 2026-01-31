@@ -24,17 +24,31 @@ ICS-specific features:
 """
 
 import asyncio
+import json
 import statistics
 from collections import deque
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any
 
-from components.security.logging_system import get_logger
+from components.security.logging_system import (
+    EventCategory,
+    EventSeverity,
+    ICSLogger,
+    get_logger,
+)
 from components.state.data_store import DataStore
 from components.state.system_state import SystemState
 from components.time.simulation_time import SimulationTime
 from config.config_loader import ConfigLoader
+
+__all__ = [
+    "AnomalyType",
+    "AnomalySeverity",
+    "AnomalyEvent",
+    "StatisticalBaseline",
+    "AnomalyDetector",
+]
 
 # ----------------------------------------------------------------
 # Anomaly Classification
@@ -61,6 +75,15 @@ class AnomalySeverity(Enum):
     MEDIUM = 2  # Moderate deviation, investigate
     HIGH = 3  # Significant deviation, likely issue
     CRITICAL = 4  # Severe deviation, immediate action
+
+
+# Map AnomalySeverity to EventSeverity for ICS logging
+ANOMALY_TO_EVENT_SEVERITY = {
+    AnomalySeverity.LOW: EventSeverity.NOTICE,
+    AnomalySeverity.MEDIUM: EventSeverity.WARNING,
+    AnomalySeverity.HIGH: EventSeverity.ALERT,
+    AnomalySeverity.CRITICAL: EventSeverity.CRITICAL,
+}
 
 
 # ----------------------------------------------------------------
@@ -204,6 +227,7 @@ class AnomalyDetector:
     - DataStore: Read device telemetry
     - SystemState: Monitor system-wide patterns
     - ConfigLoader: Load detection thresholds
+    - ICSLogger: Security event logging
     """
 
     def __init__(
@@ -221,12 +245,13 @@ class AnomalyDetector:
         self.data_store = data_store
         self.system_state = system_state
         self.sim_time = SimulationTime()
+        self.logger: ICSLogger = get_logger(__name__, device="anomaly_detector")
 
         # Configuration
         self.config = ConfigLoader().load_all()
         self._load_config()
 
-        # Baselines
+        # Baselines (protected by _lock)
         self.baselines: dict[tuple[str, str], StatisticalBaseline] = {}
 
         # Anomaly history
@@ -252,6 +277,8 @@ class AnomalyDetector:
         # Detection enabled flag
         self.enabled = True
 
+        self.logger.info("AnomalyDetector initialised")
+
     def _load_config(self) -> None:
         """Load configuration from YAML."""
         anomaly_cfg = self.config.get("simulation", {}).get("anomaly_detection", {})
@@ -269,11 +296,34 @@ class AnomalyDetector:
         # Enable/disable
         self.enabled = anomaly_cfg.get("enabled", True)
 
+    async def _log_anomaly(self, anomaly: AnomalyEvent) -> None:
+        """Log anomaly to ICS logging system."""
+        event_severity = ANOMALY_TO_EVENT_SEVERITY.get(
+            anomaly.severity, EventSeverity.WARNING
+        )
+
+        await self.logger.log_event(
+            severity=event_severity,
+            category=EventCategory.SECURITY,
+            message=anomaly.description,
+            device=anomaly.device,
+            component="anomaly_detector",
+            data={
+                "anomaly_type": anomaly.anomaly_type.value,
+                "parameter": anomaly.parameter,
+                "observed_value": str(anomaly.observed_value),
+                "expected_value": str(anomaly.expected_value),
+                "deviation_magnitude": anomaly.deviation_magnitude,
+                **anomaly.data,
+            },
+            store_in_datastore=True,
+        )
+
     # ----------------------------------------------------------------
     # Baseline Management
     # ----------------------------------------------------------------
 
-    def add_baseline(
+    async def add_baseline(
         self,
         device: str,
         parameter: str,
@@ -288,15 +338,19 @@ class AnomalyDetector:
             learning_window: Number of samples for learning (None = use default)
         """
         key = (device, parameter)
-        if key not in self.baselines:
-            baseline = StatisticalBaseline(
-                parameter=parameter,
-                device=device,
-                learning_window=learning_window or self.learning_window,
-            )
-            self.baselines[key] = baseline
+        async with self._lock:
+            if key not in self.baselines:
+                baseline = StatisticalBaseline(
+                    parameter=parameter,
+                    device=device,
+                    learning_window=learning_window or self.learning_window,
+                )
+                self.baselines[key] = baseline
+                self.logger.debug(
+                    f"Added baseline monitoring for {device}:{parameter}"
+                )
 
-    def set_range_limit(
+    async def set_range_limit(
         self,
         device: str,
         parameter: str,
@@ -313,9 +367,13 @@ class AnomalyDetector:
             max_value: Maximum allowed value
         """
         key = (device, parameter)
-        self.range_limits[key] = (min_value, max_value)
+        async with self._lock:
+            self.range_limits[key] = (min_value, max_value)
+        self.logger.debug(
+            f"Set range limit for {device}:{parameter}: [{min_value}, {max_value}]"
+        )
 
-    def set_rate_of_change_limit(
+    async def set_rate_of_change_limit(
         self,
         device: str,
         parameter: str,
@@ -330,7 +388,11 @@ class AnomalyDetector:
             max_rate: Maximum rate of change per second
         """
         key = (device, parameter)
-        self.roc_limits[key] = max_rate
+        async with self._lock:
+            self.roc_limits[key] = max_rate
+        self.logger.debug(
+            f"Set rate-of-change limit for {device}:{parameter}: {max_rate}/s"
+        )
 
     # ----------------------------------------------------------------
     # Anomaly Detection Methods
@@ -474,6 +536,10 @@ class AnomalyDetector:
             for anomaly in anomalies:
                 self.anomalies.append(anomaly)
 
+        # Log anomalies outside the lock
+        for anomaly in anomalies:
+            await self._log_anomaly(anomaly)
+
         return anomalies
 
     async def check_alarm_flood(self, device: str) -> AnomalyEvent | None:
@@ -527,6 +593,9 @@ class AnomalyDetector:
                 )
 
                 self.anomalies.append(anomaly)
+
+                # Log alarm flood anomaly
+                await self._log_anomaly(anomaly)
                 return anomaly
 
         return None
@@ -586,18 +655,18 @@ class AnomalyDetector:
             severity: Filter by severity (None = all severities)
 
         Returns:
-            List of anomaly events
+            List of anomaly events (most recent last)
         """
         async with self._lock:
-            anomalies = list(self.anomalies)[-limit:]
+            anomalies = list(self.anomalies)
 
-            # Apply filters
+            # Apply filters first, then limit
             if device:
                 anomalies = [a for a in anomalies if a.device == device]
             if severity:
                 anomalies = [a for a in anomalies if a.severity == severity]
 
-            return anomalies
+            return anomalies[-limit:]
 
     async def get_anomaly_summary(self) -> dict[str, Any]:
         """
@@ -684,13 +753,13 @@ class AnomalyDetector:
             device: Device name for storage context
         """
         baselines_data = await self.export_baselines()
-
-        # Convert to JSON-serialisable format
-        import json
-
         baselines_json = json.dumps(baselines_data)
 
         await self.data_store.update_metadata(
             device,
             {"baselines": baselines_json},
+        )
+
+        self.logger.info(
+            f"Stored {len(baselines_data)} baselines to DataStore"
         )
