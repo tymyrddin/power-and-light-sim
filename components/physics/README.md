@@ -16,6 +16,14 @@ caution when testing real systems.
 
 ## Components
 
+| Module | System | Description |
+|--------|--------|-------------|
+| `turbine_physics.py` | Hex Steam Turbine | Shaft dynamics, thermal behaviour, power output, damage |
+| `reactor_physics.py` | Alchemical Reactor | Temperature, pressure, reaction kinetics, thaumic stability |
+| `hvac_physics.py` | Library Environmental | Zone temperature, humidity, L-space stability |
+| `grid_physics.py` | City-Wide Distribution | System frequency, load-generation balance |
+| `power_flow.py` | Transmission Network | Bus voltages, line flows, overload protection |
+
 ### `turbine_physics.py` - Steam turbine dynamics
 
 Models the physical behaviour of a steam turbine generator, from shaft rotation to power output to mechanical damage.
@@ -566,6 +574,123 @@ grid.update(dt)
 power_flow.update(dt)
 ```
 
+### `reactor_physics.py` - Alchemical reactor dynamics
+
+Models the physical behaviour of the Bursar's Automated Alchemical Reactor, which converts thaumic input into usable
+thermal energy while accounting for both chemical and metaphysical variables.
+
+**Physical Processes Modelled:**
+- **Temperature dynamics** - Core and coolant temperatures with realistic thermal mass
+- **Pressure dynamics** - Vessel pressure response to temperature
+- **Reaction kinetics** - Reaction rate response to control rod position
+- **Thaumic field stability** - The magical component that can destabilise under stress
+- **Safety systems** - SCRAM (emergency shutdown), containment integrity
+- **Cumulative damage** - Overtemperature operation causes permanent damage
+
+**Integration Points:**
+- **Reads from DataStore**: Control inputs from PLC (power setpoint, control rods, coolant pump)
+- **Writes to DataStore**: Telemetry (temperatures, pressure, thaumic field, alarms)
+- **Uses SimulationTime**: Physics updates respect simulation time acceleration
+- **Configurable**: Parameters for thermal mass, cooling capacity, thaumic behaviour
+
+**Example Usage:**
+```python
+from components.physics.reactor_physics import ReactorPhysics, ReactorParameters
+
+# Create reactor with custom parameters
+params = ReactorParameters(
+    rated_power_mw=25.0,
+    rated_temperature_c=350.0,
+    max_safe_temperature_c=400.0,
+    critical_temperature_c=450.0
+)
+
+reactor = ReactorPhysics("reactor_plc_1", data_store, params)
+await reactor.initialise()
+
+# Main simulation loop
+while running:
+    dt = sim_time.delta(last_time)
+    await reactor.read_control_inputs()
+    reactor.update(dt)
+    await reactor.write_telemetry()
+
+    telemetry = reactor.get_telemetry()
+    print(f"Reactor: {telemetry['core_temperature_c']}°C, "
+          f"Thaumic={telemetry['thaumic_field_strength']}")
+```
+
+**Attack Scenario - Overtemperature:**
+```python
+# Attacker commands 150% power with reduced cooling
+await data_store.write_memory("reactor_plc_1", "holding_registers[10]", 150)  # Power
+await data_store.write_memory("reactor_plc_1", "holding_registers[11]", 20)   # Coolant
+
+# Reactor temperature rises above safe limits
+# Thaumic field becomes unstable
+# Damage accumulates
+# Eventually triggers auto-SCRAM or containment breach
+```
+
+### `hvac_physics.py` - Library environmental control
+
+Models the Library Environmental Management System, which maintains temperature, humidity, and magical stability within
+the University Library. The Library exists partially in L-space (a dimension where all libraries are connected).
+
+**Physical Processes Modelled:**
+- **Zone temperature** - Heating/cooling dynamics with thermal mass of stone building
+- **Humidity control** - Humidification, dehumidification, outside air mixing
+- **Air handling** - Fan speed, duct pressure, damper positions (fan laws)
+- **L-space stability** - Dimensional stability affected by environmental stress
+- **Energy consumption** - Power usage calculation for all components
+
+**Integration Points:**
+- **Reads from DataStore**: Control inputs (setpoints, mode, fan speed, damper)
+- **Writes to DataStore**: Telemetry (temperatures, humidity, L-space stability, alarms)
+- **Uses SimulationTime**: Physics updates respect simulation time
+- **Configurable**: Zone thermal mass, equipment capacities, L-space thresholds
+
+**Example Usage:**
+```python
+from components.physics.hvac_physics import HVACPhysics, HVACParameters
+
+# Create HVAC for the Library
+params = HVACParameters(
+    zone_thermal_mass=500.0,      # Large stone library
+    zone_volume_m3=5000.0,
+    rated_heating_kw=50.0,
+    rated_cooling_kw=75.0,
+    lspace_threshold_temp_c=25.0  # L-space gets unstable above this
+)
+
+hvac = HVACPhysics("library_hvac_1", data_store, params)
+await hvac.initialise()
+
+# Main simulation loop
+while running:
+    dt = sim_time.delta(last_time)
+    await hvac.read_control_inputs()
+    hvac.update(dt)
+    await hvac.write_telemetry()
+
+    telemetry = hvac.get_telemetry()
+    print(f"Library: {telemetry['zone_temperature_c']}°C, "
+          f"RH={telemetry['zone_humidity_percent']}%, "
+          f"L-space={telemetry['lspace_stability']}")
+```
+
+**Attack Scenario - L-space Destabilisation:**
+```python
+# Attacker disables L-space dampener and overheats the library
+await data_store.write_memory("library_hvac_1", "coils[11]", False)  # Dampener off
+await data_store.write_memory("library_hvac_1", "holding_registers[10]", 30)  # High temp
+
+# Library temperature rises
+# L-space stability decreases
+# Books may begin migrating between dimensions
+# The Librarian becomes very unhappy (Ook!)
+```
+
 ## Future enhancements
 
 Potential improvements:
@@ -577,6 +702,7 @@ Potential improvements:
 - **Protection coordination** - Detailed relay models
 - **HVDC links** - DC transmission modelling
 - **Renewable integration** - Solar/wind variability
+- **Substation physics** - Transformer dynamics, tap changers, breakers
 
 ## References
 
