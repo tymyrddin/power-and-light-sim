@@ -18,11 +18,12 @@ Test Coverage:
 """
 
 import asyncio
+
 import pytest
 
-from components.state.system_state import SystemState
-from components.state.data_store import DataStore
 from components.devices.control_zone.plc.generic.base_plc import BasePLC
+from components.state.data_store import DataStore
+from components.state.system_state import SystemState
 from components.time.simulation_time import SimulationTime
 
 
@@ -142,10 +143,10 @@ async def started_plc(test_plc):
 # INITIALIZATION TESTS
 # ================================================================
 class TestBasePLCInitialization:
-    """Test PLC initialization."""
+    """Test PLC initialisation."""
 
     def test_init_with_defaults(self, datastore_setup):
-        """Test initializing PLC with default parameters.
+        """Test initialising PLC with default parameters.
 
         WHY: Verify sensible defaults for PLCs.
         """
@@ -163,7 +164,7 @@ class TestBasePLCInitialization:
         assert not plc.is_running()
 
     def test_init_with_custom_scan_interval(self, datastore_setup):
-        """Test initializing PLC with custom scan rate.
+        """Test initialising PLC with custom scan rate.
 
         WHY: Different PLCs have different scan rates.
         """
@@ -190,14 +191,14 @@ class TestBasePLCInitialization:
         WHY: Should use BaseDevice.metadata, not create duplicates.
         """
         # Should NOT have these attributes (would be duplicates)
-        assert not hasattr(test_plc, 'scan_count')
-        assert not hasattr(test_plc, 'error_count')
-        assert not hasattr(test_plc, 'last_scan_time')
+        assert not hasattr(test_plc, "scan_count")
+        assert not hasattr(test_plc, "error_count")
+        assert not hasattr(test_plc, "last_scan_time")
 
         # Should use metadata from BaseDevice
-        assert 'scan_count' in test_plc.metadata
-        assert 'error_count' in test_plc.metadata
-        assert 'last_scan_time' in test_plc.metadata
+        assert "scan_count" in test_plc.metadata
+        assert "error_count" in test_plc.metadata
+        assert "last_scan_time" in test_plc.metadata
 
 
 # ================================================================
@@ -359,7 +360,9 @@ class TestBasePLCIntegration:
         assert devices[0].device_name == "test_plc_1"
 
     @pytest.mark.asyncio
-    async def test_plc_memory_accessible_via_datastore(self, started_plc, datastore_setup):
+    async def test_plc_memory_accessible_via_datastore(
+        self, started_plc, datastore_setup
+    ):
         """Test that PLC memory is accessible via DataStore.
 
         WHY: Protocols must be able to read/write PLC memory.
@@ -383,7 +386,7 @@ class TestBasePLCIntegration:
         assert read_back == test_value
 
         # Note: PLC's next scan will overwrite this with computed value,
-        # which is correct PLC behavior (control logic has authority over outputs)
+        # which is correct PLC behaviour (control logic has authority over outputs)
 
     @pytest.mark.asyncio
     async def test_complete_plc_lifecycle(self, test_plc):
@@ -443,7 +446,9 @@ class TestBasePLCMemoryMap:
         await asyncio.sleep(0.03)
 
         # Check for underscore keys (diagnostic pollution)
-        underscore_keys = [k for k in started_plc.memory_map.keys() if k.startswith('_')]
+        underscore_keys = [
+            k for k in started_plc.memory_map.keys() if k.startswith("_")
+        ]
 
         # Should have no underscore keys
         assert len(underscore_keys) == 0
@@ -456,9 +461,9 @@ class TestBasePLCMemoryMap:
         """
         # All keys should be protocol addresses
         for key in started_plc.memory_map.keys():
-            assert not key.startswith('_')
+            assert not key.startswith("_")
             # Should look like protocol addresses
-            assert 'holding_registers' in key or 'coils' in key
+            assert "holding_registers" in key or "coils" in key
 
 
 # ================================================================
@@ -477,8 +482,7 @@ class TestBasePLCConcurrency:
 
         # Create multiple PLCs
         plcs = [
-            ConcretePLC(f"plc_{i}", i, data_store, scan_interval=0.01)
-            for i in range(3)
+            ConcretePLC(f"plc_{i}", i, data_store, scan_interval=0.01) for i in range(3)
         ]
 
         # Start all

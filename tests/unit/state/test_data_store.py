@@ -17,10 +17,11 @@ Test Coverage:
 """
 
 import asyncio
+
 import pytest
 
-from components.state.system_state import SystemState
 from components.state.data_store import DataStore
+from components.state.system_state import SystemState
 
 
 # ================================================================
@@ -242,7 +243,10 @@ class TestDataStoreMemoryOperations:
         assert await data_store.read_memory("test_plc", "holding_registers[0]") == 3600
         assert await data_store.read_memory("test_plc", "holding_registers[1]") == 98.6
         assert await data_store.read_memory("test_plc", "coils[0]") is True
-        assert await data_store.read_memory("test_plc", "holding_registers[2]") == "status_ok"
+        assert (
+            await data_store.read_memory("test_plc", "holding_registers[2]")
+            == "status_ok"
+        )
 
 
 # ================================================================
@@ -399,9 +403,7 @@ class TestDataStoreAddressValidation:
         await data_store.register_device("test_plc", "turbine_plc", 1, ["modbus"])
 
         # Should not raise
-        result = await data_store.write_memory(
-            "test_plc", "holding_registers[0]", 100
-        )
+        result = await data_store.write_memory("test_plc", "holding_registers[0]", 100)
         assert result is True
 
     @pytest.mark.asyncio
@@ -429,9 +431,7 @@ class TestDataStoreAddressValidation:
 
         await data_store.register_device("test_plc", "turbine_plc", 1, ["modbus"])
 
-        result = await data_store.write_memory(
-            "test_plc", "input_registers[10]", 50
-        )
+        result = await data_store.write_memory("test_plc", "input_registers[10]", 50)
         assert result is True
 
     @pytest.mark.asyncio
@@ -445,9 +445,7 @@ class TestDataStoreAddressValidation:
 
         await data_store.register_device("test_plc", "turbine_plc", 1, ["modbus"])
 
-        result = await data_store.write_memory(
-            "test_plc", "discrete_inputs[3]", False
-        )
+        result = await data_store.write_memory("test_plc", "discrete_inputs[3]", False)
         assert result is True
 
     @pytest.mark.asyncio
@@ -462,13 +460,9 @@ class TestDataStoreAddressValidation:
         await data_store.register_device("test_plc", "turbine_plc", 1, ["opcua"])
 
         # String identifier
-        result1 = await data_store.write_memory(
-            "test_plc", "ns=2;s=Temperature", 98.6
-        )
+        result1 = await data_store.write_memory("test_plc", "ns=2;s=Temperature", 98.6)
         # Numeric identifier
-        result2 = await data_store.write_memory(
-            "test_plc", "ns=2;i=1001", 100
-        )
+        result2 = await data_store.write_memory("test_plc", "ns=2;i=1001", 100)
 
         assert result1 is True
         assert result2 is True
@@ -484,9 +478,7 @@ class TestDataStoreAddressValidation:
 
         await data_store.register_device("test_rtu", "rtu", 1, ["iec104"])
 
-        result = await data_store.write_memory(
-            "test_rtu", "M_SP_NA_1:100", True
-        )
+        result = await data_store.write_memory("test_rtu", "M_SP_NA_1:100", True)
         assert result is True
 
     @pytest.mark.asyncio
@@ -501,9 +493,7 @@ class TestDataStoreAddressValidation:
         await data_store.register_device("test_plc", "turbine_plc", 1, ["custom"])
 
         # Should not raise, even though format is non-standard
-        result = await data_store.write_memory(
-            "test_plc", "custom_addr_123", 100
-        )
+        result = await data_store.write_memory("test_plc", "custom_addr_123", 100)
         assert result is True
 
 
@@ -541,8 +531,11 @@ class TestDataStoreMetadataOperations:
         data_store = DataStore(system_state)
 
         await data_store.register_device(
-            "test_plc", "turbine_plc", 1, ["modbus"],
-            metadata={"location": "Building A"}
+            "test_plc",
+            "turbine_plc",
+            1,
+            ["modbus"],
+            metadata={"location": "Building A"},
         )
 
         meta1 = await data_store.read_metadata("test_plc")
@@ -561,8 +554,11 @@ class TestDataStoreMetadataOperations:
         data_store = DataStore(system_state)
 
         await data_store.register_device(
-            "test_plc", "turbine_plc", 1, ["modbus"],
-            metadata={"location": "Building A"}
+            "test_plc",
+            "turbine_plc",
+            1,
+            ["modbus"],
+            metadata={"location": "Building A"},
         )
 
         await data_store.update_metadata("test_plc", {"ip": "192.168.1.10"})
@@ -580,9 +576,7 @@ class TestDataStoreMetadataOperations:
         system_state = SystemState()
         data_store = DataStore(system_state)
 
-        result = await data_store.update_metadata(
-            "nonexistent", {"key": "value"}
-        )
+        result = await data_store.update_metadata("nonexistent", {"key": "value"})
 
         assert result is False
 
@@ -880,7 +874,7 @@ class TestDataStoreIntegration:
             "turbine_plc",
             1,
             ["modbus"],
-            metadata={"location": "Building A"}
+            metadata={"location": "Building A"},
         )
 
         # Bring online
@@ -893,7 +887,7 @@ class TestDataStoreIntegration:
                 "holding_registers[0]": 3600,
                 "holding_registers[1]": 50,
                 "coils[0]": True,
-            }
+            },
         )
 
         # Read memory
@@ -949,9 +943,7 @@ class TestDataStoreConcurrency:
 
         # Register devices
         for i in range(10):
-            await data_store.register_device(
-                f"plc_{i}", "turbine_plc", i, ["modbus"]
-            )
+            await data_store.register_device(f"plc_{i}", "turbine_plc", i, ["modbus"])
 
         async def write_device(device_id: int):
             device_name = f"plc_{device_id}"
@@ -982,17 +974,13 @@ class TestDataStoreConcurrency:
 
         async def reader():
             for _ in range(50):
-                value = await data_store.read_memory(
-                    "test_plc", "holding_registers[0]"
-                )
+                value = await data_store.read_memory("test_plc", "holding_registers[0]")
                 results.append(value)
                 await asyncio.sleep(0.001)
 
         async def writer():
             for i in range(50):
-                await data_store.write_memory(
-                    "test_plc", "holding_registers[0]", i
-                )
+                await data_store.write_memory("test_plc", "holding_registers[0]", i)
                 await asyncio.sleep(0.001)
 
         # Run concurrently
@@ -1020,7 +1008,7 @@ class TestDataStoreConcurrency:
                     {
                         f"holding_registers[{i}]": i * 100,
                         f"coils[{i}]": i % 2 == 0,
-                    }
+                    },
                 )
                 # Bulk read
                 await data_store.bulk_read_memory("test_plc")
@@ -1051,9 +1039,7 @@ class TestDataStoreEdgeCases:
 
         await data_store.register_device("test_plc", "turbine_plc", 1, ["modbus"])
 
-        result = await data_store.write_memory(
-            "test_plc", "holding_registers[0]", None
-        )
+        result = await data_store.write_memory("test_plc", "holding_registers[0]", None)
 
         assert result is True
         value = await data_store.read_memory("test_plc", "holding_registers[0]")

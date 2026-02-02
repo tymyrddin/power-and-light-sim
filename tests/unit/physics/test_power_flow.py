@@ -19,19 +19,20 @@ Test Coverage:
 """
 
 import asyncio
-import pytest
 import tempfile
 from pathlib import Path
+
+import pytest
 import yaml
 
-from components.state.system_state import SystemState
-from components.state.data_store import DataStore
 from components.physics.power_flow import (
-    PowerFlow,
-    PowerFlowParameters,
     BusState,
     LineState,
+    PowerFlow,
+    PowerFlowParameters,
 )
+from components.state.data_store import DataStore
+from components.state.system_state import SystemState
 from config.config_loader import ConfigLoader
 
 
@@ -75,7 +76,7 @@ def simple_grid_config(temp_config_dir):
     }
 
     grid_file = temp_config_dir / "grid.yml"
-    with open(grid_file, 'w') as f:
+    with open(grid_file, "w") as f:
         yaml.dump(config, f)
 
     # Create other required config files
@@ -314,7 +315,9 @@ class TestPowerFlowDeviceAggregation:
         params = PowerFlowParameters()
         params.buses["bus_turbine_plc_1"] = BusState()
         params.buses["bus_load"] = BusState()
-        params.lines["line_1"] = LineState(from_bus="bus_turbine_plc_1", to_bus="bus_load")
+        params.lines["line_1"] = LineState(
+            from_bus="bus_turbine_plc_1", to_bus="bus_load"
+        )
 
         power_flow = PowerFlow(data_store, params=params)
         await power_flow.initialise()
@@ -349,7 +352,10 @@ class TestPowerFlowDeviceAggregation:
 
         # Q = P * tan(acos(0.9)) ≈ P * 0.484
         expected_mvar = 100.0 * 0.484
-        assert abs(power_flow.params.buses["bus_turbine_plc_1"].gen_mvar - expected_mvar) < 0.1
+        assert (
+            abs(power_flow.params.buses["bus_turbine_plc_1"].gen_mvar - expected_mvar)
+            < 0.1
+        )
 
     @pytest.mark.asyncio
     async def test_update_from_devices_sets_fixed_load(self, power_flow_with_datastore):
@@ -591,7 +597,9 @@ class TestPowerFlowOverloadDetection:
 
             # Check for overload log messages
             if any(line.overload for line in power_flow.params.lines.values()):
-                assert any("LINE OVERLOAD" in record.message for record in caplog.records)
+                assert any(
+                    "LINE OVERLOAD" in record.message for record in caplog.records
+                )
 
 
 # ================================================================
@@ -764,8 +772,7 @@ class TestPowerFlowIntegration:
         params.buses["bus_turbine_plc_1"] = BusState()
         params.buses["bus_load"] = BusState()
         params.lines["line_main"] = LineState(
-            from_bus="bus_turbine_plc_1",
-            to_bus="bus_load"
+            from_bus="bus_turbine_plc_1", to_bus="bus_load"
         )
 
         power_flow = PowerFlow(data_store, params=params)

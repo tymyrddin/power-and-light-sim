@@ -162,7 +162,9 @@ class NetworkSimulator:
             if self.system_state:
                 device_state = await self.system_state.get_device(node)
                 if not device_state:
-                    self.logger.warning(f"Exposing service on unregistered device: {node}")
+                    self.logger.warning(
+                        f"Exposing service on unregistered device: {node}"
+                    )
 
             # Check if device is on any network
             if node not in self.device_networks:

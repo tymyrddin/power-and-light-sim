@@ -427,9 +427,7 @@ class ICSLogger:
         """Store log entry in DataStore for centralised access."""
         try:
             # Store as device metadata with unique suffix to prevent collisions
-            log_key = (
-                f"log_{int(entry.simulation_time * 1000)}_{uuid.uuid4().hex[:8]}"
-            )
+            log_key = f"log_{int(entry.simulation_time * 1000)}_{uuid.uuid4().hex[:8]}"
             await self.data_store.update_metadata(
                 self.device,
                 {log_key: entry.to_json()},

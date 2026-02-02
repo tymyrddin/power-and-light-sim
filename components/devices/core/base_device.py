@@ -38,13 +38,13 @@ class BaseDevice(ABC):
     """
 
     def __init__(
-            self,
-            device_name: str,
-            device_id: int,
-            data_store: DataStore,
-            description: str = "",
-            scan_interval: float = 0.1,  # 100ms default scan rate
-            log_dir: Path | None = None,
+        self,
+        device_name: str,
+        device_id: int,
+        data_store: DataStore,
+        description: str = "",
+        scan_interval: float = 0.1,  # 100ms default scan rate
+        log_dir: Path | None = None,
     ):
         """
         Initialise base device.
@@ -177,7 +177,9 @@ class BaseDevice(ABC):
             self.logger.info(f"Device '{self.device_name}' started successfully")
 
         except Exception as e:
-            self.logger.error(f"Failed to start device '{self.device_name}': {e}", exc_info=True)
+            self.logger.error(
+                f"Failed to start device '{self.device_name}': {e}", exc_info=True
+            )
             # Cleanup on failure
             self._online = False
             self._running = False

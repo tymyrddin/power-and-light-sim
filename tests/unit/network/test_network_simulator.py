@@ -13,11 +13,12 @@ Test Coverage:
 """
 
 import asyncio
+
 import pytest
 import yaml
 
-from components.state.system_state import SystemState
 from components.network.network_simulator import NetworkSimulator
+from components.state.system_state import SystemState
 from config.config_loader import ConfigLoader
 
 
@@ -29,7 +30,7 @@ def simple_network_config(temp_config_dir):
     """Create simple network configuration."""
     config = {
         "networks": [{"name": "control_network", "vlan": 100}],
-        "connections": {"control_network": ["plc_1", "plc_2"]}
+        "connections": {"control_network": ["plc_1", "plc_2"]},
     }
 
     (temp_config_dir / "network.yml").write_text(yaml.dump(config))
@@ -49,7 +50,7 @@ def segmented_network_config(temp_config_dir):
         "connections": {
             "control_network": ["plc_1", "scada_1"],
             "corporate_network": ["workstation_1"],
-        }
+        },
     }
 
     (temp_config_dir / "network.yml").write_text(yaml.dump(config))
@@ -100,8 +101,7 @@ class TestNetworkSimulatorConfiguration:
         await system_state.register_device("plc_1", "turbine_plc", 1, ["modbus"])
 
         net_sim = NetworkSimulator(
-            config_loader=simple_network_config,
-            system_state=system_state
+            config_loader=simple_network_config, system_state=system_state
         )
         await net_sim.load()
 
@@ -214,9 +214,7 @@ class TestNetworkSimulatorReachability:
         await net_sim.load()
         await net_sim.expose_service("plc_1", "modbus", 502)
 
-        can_reach = await net_sim.can_reach(
-            "control_network", "plc_1", "modbus", 502
-        )
+        can_reach = await net_sim.can_reach("control_network", "plc_1", "modbus", 502)
 
         assert can_reach is True
 
@@ -230,9 +228,7 @@ class TestNetworkSimulatorReachability:
         await net_sim.load()
         await net_sim.expose_service("plc_1", "modbus", 502)
 
-        can_reach = await net_sim.can_reach(
-            "corporate_network", "plc_1", "modbus", 502
-        )
+        can_reach = await net_sim.can_reach("corporate_network", "plc_1", "modbus", 502)
 
         assert can_reach is False
 
@@ -243,9 +239,7 @@ class TestNetworkSimulatorReachability:
         WHY: Service must be listening.
         """
         net_sim = NetworkSimulator()
-        can_reach = await net_sim.can_reach(
-            "control_network", "plc_1", "modbus", 502
-        )
+        can_reach = await net_sim.can_reach("control_network", "plc_1", "modbus", 502)
 
         assert can_reach is False
 
@@ -259,9 +253,7 @@ class TestNetworkSimulatorReachability:
         await net_sim.load()
         await net_sim.expose_service("plc_1", "modbus", 502)
 
-        can_reach = await net_sim.can_reach(
-            "control_network", "plc_1", "opcua", 502
-        )
+        can_reach = await net_sim.can_reach("control_network", "plc_1", "opcua", 502)
 
         assert can_reach is False
 
@@ -275,14 +267,14 @@ class TestNetworkSimulatorReachability:
         await net_sim.load()
         await net_sim.expose_service("plc_1", "modbus", 502)
 
-        can_reach = await net_sim.can_reach_from_device(
-            "plc_2", "plc_1", "modbus", 502
-        )
+        can_reach = await net_sim.can_reach_from_device("plc_2", "plc_1", "modbus", 502)
 
         assert can_reach is True
 
     @pytest.mark.asyncio
-    async def test_cannot_reach_from_device_different_network(self, segmented_network_config):
+    async def test_cannot_reach_from_device_different_network(
+        self, segmented_network_config
+    ):
         """Test device-to-device blocked across networks.
 
         WHY: Segmentation applies device-to-device.

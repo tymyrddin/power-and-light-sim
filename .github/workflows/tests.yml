@@ -47,8 +47,8 @@ jobs:
             --cov=. --cov-append \
             --cov-report=xml:coverage.xml
 
-#      - name: Upload to Codecov
-#        uses: codecov/codecov-action@v4
-#        with:
-#          file: ./coverage.xml
-#          fail_ci_if_error: false
+      - name: Upload to Codecov
+        uses: codecov/codecov-action@v4
+        with:
+          file: ./coverage.xml
+          fail_ci_if_error: false

@@ -1,3 +1,4 @@
+# protocols/modbus/modbus_rtu_protocol.py
 """
 Modbus RTU protocol wrapper.
 
@@ -79,6 +80,37 @@ class ModbusRTUProtocol(BaseProtocol):
             pass
 
         return base_info
+
+    # ------------------------------------------------------------------
+    # Device sync - call these from device scan cycle
+    # ------------------------------------------------------------------
+
+    # sync_from_device
+    async def sync_from_device(self, memory_map: dict[str, object]) -> None:
+        """Push device memory_map to Modbus server via adapter."""
+        for i in range(self.adapter.num_input_registers):
+            key = f"input_registers[{i}]"
+            if key in memory_map:
+                value = memory_map[key]
+                if isinstance(value, (int, float)):
+                    await self.adapter.write_register(i, int(value))
+        for i in range(self.adapter.num_discrete_inputs):
+            key = f"discrete_inputs[{i}]"
+            if key in memory_map:
+                value = memory_map[key]
+                await self.adapter.write_coil(i, bool(value))
+
+    # sync_to_device
+    async def sync_to_device(self, memory_map: dict[str, object]) -> None:
+        """Pull external writes from Modbus server into memory_map."""
+        result = await self.adapter.read_coils(0, self.adapter.num_coils)
+        if hasattr(result, "bits"):
+            for i, val in enumerate(result.bits):
+                memory_map[f"coils[{i}]"] = bool(val)
+        result = await self.adapter.read_holding_registers(0, self.adapter.num_holding_registers)
+        if hasattr(result, "registers"):
+            for i, val in enumerate(result.registers):
+                memory_map[f"holding_registers[{i}]"] = int(val)
 
     # ------------------------------------------------------------
     # Attack primitives

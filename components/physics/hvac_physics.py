@@ -336,19 +336,19 @@ class HVACPhysics:
             dt: Time delta in seconds
         """
         # Fan stops
-        self.state.fan_speed_percent *= 0.9 ** dt
+        self.state.fan_speed_percent *= 0.9**dt
         if self.state.fan_speed_percent < 1.0:
             self.state.fan_speed_percent = 0.0
 
         # Valves close
-        self.state.heating_valve_percent *= 0.8 ** dt
-        self.state.cooling_valve_percent *= 0.8 ** dt
+        self.state.heating_valve_percent *= 0.8**dt
+        self.state.cooling_valve_percent *= 0.8**dt
 
         # Damper closes
-        self.state.damper_position_percent *= 0.9 ** dt
+        self.state.damper_position_percent *= 0.9**dt
 
         # Duct pressure drops
-        self.state.duct_pressure_pa *= 0.7 ** dt
+        self.state.duct_pressure_pa *= 0.7**dt
 
         # Zone drifts towards outside conditions (slowly due to insulation)
         drift_rate = 0.001  # Very slow for a well-insulated library
@@ -369,7 +369,7 @@ class HVACPhysics:
             self.state.lspace_stability = max(0.5, self.state.lspace_stability)
 
         # Energy consumption drops
-        self.state.energy_consumption_kw *= 0.5 ** dt
+        self.state.energy_consumption_kw *= 0.5**dt
         if self.state.energy_consumption_kw < 0.1:
             self.state.energy_consumption_kw = 0.0
 
@@ -386,7 +386,9 @@ class HVACPhysics:
         speed_error = speed_command - self.state.fan_speed_percent
         fan_time_constant = 5.0  # seconds
         self.state.fan_speed_percent += speed_error * (dt / fan_time_constant)
-        self.state.fan_speed_percent = max(0.0, min(100.0, self.state.fan_speed_percent))
+        self.state.fan_speed_percent = max(
+            0.0, min(100.0, self.state.fan_speed_percent)
+        )
 
         # Duct pressure proportional to fan speed squared (fan laws)
         max_pressure = 500.0  # Pa at 100% speed
@@ -461,18 +463,20 @@ class HVACPhysics:
                 self.state.cooling_valve_percent = 0.0
             else:
                 self.state.heating_valve_percent = 0.0
-                self.state.cooling_valve_percent = max(
-                    0.0, min(100.0, -control_output)
-                )
+                self.state.cooling_valve_percent = max(0.0, min(100.0, -control_output))
 
         # Calculate supply air temperature based on valves
         if self.state.heating_valve_percent > 0:
             # Heating coil heats supply air
-            heating_effect = self.state.heating_valve_percent / 100.0 * 15.0  # +15°C max
+            heating_effect = (
+                self.state.heating_valve_percent / 100.0 * 15.0
+            )  # +15°C max
             self.state.supply_air_temp_c = self.state.return_air_temp_c + heating_effect
         elif self.state.cooling_valve_percent > 0:
             # Cooling coil cools supply air
-            cooling_effect = self.state.cooling_valve_percent / 100.0 * 10.0  # -10°C max
+            cooling_effect = (
+                self.state.cooling_valve_percent / 100.0 * 10.0
+            )  # -10°C max
             self.state.supply_air_temp_c = self.state.return_air_temp_c - cooling_effect
         else:
             # No conditioning - supply equals return (with some outside air mixing)
@@ -500,7 +504,9 @@ class HVACPhysics:
         # Heat loss to outside (simplified)
         # U-value equivalent for a well-insulated building
         ua_value = 0.5  # kW/°C
-        heat_loss = ua_value * (self.state.zone_temperature_c - self.params.outside_temp_c)
+        heat_loss = ua_value * (
+            self.state.zone_temperature_c - self.params.outside_temp_c
+        )
 
         # Internal heat gains (people, lights, equipment, magical books)
         internal_gains = 5.0  # kW baseline
@@ -666,7 +672,11 @@ class HVACPhysics:
         dampener_power = 2.0 if self.state.lspace_stability < 0.9 else 0.5
 
         self.state.energy_consumption_kw = (
-            fan_power + heating_power + cooling_power + humidifier_power + dampener_power
+            fan_power
+            + heating_power
+            + cooling_power
+            + humidifier_power
+            + dampener_power
         )
 
     async def _write_telemetry(self) -> None:
@@ -806,7 +816,9 @@ class HVACPhysics:
             mode = self.MODE_OFF
         self._control_cache["mode_select"] = mode
         mode_names = {0: "OFF", 1: "HEAT", 2: "COOL", 3: "AUTO"}
-        logger.debug(f"{self.device_name}: Mode set to {mode_names.get(mode, 'UNKNOWN')}")
+        logger.debug(
+            f"{self.device_name}: Mode set to {mode_names.get(mode, 'UNKNOWN')}"
+        )
 
     def set_system_enable(self, enabled: bool) -> None:
         """Enable or disable HVAC system.

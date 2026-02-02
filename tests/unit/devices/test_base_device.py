@@ -22,11 +22,12 @@ BaseDevice is abstract, so we create a concrete test implementation.
 """
 
 import asyncio
+
 import pytest
 
-from components.state.system_state import SystemState
-from components.state.data_store import DataStore
 from components.devices.core.base_device import BaseDevice
+from components.state.data_store import DataStore
+from components.state.system_state import SystemState
 from components.time.simulation_time import SimulationTime
 
 
@@ -40,8 +41,14 @@ class ConcreteTestDevice(BaseDevice):
     Note: Named ConcreteTestDevice (not TestDevice) to avoid pytest collection.
     """
 
-    def __init__(self, device_name: str, device_id: int, data_store: DataStore,
-                 description: str = "", scan_interval: float = 0.1):
+    def __init__(
+        self,
+        device_name: str,
+        device_id: int,
+        data_store: DataStore,
+        description: str = "",
+        scan_interval: float = 0.1,
+    ):
         super().__init__(device_name, device_id, data_store, description, scan_interval)
         self.scan_cycle_count = 0
         self.scan_cycle_error = None  # Set to exception to simulate errors
@@ -54,7 +61,7 @@ class ConcreteTestDevice(BaseDevice):
         return ["modbus", "opcua"]
 
     async def _initialise_memory_map(self) -> None:
-        """Initialize test memory map."""
+        """Initialise test memory map."""
         self.initialise_call_count += 1
         self.memory_map = {
             "holding_registers[0]": 0,
@@ -145,7 +152,7 @@ class TestBaseDeviceInitialization:
     """Test device initialization and configuration."""
 
     def test_init_with_defaults(self, datastore_setup):
-        """Test initialization with default parameters.
+        """Test initialisation with default parameters.
 
         WHY: Verify sensible defaults are set.
         """
@@ -166,7 +173,7 @@ class TestBaseDeviceInitialization:
         assert device.memory_map == {}
 
     def test_init_with_custom_params(self, datastore_setup):
-        """Test initialization with custom parameters.
+        """Test initialisation with custom parameters.
 
         WHY: Support flexible device configuration.
         """
@@ -521,7 +528,9 @@ class TestBaseDeviceScanCycle:
         assert final_value > initial_value
 
     @pytest.mark.asyncio
-    async def test_scan_cycle_writes_to_datastore(self, started_device, datastore_setup):
+    async def test_scan_cycle_writes_to_datastore(
+        self, started_device, datastore_setup
+    ):
         """Test that scan cycle writes memory to DataStore.
 
         WHY: DataStore must reflect current device state.
@@ -550,7 +559,9 @@ class TestBaseDeviceScanCycle:
         assert started_device.metadata["last_scan_time"] is not None
 
     @pytest.mark.asyncio
-    async def test_scan_cycle_respects_simulation_pause(self, started_device, clean_simulation_time):
+    async def test_scan_cycle_respects_simulation_pause(
+        self, started_device, clean_simulation_time
+    ):
         """Test that scan cycle stops when simulation paused.
 
         WHY: Time-mode awareness is critical.
@@ -581,7 +592,7 @@ class TestBaseDeviceErrorHandling:
 
     @pytest.mark.asyncio
     async def test_start_failure_cleanup(self, test_device, datastore_setup):
-        """Test that start() failures cleanup properly.
+        """Test that start() failures clean-up properly.
 
         WHY: Failed start should not leave device in inconsistent state.
         """
@@ -633,7 +644,9 @@ class TestBaseDeviceErrorHandling:
         assert started_device.scan_cycle_count > initial_count
 
     @pytest.mark.asyncio
-    async def test_datastore_write_error_continues_running(self, started_device, datastore_setup):
+    async def test_datastore_write_error_continues_running(
+        self, started_device, datastore_setup
+    ):
         """Test that DataStore write errors don't stop device.
 
         WHY: DataStore failures should be isolated.
@@ -831,11 +844,15 @@ class TestBaseDeviceIntegration:
         await data_store.write_memory("test_plc_1", "holding_registers[1]", 42)
 
         # Verify it's in DataStore
-        datastore_value = await data_store.read_memory("test_plc_1", "holding_registers[1]")
+        datastore_value = await data_store.read_memory(
+            "test_plc_1", "holding_registers[1]"
+        )
         assert datastore_value == 42
 
     @pytest.mark.asyncio
-    async def test_simulation_time_integration(self, started_device, clean_simulation_time):
+    async def test_simulation_time_integration(
+        self, started_device, clean_simulation_time
+    ):
         """Test integration with SimulationTime.
 
         WHY: Devices must respect simulation time control.

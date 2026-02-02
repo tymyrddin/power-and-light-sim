@@ -199,8 +199,12 @@ class ReactorPhysics:
                 ),
                 "coolant_pump_speed": float(coolant_pump) if coolant_pump else 0.0,
                 "control_rods_position": float(control_rods) if control_rods else 100.0,
-                "emergency_shutdown": bool(emergency_shutdown) if emergency_shutdown else False,
-                "thaumic_dampener_enabled": bool(thaumic_dampener) if thaumic_dampener else True,
+                "emergency_shutdown": (
+                    bool(emergency_shutdown) if emergency_shutdown else False
+                ),
+                "thaumic_dampener_enabled": (
+                    bool(thaumic_dampener) if thaumic_dampener else True
+                ),
             }
         except Exception as e:
             logger.warning(
@@ -331,7 +335,9 @@ class ReactorPhysics:
 
         # Heat removed by coolant (MW)
         # Cooling power depends on flow rate and temperature difference
-        temp_difference = self.state.core_temperature_c - self.state.coolant_temperature_c
+        temp_difference = (
+            self.state.core_temperature_c - self.state.coolant_temperature_c
+        )
         heat_removed = (
             self.state.coolant_flow_rate
             * self.params.coolant_capacity
@@ -414,8 +420,7 @@ class ReactorPhysics:
         power_stress = self.state.reaction_rate / 1.0  # Stress at 100% power
         temp_stress = max(
             0.0,
-            (self.state.core_temperature_c - self.params.rated_temperature_c)
-            / 100.0,
+            (self.state.core_temperature_c - self.params.rated_temperature_c) / 100.0,
         )
 
         total_stress = power_stress * 0.3 + temp_stress * 0.5
@@ -439,7 +444,9 @@ class ReactorPhysics:
         if self.state.thaumic_field_strength < 0.3:
             containment_damage = (0.3 - self.state.thaumic_field_strength) * 0.01 * dt
             self.state.containment_integrity -= containment_damage
-            self.state.containment_integrity = max(0.0, self.state.containment_integrity)
+            self.state.containment_integrity = max(
+                0.0, self.state.containment_integrity
+            )
 
             logger.warning(
                 f"{self.device_name}: Thaumic instability! "
@@ -537,8 +544,10 @@ class ReactorPhysics:
             "holding_registers[9]": int(self.state.damage_level * 100),  # %
             # Coils (digital status)
             "coils[0]": self.state.reaction_rate > 0.01,  # Reactor active
-            "coils[1]": self.state.core_temperature_c > self.params.max_safe_temperature_c,
-            "coils[2]": self.state.vessel_pressure_bar > self.params.max_safe_pressure_bar,
+            "coils[1]": self.state.core_temperature_c
+            > self.params.max_safe_temperature_c,
+            "coils[2]": self.state.vessel_pressure_bar
+            > self.params.max_safe_pressure_bar,
             "coils[3]": self.state.thaumic_field_strength < 0.5,  # Thaumic warning
             "coils[4]": self.state.containment_integrity < 0.8,  # Containment warning
             "coils[5]": self._scram_active,  # SCRAM active

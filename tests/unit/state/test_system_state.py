@@ -15,11 +15,10 @@ Test Coverage:
 """
 
 import asyncio
+
 import pytest
 
-from components.state.system_state import (
-    SystemState
-)
+from components.state.system_state import SystemState
 
 
 # ================================================================
@@ -407,8 +406,11 @@ class TestSystemStateUpdates:
         """
         state = SystemState()
         await state.register_device(
-            "test_plc", "turbine_plc", 1, ["modbus"],
-            metadata={"location": "Building A"}
+            "test_plc",
+            "turbine_plc",
+            1,
+            ["modbus"],
+            metadata={"location": "Building A"},
         )
 
         # Update with additional metadata
@@ -857,10 +859,7 @@ class TestSystemStateConcurrency:
             for i in range(10):
                 device_id = start_id + i
                 await state.register_device(
-                    f"plc_{device_id}",
-                    "turbine_plc",
-                    device_id,
-                    ["modbus"]
+                    f"plc_{device_id}", "turbine_plc", device_id, ["modbus"]
                 )
 
         # Register 30 devices concurrently (3 coroutines × 10 devices)
@@ -941,7 +940,9 @@ class TestSystemStateConcurrency:
             for i in range(10):
                 device_id = offset + i
                 device_name = f"plc_{device_id}"
-                await state.register_device(device_name, "turbine_plc", device_id, ["modbus"])
+                await state.register_device(
+                    device_name, "turbine_plc", device_id, ["modbus"]
+                )
                 await state.get_summary()  # Generate summary during registration
 
         # Launch 3 coroutines concurrently, each registering 10 unique devices
@@ -973,10 +974,7 @@ class TestSystemStateEdgeCases:
         state = SystemState()
 
         await state.register_device(
-            "multi_plc",
-            "turbine_plc",
-            1,
-            ["modbus", "dnp3", "iec61850"]
+            "multi_plc", "turbine_plc", 1, ["modbus", "dnp3", "iec61850"]
         )
 
         device = await state.get_device("multi_plc")
@@ -1031,8 +1029,7 @@ class TestSystemStateEdgeCases:
         }
 
         await state.register_device(
-            "plc_1", "turbine_plc", 1, ["modbus"],
-            metadata=complex_metadata
+            "plc_1", "turbine_plc", 1, ["modbus"], metadata=complex_metadata
         )
 
         device = await state.get_device("plc_1")

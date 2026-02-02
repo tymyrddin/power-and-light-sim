@@ -1,4 +1,4 @@
-# components/devices/hmi_workstation.py
+# components/devices/operations_zone/hmi_workstation.py
 """
 HMI (Human-Machine Interface) Workstation device class.
 
@@ -6,15 +6,15 @@ Operator interface for monitoring and controlling the industrial process.
 Typically runs software like Wonderware InTouch, FactoryTalk View, or Ignition.
 """
 
-import asyncio
-import logging
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any
 
+from components.devices.operations_zone.base_supervisory import (
+    BaseSupervisoryDevice,
+    PollTarget,
+)
 from components.state.data_store import DataStore
-from components.time.simulation_time import SimulationTime
-
-logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -26,7 +26,7 @@ class HMIScreen:
     controls_available: list[str] = field(default_factory=list)
 
 
-class HMIWorkstation:
+class HMIWorkstation(BaseSupervisoryDevice):
     """
     Human-Machine Interface workstation.
 
@@ -43,6 +43,7 @@ class HMIWorkstation:
     Example:
         >>> hmi = HMIWorkstation(
         ...     device_name="hmi_operator_1",
+        ...     device_id=1,
         ...     data_store=data_store,
         ...     scada_server="scada_master_1"
         ... )
@@ -51,31 +52,44 @@ class HMIWorkstation:
         ...     tags=["TURB1_SPEED", "TURB1_POWER"],
         ...     controls=["TURB1_SPEED_SETPOINT", "TURB1_START_STOP"]
         ... )
-        >>> await hmi.initialise()
+        >>> await hmi.start()
         >>> hmi.login_operator("operator1")
     """
 
     def __init__(
         self,
         device_name: str,
+        device_id: int,
         data_store: DataStore,
         scada_server: str = "scada_master_1",
         os_version: str = "Windows 10",
         hmi_software: str = "Wonderware InTouch 2014",
+        description: str = "",
+        scan_interval: float = 0.5,  # HMI refresh rate (500ms default)
+        log_dir: Path | None = None,
     ):
         """
         Initialise HMI workstation.
 
         Args:
             device_name: Unique device identifier
+            device_id: Numeric ID for protocol addressing
             data_store: DataStore instance
             scada_server: SCADA server to connect to
             os_version: Operating system version
             hmi_software: HMI software package
+            description: Human-readable description
+            scan_interval: Screen refresh rate in seconds
+            log_dir: Directory for log files
         """
-        self.device_name = device_name
-        self.data_store = data_store
-        self.sim_time = SimulationTime()
+        super().__init__(
+            device_name=device_name,
+            device_id=device_id,
+            data_store=data_store,
+            description=description,
+            scan_interval=scan_interval,
+            log_dir=log_dir,
+        )
 
         # Configuration
         self.scada_server = scada_server
@@ -84,52 +98,137 @@ class HMIWorkstation:
 
         # HMI screens
         self.screens: dict[str, HMIScreen] = {}
-        self.current_screen = None
+        self.current_screen: str | None = None
+
+        # Screen data cache (updated each scan)
+        self.screen_data: dict[str, Any] = {}
 
         # Operator session
-        self.operator_logged_in = False
-        self.operator_name = ""
-        self.login_time = 0.0
+        self.operator_logged_in: bool = False
+        self.operator_name: str = ""
+        self.login_time: float = 0.0
 
         # Security characteristics (realistic weaknesses)
-        self.web_interface_enabled = True
-        self.web_interface_port = 8080
-        self.web_default_credentials = ("admin", "admin")  # Common vulnerability
-        self.rdp_enabled = True
-        self.config_file_path = "C:\\InTouch\\config.xml"  # Contains credentials
-        self.credentials_plaintext = True  # Common issue
+        self.web_interface_enabled: bool = True
+        self.web_interface_port: int = 8080
+        self.web_default_credentials: tuple[str, str] = ("admin", "admin")
+        self.rdp_enabled: bool = True
+        self.config_file_path: str = "C:\\InTouch\\config.xml"
+        self.credentials_plaintext: bool = True
 
-        # Runtime state
-        self._running = False
+        # Add SCADA server as poll target
+        self.add_poll_target(
+            device_name=scada_server,
+            protocol="internal",
+            poll_rate_s=scan_interval,
+        )
 
-        logger.info(
-            f"HMIWorkstation created: {device_name}, "
-            f"OS={os_version}, software={hmi_software}"
+        self.logger.info(
+            f"HMIWorkstation '{device_name}' initialised "
+            f"(OS={os_version}, software={hmi_software})"
         )
 
     # ----------------------------------------------------------------
-    # Lifecycle
+    # BaseDevice implementation
     # ----------------------------------------------------------------
 
-    async def initialise(self) -> None:
-        """Initialise HMI workstation and register with DataStore."""
-        await self.data_store.register_device(
-            device_name=self.device_name,
-            device_type="hmi_workstation",
-            device_id=hash(self.device_name) % 1000,
-            protocols=["http", "rdp", "vnc"],
-            metadata={
-                "scada_server": self.scada_server,
-                "os_version": self.os_version,
-                "hmi_software": self.hmi_software,
-                "web_interface_port": self.web_interface_port,
-                "screens": len(self.screens),
-            },
+    def _device_type(self) -> str:
+        """Return 'hmi_workstation' as device type."""
+        return "hmi_workstation"
+
+    def _supported_protocols(self) -> list[str]:
+        """HMI workstations support HTTP, RDP, VNC for remote access."""
+        return ["http", "rdp", "vnc"]
+
+    async def _initialise_memory_map(self) -> None:
+        """
+        Initialise HMI workstation memory map.
+
+        Memory map structure:
+        - Operator session state
+        - Current screen info
+        - Cached screen data
+        """
+        self.memory_map = {
+            # Operator session
+            "operator_logged_in": False,
+            "operator_name": "",
+            "login_time": 0.0,
+            # Screen state
+            "current_screen": None,
+            "screen_count": len(self.screens),
+            "screens": list(self.screens.keys()),
+            # Cached data from SCADA
+            "screen_data": {},
+            # Configuration
+            "scada_server": self.scada_server,
+            "web_interface_port": self.web_interface_port,
+        }
+
+        self.logger.debug(
+            f"Memory map initialised with {len(self.screens)} screens"
         )
 
-        await self._sync_to_datastore()
+    # ----------------------------------------------------------------
+    # BaseSupervisoryDevice implementation
+    # ----------------------------------------------------------------
 
-        logger.info(f"HMIWorkstation initialised: {self.device_name}")
+    async def _poll_device(self, target: PollTarget) -> None:
+        """
+        Poll SCADA server for tag data.
+
+        Args:
+            target: Poll target (SCADA server)
+        """
+        try:
+            # Read SCADA server memory from DataStore
+            scada_memory = await self.data_store.bulk_read_memory(target.device_name)
+
+            if scada_memory and "tag_values" in scada_memory:
+                # Update screen data cache with tags for current screen
+                if self.current_screen and self.current_screen in self.screens:
+                    screen = self.screens[self.current_screen]
+                    for tag_name in screen.tags_displayed:
+                        if tag_name in scada_memory["tag_values"]:
+                            self.screen_data[tag_name] = scada_memory["tag_values"][tag_name]
+
+                target.last_poll_success = True
+                target.consecutive_failures = 0
+            else:
+                target.last_poll_success = False
+                target.consecutive_failures += 1
+
+        except Exception as e:
+            self.logger.error(f"Error polling SCADA server {target.device_name}: {e}")
+            target.last_poll_success = False
+            target.consecutive_failures += 1
+            self.failed_polls += 1
+
+    async def _process_polled_data(self) -> None:
+        """Process polled data and sync to memory map."""
+        # Update memory map with current state
+        self.memory_map["operator_logged_in"] = self.operator_logged_in
+        self.memory_map["operator_name"] = self.operator_name
+        self.memory_map["login_time"] = self.login_time
+        self.memory_map["current_screen"] = self.current_screen
+        self.memory_map["screen_count"] = len(self.screens)
+        self.memory_map["screens"] = list(self.screens.keys())
+        self.memory_map["screen_data"] = self.screen_data.copy()
+
+    def _check_alarms(self) -> None:
+        """
+        Check for HMI-specific alarm conditions.
+
+        HMI doesn't generate process alarms - those come from SCADA.
+        Could check for session timeouts, connection issues, etc.
+        """
+        # Check for SCADA connection failure
+        if self.scada_server in self.poll_targets:
+            target = self.poll_targets[self.scada_server]
+            if target.consecutive_failures >= 3:
+                self.logger.warning(
+                    f"HMI '{self.device_name}': Lost connection to SCADA server"
+                )
 
     # ----------------------------------------------------------------
     # Screen configuration
@@ -152,16 +251,26 @@ class HMIWorkstation:
             controls_available=controls,
         )
 
-        logger.debug(
+        self.logger.debug(
             f"HMI screen added: {screen_name}, "
             f"{len(tags)} tags, {len(controls)} controls"
         )
 
     def navigate_to_screen(self, screen_name: str) -> bool:
-        """Navigate to a specific screen."""
+        """
+        Navigate to a specific screen.
+
+        Args:
+            screen_name: Screen to navigate to
+
+        Returns:
+            True if navigation successful, False if screen not found
+        """
         if screen_name in self.screens:
             self.current_screen = screen_name
-            logger.debug(f"HMI navigated to screen: {screen_name}")
+            # Clear cached data for new screen
+            self.screen_data = {}
+            self.logger.debug(f"HMI navigated to screen: {screen_name}")
             return True
         return False
 
@@ -185,17 +294,18 @@ class HMIWorkstation:
         self.operator_name = operator_name
         self.login_time = self.sim_time.now()
 
-        logger.info(f"Operator logged in to {self.device_name}: {operator_name}")
+        self.logger.info(f"Operator logged in to {self.device_name}: {operator_name}")
         return True
 
     def logout_operator(self) -> None:
         """Logout current operator."""
         if self.operator_logged_in:
-            logger.info(
+            self.logger.info(
                 f"Operator logged out from {self.device_name}: {self.operator_name}"
             )
             self.operator_logged_in = False
             self.operator_name = ""
+            self.login_time = 0.0
 
     # ----------------------------------------------------------------
     # SCADA integration
@@ -233,12 +343,18 @@ class HMIWorkstation:
         Returns:
             True if command sent successfully
         """
+        if not self.operator_logged_in:
+            self.logger.warning(
+                f"Command rejected: No operator logged in on {self.device_name}"
+            )
+            return False
+
         # Write directly to device memory via DataStore
         # In real system, this would go through SCADA server
         await self.data_store.write_memory(device_name, address_type, value)
 
-        logger.info(
-            f"HMI command: {self.operator_name} → {device_name}:"
+        self.logger.info(
+            f"HMI command: {self.operator_name} -> {device_name}:"
             f"{address_type}[{address}] = {value}"
         )
 
@@ -249,15 +365,8 @@ class HMIWorkstation:
         if not self.current_screen or self.current_screen not in self.screens:
             return {}
 
-        screen = self.screens[self.current_screen]
-        screen_data = {}
-
-        # Fetch all tags displayed on this screen
-        for tag_name in screen.tags_displayed:
-            value = await self.get_tag_from_scada(tag_name)
-            screen_data[tag_name] = value
-
-        return screen_data
+        # Return cached screen data (updated by scan cycle)
+        return self.screen_data.copy()
 
     # ----------------------------------------------------------------
     # Security vulnerabilities (for testing)
@@ -289,21 +398,23 @@ class HMIWorkstation:
         }
 
     # ----------------------------------------------------------------
-    # State management
+    # Status and telemetry
     # ----------------------------------------------------------------
 
-    async def _sync_to_datastore(self) -> None:
-        """Synchronise HMI state to DataStore."""
-        memory_map = {
+    async def get_hmi_status(self) -> dict[str, Any]:
+        """Get HMI-specific status information."""
+        base_status = await self.get_supervisory_status()
+        hmi_status = {
+            **base_status,
+            "os_version": self.os_version,
+            "hmi_software": self.hmi_software,
             "scada_server": self.scada_server,
             "current_screen": self.current_screen,
+            "screen_count": len(self.screens),
             "operator_logged_in": self.operator_logged_in,
             "operator_name": self.operator_name,
-            "web_interface_port": self.web_interface_port,
-            "screens": [screen.screen_name for screen in self.screens.values()],
         }
-
-        await self.data_store.bulk_write_memory(self.device_name, memory_map)
+        return hmi_status
 
     async def get_telemetry(self) -> dict[str, Any]:
         """Get HMI telemetry."""

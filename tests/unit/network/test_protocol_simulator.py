@@ -385,7 +385,9 @@ class TestProtocolSimulatorSummary:
         assert summary["listeners"]["details"][0]["protocol"] == "modbus"
 
     @pytest.mark.asyncio
-    async def test_get_summary_connection_stats(self, network_sim, mock_handler_factory):
+    async def test_get_summary_connection_stats(
+        self, network_sim, mock_handler_factory
+    ):
         """Test summary includes connection statistics.
 
         WHY: Need to track connections.

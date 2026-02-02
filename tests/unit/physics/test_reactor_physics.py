@@ -333,9 +333,7 @@ class TestReactorReactionRate:
 class TestReactorThaumicField:
     """Test thaumic field stability dynamics."""
 
-    async def test_thaumic_field_stable_at_normal_operation(
-        self, reactor_with_device
-    ):
+    async def test_thaumic_field_stable_at_normal_operation(self, reactor_with_device):
         """Test thaumic field remains stable at normal conditions."""
         reactor, data_store = reactor_with_device
 
@@ -352,9 +350,7 @@ class TestReactorThaumicField:
 
         assert reactor.state.thaumic_field_strength > 0.8
 
-    async def test_thaumic_field_degrades_without_dampener(
-        self, reactor_with_device
-    ):
+    async def test_thaumic_field_degrades_without_dampener(self, reactor_with_device):
         """Test thaumic field degrades faster without dampener."""
         reactor, data_store = reactor_with_device
 
@@ -362,7 +358,9 @@ class TestReactorThaumicField:
         reactor.state.core_temperature_c = 400.0  # Above rated (350)
         reactor.state.reaction_rate = 1.2  # High reaction
 
-        await data_store.write_memory("reactor_plc_1", "coils[11]", False)  # No dampener
+        await data_store.write_memory(
+            "reactor_plc_1", "coils[11]", False
+        )  # No dampener
 
         await reactor.read_control_inputs()
 
@@ -374,9 +372,7 @@ class TestReactorThaumicField:
         # Thaumic field should have degraded
         assert reactor.state.thaumic_field_strength < initial_thaumic
 
-    async def test_thaumic_instability_damages_containment(
-        self, reactor_with_device
-    ):
+    async def test_thaumic_instability_damages_containment(self, reactor_with_device):
         """Test severe thaumic instability damages containment."""
         reactor, data_store = reactor_with_device
 
@@ -494,9 +490,7 @@ class TestReactorDamage:
 
         assert reactor.state.damage_level == 0.0
 
-    async def test_damage_accumulates_above_safe_temperature(
-        self, reactor_with_device
-    ):
+    async def test_damage_accumulates_above_safe_temperature(self, reactor_with_device):
         """Test damage accumulates above safe temperature."""
         reactor, data_store = reactor_with_device
 
@@ -574,12 +568,8 @@ class TestReactorTelemetry:
         core_temp = await data_store.read_memory(
             "reactor_plc_1", "holding_registers[0]"
         )
-        pressure = await data_store.read_memory(
-            "reactor_plc_1", "holding_registers[2]"
-        )
-        thaumic = await data_store.read_memory(
-            "reactor_plc_1", "holding_registers[4]"
-        )
+        pressure = await data_store.read_memory("reactor_plc_1", "holding_registers[2]")
+        thaumic = await data_store.read_memory("reactor_plc_1", "holding_registers[4]")
 
         assert core_temp == 300
         assert pressure == 1000  # 100.0 * 10

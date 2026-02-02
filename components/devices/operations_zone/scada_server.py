@@ -1,4 +1,4 @@
-# components/devices/scada_server.py
+# components/devices/operations_zone/scada_server.py
 """
 SCADA Server device class.
 
@@ -6,29 +6,15 @@ Central Supervisory Control and Data Acquisition system that polls field devices
 aggregates data, manages alarms, and provides operator interface.
 """
 
-import asyncio
-import logging
-from dataclasses import dataclass, field
-from datetime import datetime
+from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
 
+from components.devices.operations_zone.base_supervisory import (
+    BaseSupervisoryDevice,
+    PollTarget,
+)
 from components.state.data_store import DataStore
-from components.time.simulation_time import SimulationTime
-
-logger = logging.getLogger(__name__)
-
-
-@dataclass
-class PollTarget:
-    """Configuration for a polled device."""
-
-    device_name: str
-    protocol: str  # 'modbus', 'iec104', 'dnp3', 'opcua'
-    poll_rate_s: float = 1.0
-    enabled: bool = True
-    last_poll_time: float = 0.0
-    last_poll_success: bool = False
-    consecutive_failures: int = 0
 
 
 @dataclass
@@ -52,13 +38,13 @@ class Alarm:
 
     tag_name: str
     alarm_type: str  # 'high', 'low', 'change_of_state', 'comms_failure'
-    triggered_at: datetime
+    triggered_at: float  # Simulation time when alarm was triggered
     acknowledged: bool = False
     value: Any = None
     message: str = ""
 
 
-class SCADAServer:
+class SCADAServer(BaseSupervisoryDevice):
     """
     SCADA master station.
 
@@ -76,6 +62,7 @@ class SCADAServer:
     Example:
         >>> scada = SCADAServer(
         ...     device_name="scada_master_1",
+        ...     device_id=1,
         ...     data_store=data_store
         ... )
         >>>
@@ -96,8 +83,7 @@ class SCADAServer:
         ...     alarm_high=3960.0
         ... )
         >>>
-        >>> await scada.initialise()
-        >>> await scada.start()
+        >>> await scada.start()  # initialise() is automatic
         >>>
         >>> # Read tag values
         >>> speed = await scada.get_tag_value("TURB1_SPEED")
@@ -106,27 +92,31 @@ class SCADAServer:
     def __init__(
         self,
         device_name: str,
+        device_id: int,
         data_store: DataStore,
-        scan_rate_hz: float = 1.0,
+        description: str = "",
+        scan_interval: float = 0.1,  # 100ms default (10 Hz)
+        log_dir: Path | None = None,
     ):
         """
         Initialise SCADA server.
 
         Args:
             device_name: Unique device identifier
+            device_id: Numeric ID for protocol addressing
             data_store: DataStore instance
-            scan_rate_hz: Main scan cycle rate
+            description: Human-readable description
+            scan_interval: Main scan cycle rate in seconds
+            log_dir: Directory for log files
         """
-        self.device_name = device_name
-        self.data_store = data_store
-        self.sim_time = SimulationTime()
-
-        # Configuration
-        self.scan_rate_hz = scan_rate_hz
-        self.scan_interval = 1.0 / scan_rate_hz
-
-        # Poll targets (devices to poll)
-        self.poll_targets: dict[str, PollTarget] = {}
+        super().__init__(
+            device_name=device_name,
+            device_id=device_id,
+            data_store=data_store,
+            description=description,
+            scan_interval=scan_interval,
+            log_dir=log_dir,
+        )
 
         # Tag database
         self.tags: dict[str, TagDefinition] = {}
@@ -137,37 +127,49 @@ class SCADAServer:
         # Alarms
         self.active_alarms: list[Alarm] = []
         self.alarm_history: list[Alarm] = []
+        self.total_alarms: int = 0
 
-        # Statistics
-        self.total_polls = 0
-        self.failed_polls = 0
-        self.total_alarms = 0
-
-        # Runtime state
-        self._running = False
-        self._scan_task: asyncio.Task | None = None
-        self._poll_tasks: dict[str, asyncio.Task] = {}
-        self._last_scan_time = 0.0
-
-        logger.info(f"SCADAServer created: {device_name}, scan_rate={scan_rate_hz}Hz")
-
-    # ----------------------------------------------------------------
-    # Lifecycle
-    # ----------------------------------------------------------------
-
-    async def initialise(self) -> None:
-        """Initialise SCADA server and register with DataStore."""
-        await self.data_store.register_device(
-            device_name=self.device_name,
-            device_type="scada_server",
-            device_id=hash(self.device_name) % 1000,
-            protocols=["modbus", "iec104", "dnp3", "opcua"],  # Master supports all
-            metadata={
-                "scan_rate_hz": self.scan_rate_hz,
-                "poll_target_count": len(self.poll_targets),
-                "tag_count": len(self.tags),
-            },
+        self.logger.info(
+            f"SCADAServer '{device_name}' initialised (scan_interval={scan_interval}s)"
         )
+
+    # ----------------------------------------------------------------
+    # BaseDevice implementation
+    # ----------------------------------------------------------------
+
+    def _device_type(self) -> str:
+        """Return 'scada_server' as device type."""
+        return "scada_server"
+
+    def _supported_protocols(self) -> list[str]:
+        """SCADA servers support multiple protocols."""
+        return ["modbus", "iec104", "dnp3", "opcua"]
+
+    async def _initialise_memory_map(self) -> None:
+        """
+        Initialise SCADA server memory map.
+
+        Memory map structure:
+        - Input registers for status/statistics (read-only)
+        - Coils for control operations
+        - Tag data containers
+        """
+        self.memory_map = {
+            # Status (Input Registers - read-only)
+            "input_registers[0]": 0,  # Poll count (low word)
+            "input_registers[1]": 0,  # Poll count (high word)
+            "input_registers[2]": 0,  # Failed polls
+            "input_registers[3]": 0,  # Active alarm count
+            # Control (Coils - read/write)
+            "coils[0]": False,  # Acknowledge all alarms
+            "coils[1]": False,  # Reset statistics
+            "coils[2]": True,  # Polling enabled
+            # Tag data (dict containers)
+            "tag_values": {},
+            "tag_quality": {},
+            "tag_timestamps": {},
+            "active_alarms": [],
+        }
 
         # Initialise tag values
         for tag_name in self.tags:
@@ -175,88 +177,110 @@ class SCADAServer:
             self.tag_timestamps[tag_name] = 0.0
             self.tag_quality[tag_name] = "uncertain"
 
-        await self._sync_to_datastore()
-
-        logger.info(
-            f"SCADAServer initialised: {self.device_name}, "
-            f"{len(self.poll_targets)} poll targets, {len(self.tags)} tags"
-        )
-
-    async def start(self) -> None:
-        """Start SCADA server polling."""
-        if self._running:
-            logger.warning(f"SCADAServer already running: {self.device_name}")
-            return
-
-        self._running = True
-        self._last_scan_time = self.sim_time.now()
-
-        # Start main scan cycle
-        self._scan_task = asyncio.create_task(self._scan_cycle())
-
-        # Start individual poll tasks for each device
-        for device_name, poll_target in self.poll_targets.items():
-            if poll_target.enabled:
-                task = asyncio.create_task(self._poll_device(poll_target))
-                self._poll_tasks[device_name] = task
-
-        logger.info(f"SCADAServer started: {self.device_name}")
-
-    async def stop(self) -> None:
-        """Stop SCADA server polling."""
-        if not self._running:
-            return
-
-        self._running = False
-
-        # Stop main scan cycle
-        if self._scan_task:
-            self._scan_task.cancel()
-            try:
-                await self._scan_task
-            except asyncio.CancelledError:
-                pass
-            self._scan_task = None
-
-        # Stop all poll tasks
-        for task in self._poll_tasks.values():
-            task.cancel()
-            try:
-                await task
-            except asyncio.CancelledError:
-                pass
-        self._poll_tasks.clear()
-
-        logger.info(f"SCADAServer stopped: {self.device_name}")
+        self.logger.debug(f"Memory map initialised with {len(self.tags)} tags")
 
     # ----------------------------------------------------------------
-    # Configuration
+    # BaseSupervisoryDevice implementation
     # ----------------------------------------------------------------
 
-    def add_poll_target(
-        self,
-        device_name: str,
-        protocol: str,
-        poll_rate_s: float = 1.0,
-        enabled: bool = True,
-    ) -> None:
+    async def _poll_device(self, target: PollTarget) -> None:
         """
-        Add a device to poll.
+        Poll a specific device.
 
         Args:
-            device_name: Name of device to poll
-            protocol: Protocol to use ('modbus', 'iec104', 'dnp3', 'opcua')
-            poll_rate_s: Polling interval in seconds
-            enabled: Whether polling is enabled
+            target: Poll target configuration
         """
-        self.poll_targets[device_name] = PollTarget(
-            device_name=device_name,
-            protocol=protocol,
-            poll_rate_s=poll_rate_s,
-            enabled=enabled,
-        )
+        try:
+            # Read device memory from DataStore
+            device_memory = await self.data_store.bulk_read_memory(target.device_name)
 
-        logger.info(f"Poll target added: {device_name} ({protocol}) @ {poll_rate_s}s")
+            if device_memory:
+                # Update tags from this device
+                for tag_name, tag_def in self.tags.items():
+                    if tag_def.device_name == target.device_name:
+                        await self._update_tag_from_memory(
+                            tag_name, tag_def, device_memory
+                        )
+
+                target.last_poll_success = True
+                target.consecutive_failures = 0
+            else:
+                # Poll failed - no data returned
+                target.last_poll_success = False
+                target.consecutive_failures += 1
+
+                # Mark tags as bad quality if failures persist
+                if target.consecutive_failures >= 3:
+                    for tag_name, tag_def in self.tags.items():
+                        if tag_def.device_name == target.device_name:
+                            self.tag_quality[tag_name] = "bad"
+                            self._raise_comms_alarm(tag_name)
+
+        except Exception as e:
+            self.logger.error(f"Error polling {target.device_name}: {e}")
+            target.last_poll_success = False
+            target.consecutive_failures += 1
+            self.failed_polls += 1
+
+    async def _process_polled_data(self) -> None:
+        """Process polled data and sync to memory map."""
+        # Update memory map with current tag data
+        self.memory_map["tag_values"] = self.tag_values.copy()
+        self.memory_map["tag_quality"] = self.tag_quality.copy()
+        self.memory_map["tag_timestamps"] = self.tag_timestamps.copy()
+
+        # Update statistics in registers
+        self.memory_map["input_registers[0]"] = self.total_polls & 0xFFFF
+        self.memory_map["input_registers[1]"] = (self.total_polls >> 16) & 0xFFFF
+        self.memory_map["input_registers[2]"] = self.failed_polls
+        self.memory_map["input_registers[3]"] = len(self.active_alarms)
+
+        # Process control coils
+        if self.memory_map.get("coils[0]"):  # Acknowledge all alarms
+            for alarm in self.active_alarms:
+                alarm.acknowledged = True
+            self.memory_map["coils[0]"] = False  # Reset coil
+
+        if self.memory_map.get("coils[1]"):  # Reset statistics
+            self.total_polls = 0
+            self.failed_polls = 0
+            self.memory_map["coils[1]"] = False  # Reset coil
+
+        # Sync polling enabled from coil
+        self.polling_enabled = self.memory_map.get("coils[2]", True)
+
+        # Update active alarms in memory map
+        self.memory_map["active_alarms"] = [
+            {
+                "tag_name": a.tag_name,
+                "type": a.alarm_type,
+                "value": a.value,
+                "message": a.message,
+                "acknowledged": a.acknowledged,
+            }
+            for a in self.active_alarms
+        ]
+
+    def _check_alarms(self) -> None:
+        """Check all tags for alarm conditions."""
+        for tag_name, tag_def in self.tags.items():
+            value = self.tag_values.get(tag_name)
+            quality = self.tag_quality.get(tag_name)
+
+            if quality != "good" or value is None:
+                continue
+
+            # High alarm
+            if tag_def.alarm_high is not None and value > tag_def.alarm_high:
+                self._raise_alarm(tag_name, "high", value)
+
+            # Low alarm
+            if tag_def.alarm_low is not None and value < tag_def.alarm_low:
+                self._raise_alarm(tag_name, "low", value)
+
+    # ----------------------------------------------------------------
+    # Tag management
+    # ----------------------------------------------------------------
 
     def add_tag(
         self,
@@ -301,94 +325,14 @@ class SCADAServer:
         self.tag_timestamps[tag_name] = 0.0
         self.tag_quality[tag_name] = "uncertain"
 
-        logger.debug(
+        self.logger.debug(
             f"Tag added: {tag_name} -> {device_name}:{address_type}[{address}]"
         )
-
-    # ----------------------------------------------------------------
-    # Scan cycle
-    # ----------------------------------------------------------------
-
-    async def _scan_cycle(self) -> None:
-        """Main SCADA scan cycle - manages alarms and coordination."""
-        logger.info(f"SCADA scan cycle started for {self.device_name}")
-
-        while self._running:
-            current_time = self.sim_time.now()
-
-            try:
-                # Check for alarms
-                self._check_alarms()
-
-                # Update statistics
-                await self._update_statistics()
-
-                # Sync to DataStore
-                await self._sync_to_datastore()
-
-            except Exception as e:
-                logger.error(f"Error in SCADA scan cycle for {self.device_name}: {e}")
-
-            self._last_scan_time = current_time
-            await asyncio.sleep(self.scan_interval)
-
-    async def _poll_device(self, poll_target: PollTarget) -> None:
-        """
-        Poll a specific device at its configured rate.
-
-        Args:
-            poll_target: Device polling configuration
-        """
-        while self._running:
-            current_time = self.sim_time.now()
-
-            try:
-                # Read device memory from DataStore
-                device_memory = await self.data_store.bulk_read_memory(
-                    poll_target.device_name
-                )
-
-                if device_memory:
-                    # Update tags from this device
-                    for tag_name, tag_def in self.tags.items():
-                        if tag_def.device_name == poll_target.device_name:
-                            await self._update_tag_from_memory(
-                                tag_name, tag_def, device_memory
-                            )
-
-                    poll_target.last_poll_success = True
-                    poll_target.consecutive_failures = 0
-                else:
-                    # Poll failed
-                    poll_target.last_poll_success = False
-                    poll_target.consecutive_failures += 1
-
-                    # Mark tags as bad quality if failures persist
-                    if poll_target.consecutive_failures >= 3:
-                        for tag_name, tag_def in self.tags.items():
-                            if tag_def.device_name == poll_target.device_name:
-                                self.tag_quality[tag_name] = "bad"
-                                self._raise_comms_alarm(tag_name)
-
-                poll_target.last_poll_time = current_time
-                self.total_polls += 1
-
-            except Exception as e:
-                logger.error(f"Error polling {poll_target.device_name}: {e}")
-                poll_target.last_poll_success = False
-                poll_target.consecutive_failures += 1
-                self.failed_polls += 1
-
-            # Wait for next poll
-            await asyncio.sleep(poll_target.poll_rate_s)
 
     async def _update_tag_from_memory(
         self, tag_name: str, tag_def: TagDefinition, device_memory: dict
     ) -> None:
         """Update a tag value from device memory."""
-        # Extract value based on address type
-        value = None
-
         if tag_def.address_type == "holding_register":
             registers = device_memory.get("holding_registers", {})
             value = registers.get(tag_def.address)
@@ -418,7 +362,6 @@ class SCADAServer:
             value = device_memory.get(tag_def.address_type)
 
         if value is not None:
-            # Update tag
             old_value = self.tag_values.get(tag_name)
             self.tag_values[tag_name] = value
             self.tag_timestamps[tag_name] = self.sim_time.now()
@@ -428,22 +371,9 @@ class SCADAServer:
             if old_value != value and tag_def.data_type == "bool":
                 self._raise_cos_alarm(tag_name, value)
 
-    def _check_alarms(self) -> None:
-        """Check all tags for alarm conditions."""
-        for tag_name, tag_def in self.tags.items():
-            value = self.tag_values.get(tag_name)
-            quality = self.tag_quality.get(tag_name)
-
-            if quality != "good" or value is None:
-                continue
-
-            # High alarm
-            if tag_def.alarm_high is not None and value > tag_def.alarm_high:
-                self._raise_alarm(tag_name, "high", value)
-
-            # Low alarm
-            if tag_def.alarm_low is not None and value < tag_def.alarm_low:
-                self._raise_alarm(tag_name, "low", value)
+    # ----------------------------------------------------------------
+    # Alarm management
+    # ----------------------------------------------------------------
 
     def _raise_alarm(self, tag_name: str, alarm_type: str, value: Any) -> None:
         """Raise an alarm if not already active."""
@@ -456,7 +386,7 @@ class SCADAServer:
         alarm = Alarm(
             tag_name=tag_name,
             alarm_type=alarm_type,
-            triggered_at=datetime.now(),
+            triggered_at=self.sim_time.now(),
             value=value,
             message=f"{tag_name} {alarm_type} alarm: {value}",
         )
@@ -465,7 +395,7 @@ class SCADAServer:
         self.alarm_history.append(alarm)
         self.total_alarms += 1
 
-        logger.warning(f"ALARM: {alarm.message}")
+        self.logger.warning(f"ALARM: {alarm.message}")
 
     def _raise_cos_alarm(self, tag_name: str, value: Any) -> None:
         """Raise change-of-state alarm."""
@@ -515,53 +445,11 @@ class SCADAServer:
         """Acknowledge an active alarm."""
         if 0 <= alarm_index < len(self.active_alarms):
             self.active_alarms[alarm_index].acknowledged = True
-            logger.info(
+            self.logger.info(
                 f"Alarm acknowledged: {self.active_alarms[alarm_index].message}"
             )
             return True
         return False
-
-    async def _update_statistics(self) -> None:
-        """Update polling statistics."""
-        # Calculate success rate
-        if self.total_polls > 0:
-            success_rate = (
-                (self.total_polls - self.failed_polls) / self.total_polls
-            ) * 100
-        else:
-            success_rate = 0.0
-
-        # Update metadata
-        await self.data_store.update_metadata(
-            self.device_name,
-            {
-                "total_polls": self.total_polls,
-                "failed_polls": self.failed_polls,
-                "success_rate": success_rate,
-                "active_alarms": len(self.active_alarms),
-                "total_alarms": self.total_alarms,
-            },
-        )
-
-    async def _sync_to_datastore(self) -> None:
-        """Synchronise SCADA data to DataStore."""
-        memory_map = {
-            "tag_values": self.tag_values.copy(),
-            "tag_quality": self.tag_quality.copy(),
-            "tag_timestamps": self.tag_timestamps.copy(),
-            "active_alarms": [
-                {
-                    "tag_name": a.tag_name,
-                    "type": a.alarm_type,
-                    "value": a.value,
-                    "message": a.message,
-                    "acknowledged": a.acknowledged,
-                }
-                for a in self.active_alarms
-            ],
-        }
-
-        await self.data_store.bulk_write_memory(self.device_name, memory_map)
 
     async def get_telemetry(self) -> dict[str, Any]:
         """Get comprehensive SCADA telemetry."""

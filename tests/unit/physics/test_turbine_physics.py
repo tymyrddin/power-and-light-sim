@@ -18,14 +18,15 @@ Test Coverage:
 """
 
 import asyncio
+
 import pytest
 
-from components.state.system_state import SystemState
-from components.state.data_store import DataStore
 from components.physics.turbine_physics import (
-    TurbinePhysics,
     TurbineParameters,
+    TurbinePhysics,
 )
+from components.state.data_store import DataStore
+from components.state.system_state import SystemState
 
 
 # ================================================================
@@ -664,7 +665,9 @@ class TestTurbinePhysicsVibration:
         turbine.update(dt=1.0)
 
         # Should be close to normal vibration
-        assert turbine.state.vibration_mils <= turbine.params.vibration_normal_mils * 1.5
+        assert (
+            turbine.state.vibration_mils <= turbine.params.vibration_normal_mils * 1.5
+        )
 
     @pytest.mark.asyncio
     async def test_vibration_increases_off_rated_speed(self, turbine_with_device):
@@ -1003,7 +1006,9 @@ class TestTurbinePhysicsUpdateLifecycle:
         assert turbine.state.shaft_speed_rpm == initial_speed
 
     @pytest.mark.asyncio
-    async def test_update_without_read_control_inputs_uses_cache(self, turbine_with_device):
+    async def test_update_without_read_control_inputs_uses_cache(
+        self, turbine_with_device
+    ):
         """Test that update() uses cached control inputs.
 
         WHY: Allows synchronous update() after async read.
@@ -1173,7 +1178,9 @@ class TestTurbinePhysicsConcurrency:
         )
 
         # Both should have converged to different speeds
-        assert abs(turbine1.state.shaft_speed_rpm - turbine2.state.shaft_speed_rpm) > 1200
+        assert (
+            abs(turbine1.state.shaft_speed_rpm - turbine2.state.shaft_speed_rpm) > 1200
+        )
 
 
 # ================================================================

@@ -19,11 +19,12 @@ Test Coverage:
 """
 
 import asyncio
+
 import pytest
 
-from components.state.system_state import SystemState
-from components.state.data_store import DataStore
 from components.devices.control_zone.rtu.base_rtu import BaseRTU
+from components.state.data_store import DataStore
+from components.state.system_state import SystemState
 from components.time.simulation_time import SimulationTime
 
 
@@ -202,10 +203,10 @@ class TestBaseRTUInitialization:
         WHY: Should use BaseDevice.metadata["scan_count"].
         """
         # Should NOT have poll_count attribute (would be duplicate)
-        assert not hasattr(test_rtu, 'poll_count')
+        assert not hasattr(test_rtu, "poll_count")
 
         # Should use metadata from BaseDevice
-        assert 'scan_count' in test_rtu.metadata
+        assert "scan_count" in test_rtu.metadata
 
 
 # ================================================================
@@ -252,7 +253,9 @@ class TestBaseRTUDataAcquisition:
         assert started_rtu.metadata["scan_count"] > 0
 
         # Should be closely correlated with read count (may differ by 1 due to timing)
-        assert abs(started_rtu.metadata["scan_count"] - started_rtu.read_inputs_count) <= 1
+        assert (
+            abs(started_rtu.metadata["scan_count"] - started_rtu.read_inputs_count) <= 1
+        )
 
 
 # ================================================================
@@ -480,7 +483,9 @@ class TestBaseRTUIntegration:
         assert devices[0].device_name == "test_rtu_1"
 
     @pytest.mark.asyncio
-    async def test_rtu_memory_accessible_via_datastore(self, started_rtu, datastore_setup):
+    async def test_rtu_memory_accessible_via_datastore(
+        self, started_rtu, datastore_setup
+    ):
         """Test that RTU point map is accessible via DataStore.
 
         WHY: SCADA masters read RTU data via protocols.
@@ -536,7 +541,9 @@ class TestBaseRTUMemoryMap:
         await asyncio.sleep(0.03)
 
         # Check for underscore keys (diagnostic pollution)
-        underscore_keys = [k for k in started_rtu.memory_map.keys() if k.startswith('_')]
+        underscore_keys = [
+            k for k in started_rtu.memory_map.keys() if k.startswith("_")
+        ]
 
         # Should have no underscore keys
         assert len(underscore_keys) == 0
@@ -558,8 +565,7 @@ class TestBaseRTUConcurrency:
 
         # Create multiple RTUs
         rtus = [
-            ConcreteRTU(f"rtu_{i}", i, data_store, scan_interval=0.01)
-            for i in range(3)
+            ConcreteRTU(f"rtu_{i}", i, data_store, scan_interval=0.01) for i in range(3)
         ]
 
         # Start all

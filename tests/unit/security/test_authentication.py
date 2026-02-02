@@ -19,10 +19,10 @@ import threading
 import pytest
 
 from components.security.authentication import (
+    ROLE_PERMISSIONS,
     AuthenticationManager,
     AuthSession,
     PermissionType,
-    ROLE_PERMISSIONS,
     User,
     UserRole,
     quick_auth,

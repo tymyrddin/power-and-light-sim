@@ -346,9 +346,7 @@ class AnomalyDetector:
                     learning_window=learning_window or self.learning_window,
                 )
                 self.baselines[key] = baseline
-                self.logger.debug(
-                    f"Added baseline monitoring for {device}:{parameter}"
-                )
+                self.logger.debug(f"Added baseline monitoring for {device}:{parameter}")
 
     async def set_range_limit(
         self,
@@ -760,6 +758,4 @@ class AnomalyDetector:
             {"baselines": baselines_json},
         )
 
-        self.logger.info(
-            f"Stored {len(baselines_data)} baselines to DataStore"
-        )
+        self.logger.info(f"Stored {len(baselines_data)} baselines to DataStore")

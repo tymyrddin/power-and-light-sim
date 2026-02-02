@@ -106,7 +106,9 @@ class BaseSafetyController(BaseDevice):
         # Safety controller state
         self.safe_state_active = False  # System in safe state (tripped)
         self.diagnostic_fault = False  # Diagnostic failure detected
-        self.bypass_active = False  # Safety function bypassed (requires authorisation)
+        self.bypass_active = (
+            False  # Safety function bypassed (requires # authorisation)
+        )
 
         # Diagnostics and testing
         self.diagnostic_count = 0
@@ -164,11 +166,13 @@ class BaseSafetyController(BaseDevice):
             # 3. Execute safety logic
             safety_demand = await self._execute_safety_logic()
 
-            # Track safety demands
+            # Track safety demands and activate safe state
             if safety_demand and not self.safe_state_active:
                 self.demand_count += 1
+                self.safe_state_active = True
                 logger.warning(
-                    f"Safety controller '{self.device_name}': Safety demand #{self.demand_count}"
+                    f"Safety controller '{self.device_name}': Safety demand #{self.demand_count} - "
+                    f"activating safe state"
                 )
 
             # 4. Write safety outputs

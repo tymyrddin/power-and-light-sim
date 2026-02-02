@@ -26,6 +26,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
+from components.devices import DEVICE_REGISTRY
 from components.network.network_simulator import NetworkSimulator
 from components.physics.grid_physics import GridParameters, GridPhysics
 from components.physics.power_flow import PowerFlow
@@ -87,6 +88,12 @@ class SimulatorManager:
         self.grid_physics: GridPhysics | None = None
         self.power_flow: PowerFlow | None = None
 
+        # Device instances (PLCs, RTUs, etc.)
+        self.device_instances: dict[str, Any] = {}
+
+        # Protocol servers
+        self.protocol_servers: dict[str, Any] = {}
+
         # Simulation state
         self._running = False
         self._paused = False
@@ -142,8 +149,12 @@ class SimulatorManager:
             logger.info("Creating physics engines...")
             await self._create_physics_engines(config)
 
-            # 5. Expose services in network
-            logger.info("Exposing network services...")
+            # 5. Create device instances (PLCs, RTUs, etc.)
+            logger.info("Creating device instances...")
+            await self._create_devices(config)
+
+            # 6. Expose services in network (start protocol servers)
+            logger.info("Starting protocol servers...")
             await self._expose_services(config)
 
             self._initialised = True
@@ -179,6 +190,11 @@ class SimulatorManager:
 
             if not device_name or not device_type:
                 logger.warning(f"Skipping invalid device config: {device_cfg}")
+                continue
+
+            # Skip devices without protocols (workstations, etc. - not networked)
+            if not protocols:
+                logger.info(f"Skipping device without protocols: {device_name} ({device_type})")
                 continue
 
             # Register device in state
@@ -240,8 +256,8 @@ class SimulatorManager:
             await self.power_flow.initialise()
             logger.info("Created power flow engine")
 
-    async def _expose_services(self, config: dict[str, Any]) -> None:
-        """Expose services in network simulator.
+    async def _create_devices(self, config: dict[str, Any]) -> None:
+        """Create device instances (PLCs, RTUs, etc.) using config-driven registry.
 
         Args:
             config: Loaded configuration dictionary
@@ -250,18 +266,146 @@ class SimulatorManager:
 
         for device_cfg in devices:
             device_name = device_cfg.get("name")
+            device_type = device_cfg.get("type")
+            device_id = device_cfg.get("device_id", 1)
+            scan_interval = device_cfg.get("scan_interval", 0.1)
+            physics_engine_name = device_cfg.get("physics_engine")
+
+            # Look up device class from registry
+            device_class = DEVICE_REGISTRY.get(device_type)
+            if not device_class:
+                logger.warning(f"Unknown device type '{device_type}' for {device_name}, skipping")
+                continue
+
+            # Get physics engine if specified in config
+            physics_engine = self._get_physics_engine(physics_engine_name) if physics_engine_name else None
+
+            try:
+                # Create device instance
+                # TurbinePLC needs turbine_physics and grid_physics
+                if device_type == "turbine_plc":
+                    if not physics_engine:
+                        logger.warning(f"No physics engine for {device_name}, skipping")
+                        continue
+
+                    device = device_class(
+                        device_name=device_name,
+                        device_id=device_id,
+                        data_store=self.data_store,
+                        turbine_physics=physics_engine,
+                        grid_physics=self.grid_physics,
+                        scan_interval=scan_interval,
+                    )
+                else:
+                    # Generic device creation (adjust as needed for other device types)
+                    device = device_class(
+                        device_name=device_name,
+                        device_id=device_id,
+                        data_store=self.data_store,
+                        description=device_cfg.get("description", ""),
+                    )
+
+                # Start device
+                await device.start()
+
+                # Store reference
+                self.device_instances[device_name] = device
+                logger.info(f"Created and started device: {device_name} ({device_type})")
+
+            except Exception as e:
+                logger.error(f"Failed to create device {device_name} ({device_type}): {e}", exc_info=True)
+
+    def _get_physics_engine(self, engine_name: str | None) -> Any:
+        """Get physics engine by name from config.
+
+        Args:
+            engine_name: Name of physics engine (e.g., "turbine_physics")
+
+        Returns:
+            Physics engine instance or None
+        """
+        if not engine_name:
+            return None
+
+        # Map engine names to actual instances
+        engine_map = {
+            "turbine_physics": lambda: next(iter(self.turbine_physics.values())) if self.turbine_physics else None,
+            "grid_physics": lambda: self.grid_physics,
+            "reactor_physics": None,  # TODO: Add when implemented
+            "hvac_physics": None,  # TODO: Add when implemented
+        }
+
+        engine_getter = engine_map.get(engine_name)
+        if callable(engine_getter):
+            return engine_getter()
+        return engine_getter
+
+    async def _expose_services(self, config: dict[str, Any]) -> None:
+        """Start protocol servers for devices based on config.
+
+        Args:
+            config: Loaded configuration dictionary
+        """
+        from components.protocols.modbus import ModbusTCPServer
+
+        devices = config.get("devices", [])
+
+        for device_cfg in devices:
+            device_name = device_cfg.get("name")
             protocols_cfg = device_cfg.get("protocols", {})
 
             for proto_name, proto_cfg in protocols_cfg.items():
+                # Skip non-network protocols (serial, etc.)
+                if proto_name not in ["modbus", "s7", "dnp3", "opcua", "iec61850", "ethernet_ip", "iec104"]:
+                    continue
+
                 port = proto_cfg.get("port")
 
                 if not port:
                     continue
 
-                # Expose service in network simulator
+                # Convert port to int if needed (skip if not numeric)
+                try:
+                    port = int(port) if isinstance(port, str) else port
+                except ValueError:
+                    logger.warning(f"Invalid port '{port}' for {device_name}:{proto_name}, skipping")
+                    continue
+
+                # Expose service in network simulator (topology)
                 await self.network_sim.expose_service(device_name, proto_name, port)
 
-                logger.info(f"Exposed {proto_name} service: {device_name}:{port}")
+                # Create and start protocol server
+                if proto_name == "modbus":
+                    try:
+                        host = proto_cfg.get("host", "0.0.0.0")
+                        unit_id = proto_cfg.get("unit_id", 1)
+
+                        # Create Modbus TCP server with pymodbus simulator
+                        server = ModbusTCPServer(
+                            host=host,
+                            port=port,
+                            unit_id=unit_id,
+                            num_coils=64,
+                            num_discrete_inputs=64,
+                            num_holding_registers=256,
+                            num_input_registers=256,
+                        )
+
+                        # Start server
+                        await server.start()
+
+                        # Store reference
+                        server_key = f"{device_name}:{proto_name}"
+                        self.protocol_servers[server_key] = server
+
+                        logger.info(f"Started Modbus TCP server: {device_name}:{port}")
+
+                    except Exception as e:
+                        logger.error(f"Failed to start {proto_name} server for {device_name}: {e}")
+
+                else:
+                    # Protocol not yet implemented
+                    logger.info(f"Exposed {proto_name} service (server not implemented): {device_name}:{port}")
 
     async def _log_summary(self) -> None:
         """Log initialisation summary."""
@@ -270,9 +414,11 @@ class SimulatorManager:
 
         logger.info("--- Simulation Summary ---")
         logger.info(f"Devices: {summary['devices']['total']}")
+        logger.info(f"Device instances: {len(self.device_instances)}")
         logger.info(f"Device types: {summary['device_types']}")
         logger.info(f"Networks: {net_summary['networks']['count']}")
         logger.info(f"Services exposed: {net_summary['services']['count']}")
+        logger.info(f"Protocol servers: {len(self.protocol_servers)}")
         logger.info(f"Turbine physics engines: {len(self.turbine_physics)}")
         logger.info(f"Grid physics: {'enabled' if self.grid_physics else 'disabled'}")
         logger.info(f"Power flow: {'enabled' if self.power_flow else 'disabled'}")
@@ -311,10 +457,13 @@ class SimulatorManager:
         # Start main simulation loop
         self._simulation_task = asyncio.create_task(self._simulation_loop())
 
-        logger.info("Simulation started - physics engines active")
-        logger.info(
-            "NOTE: Protocol listeners not implemented yet - devices accessible via state only"
-        )
+        logger.info("Simulation started - physics engines and protocol servers active")
+        if self.protocol_servers:
+            logger.info(f"Protocol servers running: {len(self.protocol_servers)}")
+            for server_key in self.protocol_servers.keys():
+                logger.info(f"  - {server_key}")
+        else:
+            logger.info("No protocol servers configured")
 
     async def stop(self) -> None:
         """Stop the simulation gracefully.
@@ -336,6 +485,23 @@ class SimulatorManager:
                 await self._simulation_task
             except asyncio.CancelledError:
                 pass
+
+        # Stop all protocol servers
+        for server_key, server in self.protocol_servers.items():
+            try:
+                await server.stop()
+                logger.info(f"Stopped protocol server: {server_key}")
+            except Exception as e:
+                logger.error(f"Error stopping {server_key}: {e}")
+
+        # Stop all device instances
+        for device_name, device in self.device_instances.items():
+            try:
+                if hasattr(device, "stop"):
+                    await device.stop()
+                    logger.info(f"Stopped device: {device_name}")
+            except Exception as e:
+                logger.error(f"Error stopping device {device_name}: {e}")
 
         # Stop simulation time
         await self.sim_time.stop()
@@ -484,8 +650,70 @@ class SimulatorManager:
         for turbine in self.turbine_physics.values():
             await turbine.write_telemetry()
 
-        # 4. Increment system update counter
+        # 4. Sync protocol servers with device registers
+        await self._sync_protocol_servers()
+
+        # 5. Increment system update counter
         await self.data_store.increment_update_cycle()
+
+    async def _sync_protocol_servers(self) -> None:
+        """Sync device registers with protocol servers (Option C: manual sync).
+
+        Device → Server: Push telemetry (input_registers, discrete_inputs)
+        Server → Device: Pull commands (coils, holding_registers)
+        """
+        for device_name, device in self.device_instances.items():
+            # Find Modbus server for this device
+            server_key = f"{device_name}:modbus"
+            server = self.protocol_servers.get(server_key)
+
+            if not server:
+                continue
+
+            try:
+                # Extract registers from device memory_map
+                memory_map = device.memory_map
+
+                # Device → Server (telemetry)
+                input_registers = {}
+                discrete_inputs = {}
+                for key, value in memory_map.items():
+                    if key.startswith("input_registers["):
+                        # Extract address from "input_registers[100]"
+                        addr = int(key.split("[")[1].split("]")[0])
+                        input_registers[addr] = value
+                    elif key.startswith("discrete_inputs["):
+                        addr = int(key.split("[")[1].split("]")[0])
+                        discrete_inputs[addr] = value
+
+                if input_registers:
+                    await server.sync_from_device(input_registers, "input_registers")
+                if discrete_inputs:
+                    await server.sync_from_device(discrete_inputs, "discrete_inputs")
+
+                # Server → Device (commands)
+                # Find coils range
+                coil_addrs = [int(k.split("[")[1].split("]")[0]) for k in memory_map.keys() if k.startswith("coils[")]
+                if coil_addrs:
+                    min_addr = min(coil_addrs)
+                    max_addr = max(coil_addrs)
+                    coils_from_server = await server.sync_to_device(min_addr, max_addr - min_addr + 1, "coils")
+                    for addr, value in coils_from_server.items():
+                        device.memory_map[f"coils[{addr}]"] = value
+
+                # Find holding registers range
+                hr_addrs = [int(k.split("[")[1].split("]")[0]) for k in memory_map.keys() if k.startswith("holding_registers[")]
+                if hr_addrs:
+                    min_addr = min(hr_addrs)
+                    max_addr = max(hr_addrs)
+                    regs_from_server = await server.sync_to_device(min_addr, max_addr - min_addr + 1, "holding_registers")
+                    for addr, value in regs_from_server.items():
+                        key = f"holding_registers[{addr}]"
+                        if key in device.memory_map:
+                            device.memory_map[key] = value
+
+            except Exception as e:
+                logger.error(f"Failed to sync {device_name} with protocol server: {e}")
 
     # ----------------------------------------------------------------
     # Status and monitoring
@@ -609,7 +837,8 @@ class SimulatorManager:
             logger.info("  ✓ Physics simulation (turbines, grid, power flow)")
             logger.info("  ✓ Device state management")
             logger.info("  ✓ Network topology simulation")
-            logger.info("  ✗ Protocol listeners (not yet implemented)")
+            logger.info("  ✓ Protocol servers (Modbus TCP)")
+            logger.info("  ✓ Device ↔ Server synchronization")
             logger.info("")
             await self.wait_for_shutdown()
 

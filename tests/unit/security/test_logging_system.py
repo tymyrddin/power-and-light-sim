@@ -431,9 +431,7 @@ class TestICSLogger:
         )
 
         # Filter by category with limit
-        trail = await logger.get_audit_trail(
-            limit=5, category=EventCategory.SECURITY
-        )
+        trail = await logger.get_audit_trail(limit=5, category=EventCategory.SECURITY)
 
         # All returned should be security events
         assert all(e.category == EventCategory.SECURITY for e in trail)

@@ -15,14 +15,15 @@ Test Coverage:
 """
 
 import asyncio
-import pytest
 import time as wall_time
+
+import pytest
 
 from components.time.simulation_time import (
     SimulationTime,
     TimeMode,
-    wait_simulation_time,
     get_simulation_delta,
+    wait_simulation_time,
 )
 
 
@@ -216,7 +217,9 @@ class TestSimulationTimeLifecycle:
         assert not sim_time._running
 
     @pytest.mark.asyncio
-    async def test_reset_clears_time_but_preserves_config(self, clean_simulation_time_with_config):
+    async def test_reset_clears_time_but_preserves_config(
+        self, clean_simulation_time_with_config
+    ):
         """Test that reset() clears time but keeps configuration.
 
         WHY: Reset is used between simulation runs - config should persist.
@@ -320,7 +323,9 @@ class TestSimulationTimeQueries:
         assert abs(wall_elapsed - actual_elapsed) < 0.05
 
     @pytest.mark.asyncio
-    async def test_speed_returns_current_multiplier(self, clean_simulation_time_with_config):
+    async def test_speed_returns_current_multiplier(
+        self, clean_simulation_time_with_config
+    ):
         """Test that speed() returns current speed multiplier.
 
         WHY: Components need to know time scaling for calculations.
@@ -366,7 +371,7 @@ class TestSimulationTimeProgression:
 
     @pytest.mark.asyncio
     async def test_realtime_mode_progresses_naturally(
-            self, clean_simulation_time, assert_time_approximately
+        self, clean_simulation_time, assert_time_approximately
     ):
         """Test that REALTIME mode advances at 1:1 ratio with wall time.
 
@@ -382,7 +387,7 @@ class TestSimulationTimeProgression:
 
     @pytest.mark.asyncio
     async def test_accelerated_mode_progresses_faster(
-            self, clean_simulation_time_with_config, assert_time_approximately
+        self, clean_simulation_time_with_config, assert_time_approximately
     ):
         """Test that ACCELERATED mode advances faster than wall time.
 
@@ -409,9 +414,7 @@ class TestSimulationTimeProgression:
         await sim_time.stop()  # Cleanup
 
     @pytest.mark.asyncio
-    async def test_paused_mode_does_not_progress(
-            self, clean_simulation_time
-    ):
+    async def test_paused_mode_does_not_progress(self, clean_simulation_time):
         """Test that paused time does not advance.
 
         WHY: Pause is used for debugging and inspection - time must freeze.
@@ -429,9 +432,7 @@ class TestSimulationTimeProgression:
         assert sim_time.now() == paused_time, "Time should not advance while paused"
 
     @pytest.mark.asyncio
-    async def test_stepped_mode_requires_manual_stepping(
-            self, clean_simulation_time
-    ):
+    async def test_stepped_mode_requires_manual_stepping(self, clean_simulation_time):
         """Test that STEPPED mode only advances via step() calls.
 
         WHY: STEPPED mode gives precise control for deterministic testing.
@@ -456,9 +457,7 @@ class TestSimulationTimePauseResume:
     """Test pause and resume functionality."""
 
     @pytest.mark.asyncio
-    async def test_pause_stops_time_progression(
-            self, clean_simulation_time
-    ):
+    async def test_pause_stops_time_progression(self, clean_simulation_time):
         """Test that pause() stops time from advancing.
 
         WHY: Core pause functionality must work correctly.
@@ -476,9 +475,7 @@ class TestSimulationTimePauseResume:
         assert sim_time.now() == paused_time
 
     @pytest.mark.asyncio
-    async def test_resume_restarts_time_progression(
-            self, clean_simulation_time
-    ):
+    async def test_resume_restarts_time_progression(self, clean_simulation_time):
         """Test that resume() restarts time after pause.
 
         WHY: Must be able to unpause and continue simulation.
@@ -495,9 +492,7 @@ class TestSimulationTimePauseResume:
         assert sim_time.now() > paused_time
 
     @pytest.mark.asyncio
-    async def test_pause_duration_tracked(
-            self, clean_simulation_time
-    ):
+    async def test_pause_duration_tracked(self, clean_simulation_time):
         """Test that pause duration is properly tracked.
 
         WHY: Need to distinguish between sim time and wall time when paused.
@@ -515,9 +510,7 @@ class TestSimulationTimePauseResume:
         assert 0.08 <= sim_time.state.total_pause_duration <= 0.15
 
     @pytest.mark.asyncio
-    async def test_multiple_pause_resume_cycles(
-            self, clean_simulation_time
-    ):
+    async def test_multiple_pause_resume_cycles(self, clean_simulation_time):
         """Test multiple pause/resume cycles accumulate duration correctly.
 
         WHY: Simulations may pause/resume many times during execution.
@@ -540,9 +533,7 @@ class TestSimulationTimePauseResume:
         assert sim_time.state.total_pause_duration >= 0.08
 
     @pytest.mark.asyncio
-    async def test_pause_when_already_paused_is_safe(
-            self, clean_simulation_time
-    ):
+    async def test_pause_when_already_paused_is_safe(self, clean_simulation_time):
         """Test that pausing when already paused doesn't break anything.
 
         WHY: Defensive programming - multiple pause calls should be safe.
@@ -556,9 +547,7 @@ class TestSimulationTimePauseResume:
         assert sim_time.is_paused()
 
     @pytest.mark.asyncio
-    async def test_resume_when_not_paused_is_safe(
-            self, clean_simulation_time
-    ):
+    async def test_resume_when_not_paused_is_safe(self, clean_simulation_time):
         """Test that resuming when not paused doesn't break anything.
 
         WHY: Defensive programming - multiple resume calls should be safe.
@@ -578,9 +567,7 @@ class TestSimulationTimeSpeedControl:
     """Test speed multiplier control."""
 
     @pytest.mark.asyncio
-    async def test_set_speed_changes_multiplier(
-            self, clean_simulation_time
-    ):
+    async def test_set_speed_changes_multiplier(self, clean_simulation_time):
         """Test that set_speed() changes the speed multiplier.
 
         WHY: Need to dynamically adjust simulation speed.
@@ -594,7 +581,7 @@ class TestSimulationTimeSpeedControl:
 
     @pytest.mark.asyncio
     async def test_set_speed_maintains_time_continuity(
-            self, clean_simulation_time, assert_time_approximately
+        self, clean_simulation_time, assert_time_approximately
     ):
         """Test that changing speed doesn't cause time jumps.
 
@@ -613,9 +600,7 @@ class TestSimulationTimeSpeedControl:
         assert_time_approximately(time_after_change, time_before_change, tolerance=0.01)
 
     @pytest.mark.asyncio
-    async def test_set_speed_affects_future_progression(
-            self, clean_simulation_time
-    ):
+    async def test_set_speed_affects_future_progression(self, clean_simulation_time):
         """Test that new speed affects subsequent time progression.
 
         WHY: Speed change must actually change the rate of time flow.
@@ -634,9 +619,7 @@ class TestSimulationTimeSpeedControl:
         assert 0.7 <= elapsed <= 1.3
 
     @pytest.mark.asyncio
-    async def test_set_speed_rejects_zero(
-            self, clean_simulation_time
-    ):
+    async def test_set_speed_rejects_zero(self, clean_simulation_time):
         """Test that set_speed() rejects zero multiplier.
 
         WHY: Zero speed would freeze time permanently - not allowed.
@@ -649,9 +632,7 @@ class TestSimulationTimeSpeedControl:
             await sim_time.set_speed(0.0)
 
     @pytest.mark.asyncio
-    async def test_set_speed_rejects_negative(
-            self, clean_simulation_time
-    ):
+    async def test_set_speed_rejects_negative(self, clean_simulation_time):
         """Test that set_speed() rejects negative multiplier.
 
         WHY: Negative speed (time reversal) not supported.
@@ -664,9 +645,7 @@ class TestSimulationTimeSpeedControl:
             await sim_time.set_speed(-1.0)
 
     @pytest.mark.asyncio
-    async def test_set_speed_rejects_excessive_values(
-            self, clean_simulation_time
-    ):
+    async def test_set_speed_rejects_excessive_values(self, clean_simulation_time):
         """Test that set_speed() rejects values above maximum.
 
         WHY: Excessive speeds cause numerical instability.
@@ -686,9 +665,7 @@ class TestSimulationTimeSteppedMode:
     """Test manual stepping functionality."""
 
     @pytest.mark.asyncio
-    async def test_step_advances_time_by_delta(
-            self, clean_simulation_time
-    ):
+    async def test_step_advances_time_by_delta(self, clean_simulation_time):
         """Test that step() advances time by specified amount.
 
         WHY: Core functionality of STEPPED mode.
@@ -704,9 +681,7 @@ class TestSimulationTimeSteppedMode:
         assert sim_time.now() == initial + 5.0
 
     @pytest.mark.asyncio
-    async def test_step_accumulates_multiple_calls(
-            self, clean_simulation_time
-    ):
+    async def test_step_accumulates_multiple_calls(self, clean_simulation_time):
         """Test that multiple step() calls accumulate.
 
         WHY: Stepping is used iteratively - must accumulate correctly.
@@ -723,9 +698,7 @@ class TestSimulationTimeSteppedMode:
         assert sim_time.now() == 6.0
 
     @pytest.mark.asyncio
-    async def test_step_rejects_negative_delta(
-            self, clean_simulation_time
-    ):
+    async def test_step_rejects_negative_delta(self, clean_simulation_time):
         """Test that step() rejects negative time steps.
 
         WHY: Cannot step backwards in time.
@@ -740,7 +713,7 @@ class TestSimulationTimeSteppedMode:
 
     @pytest.mark.asyncio
     async def test_step_only_works_in_stepped_or_paused_mode(
-            self, clean_simulation_time
+        self, clean_simulation_time
     ):
         """Test that step() only works in STEPPED or PAUSED mode.
 
@@ -755,9 +728,7 @@ class TestSimulationTimeSteppedMode:
             await sim_time.step(1.0)
 
     @pytest.mark.asyncio
-    async def test_step_works_in_stepped_mode(
-            self, clean_simulation_time
-    ):
+    async def test_step_works_in_stepped_mode(self, clean_simulation_time):
         """Test that step() advances time in STEPPED mode.
 
         WHY: STEPPED mode allows precise control for deterministic testing.
@@ -773,9 +744,7 @@ class TestSimulationTimeSteppedMode:
         assert sim_time.now() == initial + 1.0
 
     @pytest.mark.asyncio
-    async def test_step_works_in_paused_mode(
-            self, clean_simulation_time
-    ):
+    async def test_step_works_in_paused_mode(self, clean_simulation_time):
         """Test that step() advances time when mode is PAUSED.
 
         WHY: PAUSED mode with stepping is useful for frame-by-frame debugging.
@@ -799,9 +768,7 @@ class TestSimulationTimeStatus:
     """Test status reporting functionality."""
 
     @pytest.mark.asyncio
-    async def test_get_status_returns_complete_state(
-            self, clean_simulation_time
-    ):
+    async def test_get_status_returns_complete_state(self, clean_simulation_time):
         """Test that get_status() returns all relevant state information.
 
         WHY: Status used for monitoring and debugging - must be comprehensive.
@@ -823,7 +790,7 @@ class TestSimulationTimeStatus:
 
     @pytest.mark.asyncio
     async def test_get_status_ratio_matches_speed_multiplier(
-            self, clean_simulation_time_with_config, assert_time_approximately
+        self, clean_simulation_time_with_config, assert_time_approximately
     ):
         """Test that status ratio reflects actual time scaling.
 
@@ -859,7 +826,7 @@ class TestSimulationTimeConvenienceFunctions:
 
     @pytest.mark.asyncio
     async def test_wait_simulation_time_waits_correct_duration(
-            self, clean_simulation_time, assert_time_approximately
+        self, clean_simulation_time, assert_time_approximately
     ):
         """Test that wait_simulation_time() waits for simulation time.
 
@@ -879,7 +846,7 @@ class TestSimulationTimeConvenienceFunctions:
 
     @pytest.mark.asyncio
     async def test_wait_simulation_time_respects_acceleration(
-            self, clean_simulation_time_with_config
+        self, clean_simulation_time_with_config
     ):
         """Test that wait_simulation_time() works with accelerated time.
 
@@ -910,9 +877,7 @@ class TestSimulationTimeConvenienceFunctions:
         await sim_time.stop()  # Cleanup
 
     @pytest.mark.asyncio
-    async def test_wait_simulation_time_handles_pause(
-            self, clean_simulation_time
-    ):
+    async def test_wait_simulation_time_handles_pause(self, clean_simulation_time):
         """Test that wait_simulation_time() waits during pauses.
 
         WHY: Must handle paused state correctly.
@@ -940,9 +905,7 @@ class TestSimulationTimeConvenienceFunctions:
         assert end - start >= 0.18
 
     @pytest.mark.asyncio
-    async def test_wait_simulation_time_rejects_negative(
-            self, clean_simulation_time
-    ):
+    async def test_wait_simulation_time_rejects_negative(self, clean_simulation_time):
         """Test that wait_simulation_time() rejects negative durations.
 
         WHY: Cannot wait for negative time.
@@ -956,7 +919,7 @@ class TestSimulationTimeConvenienceFunctions:
 
     @pytest.mark.asyncio
     async def test_wait_simulation_time_zero_returns_immediately(
-            self, clean_simulation_time
+        self, clean_simulation_time
     ):
         """Test that waiting for zero time returns immediately.
 
@@ -974,9 +937,7 @@ class TestSimulationTimeConvenienceFunctions:
         # Should return almost instantly
         assert end - start < 0.01
 
-    def test_get_simulation_delta_calculates_correctly(
-            self, clean_simulation_time
-    ):
+    def test_get_simulation_delta_calculates_correctly(self, clean_simulation_time):
         """Test that get_simulation_delta() helper works correctly.
 
         WHY: Convenient helper for common delta calculations.
@@ -996,9 +957,7 @@ class TestSimulationTimeConcurrency:
     """Test thread-safety and concurrent access patterns."""
 
     @pytest.mark.asyncio
-    async def test_concurrent_reads_are_safe(
-            self, clean_simulation_time
-    ):
+    async def test_concurrent_reads_are_safe(self, clean_simulation_time):
         """Test that multiple coroutines can safely read time.
 
         WHY: Many components will query time concurrently.
@@ -1018,9 +977,7 @@ class TestSimulationTimeConcurrency:
         # Should complete without errors
 
     @pytest.mark.asyncio
-    async def test_concurrent_speed_changes_are_safe(
-            self, clean_simulation_time
-    ):
+    async def test_concurrent_speed_changes_are_safe(self, clean_simulation_time):
         """Test that concurrent speed changes don't cause corruption.
 
         WHY: Multiple components might try to change speed.
@@ -1042,9 +999,7 @@ class TestSimulationTimeConcurrency:
         assert sim_time.speed() > 0
 
     @pytest.mark.asyncio
-    async def test_concurrent_pause_resume_are_safe(
-            self, clean_simulation_time
-    ):
+    async def test_concurrent_pause_resume_are_safe(self, clean_simulation_time):
         """Test that concurrent pause/resume operations are safe.
 
         WHY: Multiple components might try to pause/resume.
@@ -1074,9 +1029,7 @@ class TestSimulationTimeEdgeCases:
     """Test edge cases and boundary conditions."""
 
     @pytest.mark.asyncio
-    async def test_very_small_time_steps(
-            self, clean_simulation_time
-    ):
+    async def test_very_small_time_steps(self, clean_simulation_time):
         """Test handling of very small time steps.
 
         WHY: Physics updates may use microsecond-level precision.
@@ -1092,9 +1045,7 @@ class TestSimulationTimeEdgeCases:
         assert sim_time.now() == 0.000001
 
     @pytest.mark.asyncio
-    async def test_very_large_time_values(
-            self, clean_simulation_time
-    ):
+    async def test_very_large_time_values(self, clean_simulation_time):
         """Test handling of very large simulation times.
 
         WHY: Long-running simulations accumulate large time values.
@@ -1110,9 +1061,7 @@ class TestSimulationTimeEdgeCases:
         assert sim_time.now() == 1_000_000.0
 
     @pytest.mark.asyncio
-    async def test_fractional_speed_multipliers(
-            self, clean_simulation_time
-    ):
+    async def test_fractional_speed_multipliers(self, clean_simulation_time):
         """Test that fractional speeds (slow motion) work correctly.
 
         WHY: Slow motion useful for detailed observation.
@@ -1131,9 +1080,7 @@ class TestSimulationTimeEdgeCases:
         assert 0.005 <= elapsed <= 0.02
 
     @pytest.mark.asyncio
-    async def test_time_precision_maintained(
-            self, clean_simulation_time
-    ):
+    async def test_time_precision_maintained(self, clean_simulation_time):
         """Test that time precision is maintained through operations.
 
         WHY: Floating point errors can accumulate over time.

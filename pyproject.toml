@@ -68,7 +68,7 @@ omit = [
 
 [tool.coverage.report]
 # Fail if overall coverage drops below 30%
-fail_under = 30
+fail_under = 70
 
 # Show missing lines in terminal
 show_missing = true

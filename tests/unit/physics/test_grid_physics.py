@@ -19,15 +19,16 @@ Test Coverage:
 """
 
 import asyncio
+
 import pytest
 
-from components.state.system_state import SystemState
-from components.state.data_store import DataStore
 from components.physics.grid_physics import (
-    GridPhysics,
     GridParameters,
+    GridPhysics,
     GridState,
 )
+from components.state.data_store import DataStore
+from components.state.system_state import SystemState
 
 
 # ================================================================
@@ -546,7 +547,9 @@ class TestGridPhysicsProtection:
         assert grid.state.under_frequency_trip
 
         # Check logs for trip event
-        assert any("UNDER-FREQUENCY TRIP" in record.message for record in caplog.records)
+        assert any(
+            "UNDER-FREQUENCY TRIP" in record.message for record in caplog.records
+        )
 
     @pytest.mark.asyncio
     async def test_trip_flags_persist(self, grid_with_turbines):
@@ -748,9 +751,7 @@ class TestGridPhysicsParameters:
         data_store = DataStore(system_state)
 
         params = custom_params(
-            nominal_frequency_hz=60.0,
-            min_frequency_hz=59.0,
-            max_frequency_hz=61.0
+            nominal_frequency_hz=60.0, min_frequency_hz=59.0, max_frequency_hz=61.0
         )
         grid = GridPhysics(data_store, params)
         await grid.initialise()
@@ -840,7 +841,9 @@ class TestGridPhysicsConcurrency:
 
         async def update_turbine(device_name: str, power: int):
             for _ in range(10):
-                await data_store.write_memory(device_name, "holding_registers[5]", power)
+                await data_store.write_memory(
+                    device_name, "holding_registers[5]", power
+                )
                 await asyncio.sleep(0.001)
 
         # Update multiple turbines concurrently

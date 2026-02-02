@@ -87,7 +87,10 @@ class TestSeverityMapping:
 
         WHY: Critical anomalies are critical events.
         """
-        assert ANOMALY_TO_EVENT_SEVERITY[AnomalySeverity.CRITICAL] == EventSeverity.CRITICAL
+        assert (
+            ANOMALY_TO_EVENT_SEVERITY[AnomalySeverity.CRITICAL]
+            == EventSeverity.CRITICAL
+        )
 
 
 # ================================================================

@@ -17,16 +17,16 @@ Discrete Inputs (Read-only booleans):
   5: Over-frequency trip (grid)
 
 Input Registers (Read-only 16-bit):
-  100: Shaft speed (RPM)
-  101: Power output (MW)
-  102: Steam pressure (PSI)
-  103: Steam temperature (°F)
-  104: Bearing temperature (°F)
-  105: Vibration (mils)
-  106: Overspeed time (seconds)
-  107: Damage level (percent)
-  108: Grid frequency (Hz * 100)
-  109: Grid voltage (pu * 1000)
+  0: Shaft speed (RPM)
+  1: Power output (MW * 10)
+  2: Steam pressure (PSI)
+  3: Steam temperature (°F)
+  4: Bearing temperature (°F)
+  5: Vibration (mils * 10)
+  6: Overspeed time (seconds)
+  7: Damage level (percent)
+  8: Grid frequency (Hz * 100)
+  9: Grid voltage (pu * 1000)
 
 Coils (Read/write booleans):
   0: Governor enable
@@ -34,8 +34,8 @@ Coils (Read/write booleans):
   2: Trip reset
 
 Holding Registers (Read/write 16-bit):
-  200: Speed setpoint (RPM)
-  201: Speed setpoint (upper byte for >65535)
+  0: Speed setpoint (RPM)
+  1: Speed setpoint (upper word for >65535)
 
 Default Modbus Setup for pymodbus_3114 adapter integration.
 """
@@ -153,49 +153,43 @@ class TurbinePLC(BasePLC):
         return "turbine_plc"
 
     def _supported_protocols(self) -> list[str]:
-        """Supported protocols."""
-        return ["modbus"]
+        """Supported protocols - Allen-Bradley uses EtherNet/IP and Modbus."""
+        return ["modbus", "ethernet_ip"]
 
-    async def _initialize_registers(self) -> None:
+    async def _initialise_memory_map(self) -> None:
         """Initialize Modbus register layout."""
-        # Coils (outputs)
-        self.coils = {
-            0: False,  # Governor enable
-            1: False,  # Emergency trip
-            2: False,  # Trip reset
-        }
+        # Coils (read/write control bits)
+        self.memory_map["coils[0]"] = False  # Governor enable
+        self.memory_map["coils[1]"] = False  # Emergency trip
+        self.memory_map["coils[2]"] = False  # Trip reset
 
-        # Discrete inputs (status bits)
-        self.discrete_inputs = {
-            0: False,  # Turbine running
-            1: False,  # Governor online
-            2: False,  # Trip active
-            3: False,  # Overspeed condition
-            4: False,  # Under-frequency trip
-            5: False,  # Over-frequency trip
-        }
+        # Discrete inputs (read-only status bits)
+        self.memory_map["discrete_inputs[0]"] = False  # Turbine running
+        self.memory_map["discrete_inputs[1]"] = False  # Governor online
+        self.memory_map["discrete_inputs[2]"] = False  # Trip active
+        self.memory_map["discrete_inputs[3]"] = False  # Overspeed condition
+        self.memory_map["discrete_inputs[4]"] = False  # Under-frequency trip
+        self.memory_map["discrete_inputs[5]"] = False  # Over-frequency trip
+        self.memory_map["discrete_inputs[6]"] = False  # High vibration alarm
+        self.memory_map["discrete_inputs[7]"] = False  # High bearing temp alarm
 
-        # Input registers (telemetry)
-        self.input_registers = {
-            100: 0,  # Shaft speed (RPM)
-            101: 0,  # Power output (MW)
-            102: 0,  # Steam pressure (PSI)
-            103: 0,  # Steam temperature (°F)
-            104: 0,  # Bearing temperature (°F)
-            105: 0,  # Vibration (mils)
-            106: 0,  # Overspeed time (seconds)
-            107: 0,  # Damage level (percent)
-            108: 0,  # Grid frequency (Hz * 100)
-            109: 0,  # Grid voltage (pu * 1000)
-        }
+        # Input registers (read-only telemetry)
+        self.memory_map["input_registers[0]"] = 0  # Shaft speed (RPM)
+        self.memory_map["input_registers[1]"] = 0  # Power output (MW * 10)
+        self.memory_map["input_registers[2]"] = 0  # Steam pressure (PSI)
+        self.memory_map["input_registers[3]"] = 0  # Steam temperature (°F)
+        self.memory_map["input_registers[4]"] = 0  # Bearing temperature (°F)
+        self.memory_map["input_registers[5]"] = 0  # Vibration (mils * 10)
+        self.memory_map["input_registers[6]"] = 0  # Overspeed time (seconds)
+        self.memory_map["input_registers[7]"] = 0  # Damage level (percent)
+        self.memory_map["input_registers[8]"] = 5000  # Grid frequency (Hz * 100)
+        self.memory_map["input_registers[9]"] = 1000  # Grid voltage (pu * 1000)
 
-        # Holding registers (setpoints)
-        self.holding_registers = {
-            200: 0,  # Speed setpoint (lower 16 bits)
-            201: 0,  # Speed setpoint (upper bits)
-        }
+        # Holding registers (read/write setpoints)
+        self.memory_map["holding_registers[0]"] = 0  # Speed setpoint (lower 16 bits)
+        self.memory_map["holding_registers[1]"] = 0  # Speed setpoint (upper word)
 
-        logger.debug(f"TurbinePLC '{self.device_name}' registers initialised")
+        logger.debug(f"TurbinePLC '{self.device_name}' memory map initialised")
 
     # ----------------------------------------------------------------
     # PLC Scan Cycle
@@ -213,47 +207,51 @@ class TurbinePLC(BasePLC):
         turbine_telem = self.turbine_physics.get_telemetry()
 
         # Update discrete inputs (status bits)
-        self.discrete_inputs[0] = turbine_telem.get("turbine_running", False)
-        self.discrete_inputs[1] = turbine_telem.get("governor_online", False)
-        self.discrete_inputs[2] = turbine_telem.get("trip_active", False)
+        self.memory_map["discrete_inputs[0]"] = turbine_telem.get("turbine_running", False)
+        self.memory_map["discrete_inputs[1]"] = turbine_telem.get("governor_online", False)
+        self.memory_map["discrete_inputs[2]"] = turbine_telem.get("trip_active", False)
 
         # Overspeed condition (>110% rated)
         shaft_speed = turbine_telem.get("shaft_speed_rpm", 0)
         rated_speed = self.turbine_physics.params.rated_speed_rpm
-        self.discrete_inputs[3] = shaft_speed > (rated_speed * 1.1)
+        self.memory_map["discrete_inputs[3]"] = shaft_speed > (rated_speed * 1.1)
+
+        # Alarm conditions
+        self.memory_map["discrete_inputs[6]"] = turbine_telem.get("vibration_mils", 0) > 8.0
+        self.memory_map["discrete_inputs[7]"] = turbine_telem.get("bearing_temperature_f", 0) > 180
 
         # Update input registers (analog telemetry)
-        self.input_registers[100] = int(turbine_telem.get("shaft_speed_rpm", 0))
-        self.input_registers[101] = int(turbine_telem.get("power_output_mw", 0))
-        self.input_registers[102] = int(turbine_telem.get("steam_pressure_psi", 0))
-        self.input_registers[103] = int(turbine_telem.get("steam_temperature_f", 0))
-        self.input_registers[104] = int(turbine_telem.get("bearing_temperature_f", 0))
-        self.input_registers[105] = int(turbine_telem.get("vibration_mils", 0))
-        self.input_registers[106] = int(turbine_telem.get("overspeed_time_sec", 0))
-        self.input_registers[107] = int(turbine_telem.get("damage_percent", 0))
+        self.memory_map["input_registers[0]"] = int(turbine_telem.get("shaft_speed_rpm", 0))
+        self.memory_map["input_registers[1]"] = int(turbine_telem.get("power_output_mw", 0) * 10)
+        self.memory_map["input_registers[2]"] = int(turbine_telem.get("steam_pressure_psi", 0))
+        self.memory_map["input_registers[3]"] = int(turbine_telem.get("steam_temperature_f", 0))
+        self.memory_map["input_registers[4]"] = int(turbine_telem.get("bearing_temperature_f", 0))
+        self.memory_map["input_registers[5]"] = int(turbine_telem.get("vibration_mils", 0) * 10)
+        self.memory_map["input_registers[6]"] = int(turbine_telem.get("overspeed_time_sec", 0))
+        self.memory_map["input_registers[7]"] = int(turbine_telem.get("damage_percent", 0))
 
         # Get grid telemetry (if available)
         if self.grid_physics:
             grid_telem = self.grid_physics.get_telemetry()
 
             # Grid trip conditions
-            self.discrete_inputs[4] = grid_telem.get("under_frequency_trip", False)
-            self.discrete_inputs[5] = grid_telem.get("over_frequency_trip", False)
+            self.memory_map["discrete_inputs[4]"] = grid_telem.get("under_frequency_trip", False)
+            self.memory_map["discrete_inputs[5]"] = grid_telem.get("over_frequency_trip", False)
 
             # Grid measurements (scaled for 16-bit registers)
             # Frequency: Hz * 100 (e.g., 50.00 Hz -> 5000)
             freq_hz = grid_telem.get("frequency_hz", 50.0)
-            self.input_registers[108] = int(freq_hz * 100)
+            self.memory_map["input_registers[8]"] = int(freq_hz * 100)
 
             # Voltage: pu * 1000 (e.g., 1.000 pu -> 1000)
             voltage_pu = grid_telem.get("voltage_pu", 1.0)
-            self.input_registers[109] = int(voltage_pu * 1000)
+            self.memory_map["input_registers[9]"] = int(voltage_pu * 1000)
         else:
             # No grid physics - clear grid-related inputs
-            self.discrete_inputs[4] = False
-            self.discrete_inputs[5] = False
-            self.input_registers[108] = 5000  # Nominal 50.00 Hz
-            self.input_registers[109] = 1000  # Nominal 1.000 pu
+            self.memory_map["discrete_inputs[4]"] = False
+            self.memory_map["discrete_inputs[5]"] = False
+            self.memory_map["input_registers[8]"] = 5000  # Nominal 50.00 Hz
+            self.memory_map["input_registers[9]"] = 1000  # Nominal 1.000 pu
 
     async def _execute_logic(self) -> None:
         """
@@ -265,17 +263,17 @@ class TurbinePLC(BasePLC):
         - Emergency trip and reset
         """
         # Read setpoint from holding registers (32-bit value split across two registers)
-        speed_setpoint_low = self.holding_registers[200]
-        speed_setpoint_high = self.holding_registers[201]
+        speed_setpoint_low = self.memory_map.get("holding_registers[0]", 0)
+        speed_setpoint_high = self.memory_map.get("holding_registers[1]", 0)
         speed_setpoint = (speed_setpoint_high << 16) | speed_setpoint_low
 
         # Clamp to reasonable range (0-10000 RPM)
         speed_setpoint = max(0, min(10000, speed_setpoint))
 
         # Read control coils
-        governor_enable = self.coils[0]
-        emergency_trip = self.coils[1]
-        trip_reset = self.coils[2]
+        governor_enable = self.memory_map.get("coils[0]", False)
+        emergency_trip = self.memory_map.get("coils[1]", False)
+        trip_reset = self.memory_map.get("coils[2]", False)
 
         # Detect trip reset edge (rising edge)
         if trip_reset and not self._trip_reset_edge:
@@ -304,16 +302,16 @@ class TurbinePLC(BasePLC):
         self.turbine_physics.set_governor_enabled(self._last_governor_enable)
 
         # Handle emergency trip
-        if self.coils[1]:  # Emergency trip commanded
+        if self.memory_map.get("coils[1]", False):  # Emergency trip commanded
             self.turbine_physics.trigger_emergency_trip()
             logger.warning(f"TurbinePLC '{self.device_name}': Emergency trip activated")
 
         # Handle trip reset
-        if self.coils[2] and self._trip_reset_edge:
+        if self.memory_map.get("coils[2]", False) and self._trip_reset_edge:
             self.turbine_physics.reset_trip()
             logger.info(f"TurbinePLC '{self.device_name}': Trip reset")
             # Auto-clear trip reset coil after execution
-            self.coils[2] = False
+            self.memory_map["coils[2]"] = False
 
     # ----------------------------------------------------------------
     # Additional functionality
@@ -329,8 +327,8 @@ class TurbinePLC(BasePLC):
         rpm_int = int(max(0, min(10000, rpm)))
 
         # Split into two 16-bit registers
-        self.holding_registers[200] = rpm_int & 0xFFFF  # Lower 16 bits
-        self.holding_registers[201] = (rpm_int >> 16) & 0xFFFF  # Upper 16 bits
+        self.memory_map["holding_registers[0]"] = rpm_int & 0xFFFF  # Lower 16 bits
+        self.memory_map["holding_registers[1]"] = (rpm_int >> 16) & 0xFFFF  # Upper 16 bits
 
         logger.info(
             f"TurbinePLC '{self.device_name}': Speed setpoint set to {rpm_int} RPM"
@@ -343,7 +341,7 @@ class TurbinePLC(BasePLC):
         Args:
             enable: True to enable governor, False to disable
         """
-        self.coils[0] = enable
+        self.memory_map["coils[0]"] = enable
         logger.info(
             f"TurbinePLC '{self.device_name}': "
             f"Governor {'enabled' if enable else 'disabled'}"
@@ -351,12 +349,12 @@ class TurbinePLC(BasePLC):
 
     async def trigger_trip(self) -> None:
         """Trigger emergency trip."""
-        self.coils[1] = True
+        self.memory_map["coils[1]"] = True
         logger.warning(f"TurbinePLC '{self.device_name}': Emergency trip triggered")
 
     async def reset_trip_command(self) -> None:
         """Reset trip condition."""
-        self.coils[2] = True
+        self.memory_map["coils[2]"] = True
         logger.info(f"TurbinePLC '{self.device_name}': Trip reset commanded")
 
     async def get_turbine_status(self) -> dict[str, Any]:

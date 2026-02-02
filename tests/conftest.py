@@ -7,10 +7,11 @@ are tested with real dependencies wherever possible.
 """
 
 import asyncio
-import pytest
 import tempfile
 from pathlib import Path
 from typing import Generator
+
+import pytest
 import yaml
 
 
@@ -115,7 +116,7 @@ def write_config_file(temp_config_dir):
             Path to written configuration file
         """
         config_file = temp_config_dir / filename
-        with open(config_file, 'w') as f:
+        with open(config_file, "w") as f:
             yaml.dump(config, f)
         return config_file
 
@@ -267,16 +268,17 @@ def setup_config_files(temp_config_dir, default_simulation_config, monkeypatch):
 
         # Write simulation.yml
         simulation_file = temp_config_dir / "simulation.yml"
-        with open(simulation_file, 'w') as f:
+        with open(simulation_file, "w") as f:
             yaml.dump(config, f)
 
         # Create minimal devices.yml to prevent defaults
         devices_file = temp_config_dir / "devices.yml"
-        with open(devices_file, 'w') as f:
+        with open(devices_file, "w") as f:
             yaml.dump({"devices": []}, f)
 
         # Monkeypatch ConfigLoader to use temp directory
         import components.time.simulation_time
+
         original_init = components.time.simulation_time.ConfigLoader.__init__
 
         def patched_init(self, config_dir=None):
@@ -286,9 +288,7 @@ def setup_config_files(temp_config_dir, default_simulation_config, monkeypatch):
             original_init(self, config_dir=str(temp_config_dir))
 
         monkeypatch.setattr(
-            components.time.simulation_time.ConfigLoader,
-            "__init__",
-            patched_init
+            components.time.simulation_time.ConfigLoader, "__init__", patched_init
         )
 
     return _setup
@@ -306,10 +306,10 @@ async def wait_for_condition():
     """
 
     async def _wait(
-            condition_fn,
-            timeout: float = 1.0,
-            poll_interval: float = 0.01,
-            error_msg: str = "Condition not met within timeout"
+        condition_fn,
+        timeout: float = 1.0,
+        poll_interval: float = 0.01,
+        error_msg: str = "Condition not met within timeout",
     ):
         """Wait for a condition to become true.
 

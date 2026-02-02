@@ -573,9 +573,7 @@ class TestHVACTelemetry:
         humidity = await data_store.read_memory(
             "library_hvac_1", "holding_registers[1]"
         )
-        lspace = await data_store.read_memory(
-            "library_hvac_1", "holding_registers[4]"
-        )
+        lspace = await data_store.read_memory("library_hvac_1", "holding_registers[4]")
 
         assert zone_temp == 215  # 21.5 * 10
         assert humidity == 480  # 48.0 * 10

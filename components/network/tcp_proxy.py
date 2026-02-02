@@ -237,7 +237,9 @@ class TCPProxy:
                 f"Proxy timeout: {client_addr} -> {self.target_host}:{self.target_port}"
             )
         except ConnectionRefusedError:
-            self.logger.error(f"Proxy target refused: {self.target_host}:{self.target_port}")
+            self.logger.error(
+                f"Proxy target refused: {self.target_host}:{self.target_port}"
+            )
         except Exception as e:
             self.logger.error(f"Proxy error for {client_addr}: {e}", exc_info=True)
         finally:

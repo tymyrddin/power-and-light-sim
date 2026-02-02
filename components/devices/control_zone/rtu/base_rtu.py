@@ -228,7 +228,9 @@ class BaseRTU(BaseDevice):
             deadband: Minimum change to trigger event
         """
         self.deadbands[point] = deadband
-        self.logger.debug(f"RTU '{self.device_name}': Set deadband {point} = {deadband}")
+        self.logger.debug(
+            f"RTU '{self.device_name}': Set deadband {point} = {deadband}"
+        )
 
     # ----------------------------------------------------------------
     # RTU status and diagnostics

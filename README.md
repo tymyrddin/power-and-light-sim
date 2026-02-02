@@ -109,7 +109,7 @@ The simulator follows a strict **causal layering**: higher layers consume, never
 This maps roughly to the Purdue Model levels you'd find in real ICS environments: from Level 0 field devices
 up through control, operations, and enterprise zones.
 
-For detailed testing strategy, see `tests/README.md`.
+For detailed testing strategy, see [tests/README.md](tests/README.md).
 
 ## Getting started
 
@@ -155,15 +155,15 @@ pytest tests/scenario/test_unauthorized_write_detection.py
 
 This project is under active development. Some modules are more complete than others:
 
-| Component | Status |
-|-----------|--------|
-| Core devices (PLC, RTU, HMI) | Functional |
-| Network simulation | Functional |
-| Modbus protocol | Functional |
-| DNP3 protocol | In progress |
-| Physics engines | In progress |
-| Security logging | Functional |
-| Scenario framework | Partial |
+| Component                    | Status      |
+|------------------------------|-------------|
+| Core devices (PLC, RTU, HMI) | Functional  |
+| Network simulation           | Functional  |
+| Modbus protocol              | Functional  |
+| DNP3 protocol                | In progress |
+| Physics engines              | In progress |
+| Security logging             | Functional  |
+| Scenario framework           | Partial     |
 
 ## Contributing
 
@@ -175,21 +175,53 @@ Contributions welcome:
 - Security rules and detection logic
 - Scenario libraries
 
-Before adding tests, read `tests/README.md` for dependency ordering.
+Before adding tests, read [tests/README.md](tests/README.md) for dependency ordering.
 Respect the layering: *fix the architecture, not the test*.
 
 ## Disclaimer
 
-This simulator is for **authorised security research, education, and testing only**.
+This simulator is for *authorised security research, education, and testing only*.
 Use it to develop and validate PoCs in a safe environment before engaging with real systems
 under proper authorisation.
 
 The authors take no responsibility for misuse. If you're testing real ICS/SCADA systems,
-ensure you have explicit written permission and understand the physical consequences.
+make sure you have explicit written permission and understand the physical consequences.
 
-## Licence
+## License and usage
 
-Public domain ([Unlicense](LICENSE)). Do what you will.
+This project is licensed under the [Polyform Noncommercial License](LICENSE).
+
+### What this means in practice
+
+You are welcome to use this software for:
+
+- Learning and experimentation
+- Academic or independent research
+- Defensive security research
+- Developing and validating proof-of-concepts
+- Incident response exercises
+- Non-commercial red/blue team simulations
+
+You may **not** use this software for:
+
+- Paid workshops or training
+- Consultancy or advisory services
+- Internal corporate training
+- Commercial product development
+
+If you want to use this project in a paid or commercial context, a commercial license is required.  
+See [COMMERCIAL-LICENSE.md](COMMERCIAL-LICENSE.md) for details.
+
+### Why this license exists
+
+This project is actively developed and maintained to support realistic security research and training.  
+The license ensures that:
+
+- Security research remains accessible
+- Defensive knowledge can spread
+- Commercial exploitation is fair and sustainable
+
+If you are unsure whether your use case is commercial, ask. [Ambiguity is solvable](https://tymyrddin.dev/contact/); silence is not.
 
 ## References
 

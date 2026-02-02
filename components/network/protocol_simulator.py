@@ -157,7 +157,9 @@ class ProtocolSimulator:
                         f"Listener {listener.node}:{listener.port} failed: {result}"
                     )
         else:
-            self.logger.info(f"All {len(self.listeners)} listener(s) started successfully")
+            self.logger.info(
+                f"All {len(self.listeners)} listener(s) started successfully"
+            )
 
     async def stop(self) -> None:
         """Stop all protocol listeners.
@@ -233,9 +235,7 @@ class _Listener:
         self.active_connections = 0
         self.total_connections = 0
         self.denied_connections = 0
-        self.logger: ICSLogger = get_logger(
-            f"{__name__}.{node}", device=node
-        )
+        self.logger: ICSLogger = get_logger(f"{__name__}.{node}", device=node)
 
     # ----------------------------------------------------------------
     # Lifecycle
@@ -338,7 +338,9 @@ class _Listener:
             )
         finally:
             self.active_connections -= 1
-            self.logger.debug(f"Connection closed: {client_addr} -> {self.node}:{self.port}")
+            self.logger.debug(
+                f"Connection closed: {client_addr} -> {self.node}:{self.port}"
+            )
 
     @staticmethod
     def _determine_source_network(client_ip: str | None) -> str:

@@ -27,7 +27,6 @@ import asyncio
 import threading
 import uuid
 from dataclasses import dataclass
-
 from enum import Enum
 
 from components.security.logging_system import (
@@ -39,7 +38,6 @@ from components.security.logging_system import (
 from components.state.data_store import DataStore
 from components.time.simulation_time import SimulationTime
 from config.config_loader import ConfigLoader
-
 
 # ----------------------------------------------------------------
 # User roles and permissions
@@ -538,7 +536,9 @@ class AuthenticationManager:
 
         Uses ICSLogger.log_security for structured, ICS-compliant audit logging.
         """
-        severity = EventSeverity.NOTICE if result == "ALLOWED" else EventSeverity.WARNING
+        severity = (
+            EventSeverity.NOTICE if result == "ALLOWED" else EventSeverity.WARNING
+        )
 
         async def _log():
             await self.logger.log_security(

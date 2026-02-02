@@ -21,6 +21,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from components.security.encryption import (
+    SIMULATION_EPOCH,
     AESEncryption,
     CertificateInfo,
     CertificateManager,
@@ -30,7 +31,6 @@ from components.security.encryption import (
     OPCUASecurityPolicy,
     SecureKeyStore,
     SecurityLevel,
-    SIMULATION_EPOCH,
 )
 
 
@@ -374,9 +374,7 @@ class TestCertificateManager:
         with tempfile.TemporaryDirectory() as tmpdir:
             mgr = CertificateManager(cert_dir=Path(tmpdir))
 
-            cert, _ = mgr.generate_self_signed_cert(
-                "valid.local", validity_hours=8760
-            )
+            cert, _ = mgr.generate_self_signed_cert("valid.local", validity_hours=8760)
 
             result = mgr.validate_certificate(cert)
 
@@ -515,9 +513,7 @@ class TestOPCUACrypto:
 
         WHY: OPC UA requires policy URIs.
         """
-        uri = OPCUACrypto.get_security_policy_uri(
-            OPCUASecurityPolicy.BASIC256SHA256
-        )
+        uri = OPCUACrypto.get_security_policy_uri(OPCUASecurityPolicy.BASIC256SHA256)
 
         assert "SecurityPolicy" in uri
         assert "Basic256Sha256" in uri
@@ -619,7 +615,9 @@ class TestSecureKeyStore:
         mock_data_store.read_metadata.return_value = stored_data
 
         # Create new store with different master key
-        store2 = SecureKeyStore(mock_data_store, master_key=AESEncryption.generate_key())
+        store2 = SecureKeyStore(
+            mock_data_store, master_key=AESEncryption.generate_key()
+        )
 
         result = await store2.retrieve_key("protected")
 
