@@ -172,6 +172,10 @@ connections:
     - device: historian_primary
       ip: 10.40.1.10
       description: Primary data historian
+    - device: finance_workstation
+      ip: 10.40.1.20
+      description: Finance workstation (phishing target)
+      notes: "Has VPN access to DMZ - primary attack vector"
 
   # Legacy Network (isolated)
   legacy_network:

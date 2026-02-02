@@ -22,7 +22,8 @@ Structure:
         └── goose.py         # IEC61850GOOSE (TODO)
 
 Usage:
-    from components.protocols import ModbusTCPServer, IEC104Server, S7Server
+    # Protocol servers are imported from network layer:
+    from components.network.servers import ModbusTCPServer, S7TCPServer
 
     # Create server
     modbus = ModbusTCPServer(host="0.0.0.0", port=10502)
@@ -51,10 +52,10 @@ try:
 except ImportError:
     pass
 
-# S7
+# S7 Protocol (abstraction layer only)
 try:
-    from components.protocols.s7 import S7Server
+    from components.protocols.s7 import S7Protocol
 
-    __all__.append("S7Server")
+    __all__.append("S7Protocol")
 except ImportError:
     pass

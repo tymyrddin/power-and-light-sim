@@ -6,14 +6,7 @@ Purdue Level 0-2 devices including:
 - PLCs: TurbinePLC, ReactorPLC, HVACPLC
 - RTUs: BaseRTU (substation RTUs)
 - Safety Controllers: TurbineSafetyPLC, ReactorSafetyPLC
-- Legacy: The forgotten Windows 98 box in the corner
 """
-
-from components.devices.control_zone.legacy_workstation import (
-    CSVLogEntry,
-    DiscoveredArtifact,
-    LegacyWorkstation,
-)
 from components.devices.control_zone.plc import (
     HVACPLC,
     BasePLC,
@@ -51,8 +44,4 @@ __all__ = [
     "VotingArchitecture",
     "TurbineSafetyPLC",
     "ReactorSafetyPLC",
-    # Legacy
-    "LegacyWorkstation",
-    "CSVLogEntry",
-    "DiscoveredArtifact",
 ]

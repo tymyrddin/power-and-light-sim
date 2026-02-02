@@ -1,9 +1,15 @@
-# protocols/modbus/modbus_rtu_endpoint.py
+# components/network/servers/modbus_rtu_server.py
 """
-Modbus RTU Server using PyModbus 3.11.4 simulator.
+Modbus RTU Server - Serial Attack Surface
 
-Opens a REAL serial port. External tools can connect and interact.
-Based on the legacy modbus_rtu_adapter.py.
+Opens a REAL serial port that external tools can target.
+Simulates RTU devices accessible via serial/RS-485.
+
+External Attack Tools:
+- mbtget with serial port: Read/write Modbus RTU
+- Custom Python: pymodbus ModbusSerialClient
+
+Based on pymodbus 3.11.4 async simulator.
 """
 
 import asyncio
@@ -60,7 +66,7 @@ class ModbusRTUServer:
         return self._running
 
     async def start(self) -> bool:
-        """Start Modbus RTU server."""
+        """Start Modbus RTU server with retry logic."""
         if self._running:
             return True
 
@@ -109,40 +115,84 @@ class ModbusRTUServer:
         self._simulator = ModbusSimulatorContext(config=config, custom_actions=None)
         self._context = ModbusServerContext(self._simulator, single=True)
 
-        self._server_task = asyncio.create_task(
-            StartAsyncSerialServer(
-                context=self._context,
-                port=self.port,
-                baudrate=self.baudrate,
-                bytesize=self.bytesize,
-                parity=self.parity,
-                stopbits=self.stopbits,
-            )
+        # Retry logic for serial port access
+        max_retries = 3
+        retry_delay = 0.3
+
+        for attempt in range(max_retries):
+            try:
+                self._server_task = asyncio.create_task(
+                    StartAsyncSerialServer(
+                        context=self._context,
+                        port=self.port,
+                        baudrate=self.baudrate,
+                        bytesize=self.bytesize,
+                        parity=self.parity,
+                        stopbits=self.stopbits,
+                    )
+                )
+
+                # Give server time to open serial port
+                await asyncio.sleep(retry_delay)
+
+                # Create internal client for sync operations and verify connection
+                self._client = AsyncModbusSerialClient(
+                    port=self.port,
+                    baudrate=self.baudrate,
+                    bytesize=self.bytesize,
+                    parity=self.parity,
+                    stopbits=self.stopbits,
+                )
+                self._client.unit_id = self.unit_id
+                connected = await self._client.connect()
+
+                if connected:
+                    self._running = True
+                    return True
+
+                # Connection failed, cleanup and retry
+                if self._server_task and not self._server_task.done():
+                    self._server_task.cancel()
+                    try:
+                        await asyncio.wait_for(self._server_task, timeout=1.0)
+                    except (asyncio.CancelledError, TimeoutError):
+                        pass
+
+                if attempt < max_retries - 1:
+                    await asyncio.sleep(retry_delay * (attempt + 1))
+
+            except Exception as e:
+                # Cleanup on error
+                if self._client:
+                    self._client.close()
+                    self._client = None
+                if self._server_task and not self._server_task.done():
+                    self._server_task.cancel()
+                    try:
+                        await asyncio.wait_for(self._server_task, timeout=1.0)
+                    except (asyncio.CancelledError, TimeoutError):
+                        pass
+                    self._server_task = None
+
+                if attempt < max_retries - 1:
+                    await asyncio.sleep(retry_delay * (attempt + 1))
+                else:
+                    raise RuntimeError(
+                        f"Failed to start Modbus RTU server on {self.port} after {max_retries} attempts: {e}"
+                    )
+
+        raise RuntimeError(
+            f"Failed to start Modbus RTU server on {self.port} - client connection failed"
         )
-
-        # Give server time to bind
-        await asyncio.sleep(0.3)
-
-        # Create internal client for sync operations
-        self._client = AsyncModbusSerialClient(
-            port=self.port,
-            baudrate=self.baudrate,
-            bytesize=self.bytesize,
-            parity=self.parity,
-            stopbits=self.stopbits,
-        )
-        self._client.unit_id = self.unit_id
-        await self._client.connect()
-
-        self._running = True
-        return True
 
     async def stop(self) -> None:
-        """Stop Modbus RTU server."""
+        """Stop Modbus RTU server and release serial port."""
+        # Close client connection first
         if self._client:
             self._client.close()
             self._client = None
 
+        # Cancel and wait for server task to finish
         if self._server_task and not self._server_task.done():
             self._server_task.cancel()
             try:
@@ -150,7 +200,9 @@ class ModbusRTUServer:
             except (TimeoutError, asyncio.CancelledError):
                 pass
             self._server_task = None
-            await asyncio.sleep(0.1)  # Let OS release port
+
+        # Give OS time to release serial port
+        await asyncio.sleep(0.3)
 
         self._running = False
         self._simulator = None

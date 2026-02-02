@@ -1,0 +1,211 @@
+# config/hmi_screens.yml
+# HMI Workstation Configuration - SCADA Connections and Screen Definitions
+#
+# Defines which SCADA server each HMI connects to and what screens/tags are displayed.
+# HMIs poll SCADA servers for tag data to display to operators.
+
+hmi_workstations:
+  # ================================================================
+  # OPERATOR HMI WORKSTATIONS
+  # Main control room operator interfaces (Wonderware InTouch)
+  # ================================================================
+
+  hmi_operator_1:
+    scada_server: scada_server_primary
+    os_version: Windows 10 Pro
+    hmi_software: Wonderware InTouch 2014 R2
+    scan_interval: 0.5  # Screen refresh rate (500ms)
+
+    screens:
+      # ================================================================
+      # PLANT OVERVIEW SCREEN
+      # High-level system status
+      # ================================================================
+      - name: plant_overview
+        tags:
+          # Turbine summary
+          - TURB1_RUNNING
+          - TURB1_SPEED
+          - TURB1_POWER
+          - TURB1_TRIP_ACTIVE
+          # Reactor summary
+          - RX1_ACTIVE
+          - RX1_CORE_TEMP
+          - RX1_POWER
+          - RX1_SCRAM_ACTIVE
+          # HVAC summary
+          - LIB_ZONE_TEMP
+          - LIB_LSPACE_STAB
+        controls:
+          - NAV_TO_TURBINE
+          - NAV_TO_REACTOR
+          - NAV_TO_HVAC
+
+      # ================================================================
+      # TURBINE CONTROL SCREEN
+      # Detailed turbine monitoring and control
+      # ================================================================
+      - name: turbine_control
+        tags:
+          # Primary telemetry
+          - TURB1_SPEED
+          - TURB1_POWER
+          - TURB1_STEAM_PRESS
+          - TURB1_STEAM_TEMP
+          - TURB1_BEARING_TEMP
+          - TURB1_VIBRATION
+          - TURB1_DAMAGE
+          - TURB1_GRID_FREQ
+          # Status indicators
+          - TURB1_RUNNING
+          - TURB1_GOVERNOR_ONLINE
+          - TURB1_TRIP_ACTIVE
+          - TURB1_OVERSPEED
+          # Setpoints
+          - TURB1_SPEED_SP
+        controls:
+          - TURB1_GOV_ENABLE
+          - TURB1_EMERG_TRIP
+          - TURB1_SPEED_SP_ADJUST
+
+      # ================================================================
+      # REACTOR CONTROL SCREEN
+      # Alchemical reactor monitoring and control
+      # ================================================================
+      - name: reactor_control
+        tags:
+          # Primary telemetry
+          - RX1_CORE_TEMP
+          - RX1_COOLANT_TEMP
+          - RX1_PRESSURE
+          - RX1_POWER
+          - RX1_THAUMIC_FIELD
+          - RX1_REACTION_RATE
+          - RX1_COOLANT_FLOW
+          - RX1_CONTAINMENT
+          - RX1_DAMAGE
+          # Status indicators
+          - RX1_ACTIVE
+          - RX1_HIGH_TEMP
+          - RX1_HIGH_PRESS
+          - RX1_THAUMIC_WARN
+          - RX1_CONTAIN_WARN
+          - RX1_SCRAM_ACTIVE
+          - RX1_SEVERE_DAMAGE
+          # Setpoints
+          - RX1_POWER_SP
+          - RX1_COOLANT_PUMP
+          - RX1_CONTROL_RODS
+        controls:
+          - RX1_SCRAM_CMD
+          - RX1_SCRAM_RESET
+          - RX1_THAUMIC_DAMP
+          - RX1_POWER_SP_ADJUST
+          - RX1_COOLANT_PUMP_ADJUST
+
+  hmi_operator_2:
+    scada_server: scada_server_primary
+    os_version: Windows 10 Pro
+    hmi_software: Wonderware InTouch 2014 R2
+    scan_interval: 0.5
+
+    screens:
+      # ================================================================
+      # LIBRARY HVAC CONTROL SCREEN
+      # Environmental monitoring for Library
+      # ================================================================
+      - name: library_hvac
+        tags:
+          # Environmental conditions
+          - LIB_ZONE_TEMP
+          - LIB_HUMIDITY
+          - LIB_SUPPLY_TEMP
+          - LIB_DUCT_PRESS
+          - LIB_LSPACE_STAB
+          # Equipment status
+          - LIB_FAN_SPEED
+          - LIB_HEATING_VALVE
+          - LIB_COOLING_VALVE
+          - LIB_DAMPER_POS
+          - LIB_ENERGY
+          # Status indicators
+          - LIB_FAN_RUNNING
+          - LIB_HEATING_ACTIVE
+          - LIB_COOLING_ACTIVE
+          - LIB_TEMP_ALARM
+          - LIB_HUMID_ALARM
+          - LIB_LSPACE_WARN
+          - LIB_LSPACE_CRIT
+          - LIB_SYSTEM_ENABLED
+          # Setpoints
+          - LIB_TEMP_SP
+          - LIB_HUMID_SP
+          - LIB_FAN_CMD
+          - LIB_MODE
+        controls:
+          - LIB_SYS_ENABLE
+          - LIB_LSPACE_DAMP
+          - LIB_TEMP_SP_ADJUST
+          - LIB_HUMID_SP_ADJUST
+          - LIB_MODE_SELECT
+
+      # ================================================================
+      # ALARM SUMMARY SCREEN
+      # Active alarms and events
+      # ================================================================
+      - name: alarm_summary
+        tags:
+          # Critical alarms from all systems
+          - TURB1_TRIP_ACTIVE
+          - TURB1_OVERSPEED
+          - RX1_SCRAM_ACTIVE
+          - RX1_HIGH_TEMP
+          - RX1_THAUMIC_WARN
+          - RX1_CONTAIN_WARN
+          - LIB_TEMP_ALARM
+          - LIB_LSPACE_WARN
+          - LIB_LSPACE_CRIT
+        controls:
+          - ACK_ALL_ALARMS
+          - SILENCE_HORN
+
+  hmi_operator_3:
+    scada_server: scada_server_backup  # Connected to backup SCADA
+    os_version: Windows 10 Pro
+    hmi_software: Wonderware InTouch 2014 R2
+    scan_interval: 0.5
+
+    screens:
+      # Simple overview screen for backup SCADA monitoring
+      - name: system_status
+        tags:
+          - TURB1_RUNNING
+          - TURB1_SPEED
+          - TURB1_POWER
+          - RX1_ACTIVE
+          - RX1_CORE_TEMP
+          - RX1_SCRAM_ACTIVE
+          - LIB_ZONE_TEMP
+          - LIB_LSPACE_STAB
+        controls: []
+
+  hmi_operator_4:
+    scada_server: scada_server_backup  # Connected to backup SCADA
+    os_version: Windows 10 Pro
+    hmi_software: Wonderware InTouch 2014 R2
+    scan_interval: 0.5
+
+    screens:
+      # Trend screen for historical analysis
+      - name: trends
+        tags:
+          - TURB1_SPEED
+          - TURB1_POWER
+          - RX1_CORE_TEMP
+          - RX1_POWER
+          - RX1_THAUMIC_FIELD
+          - LIB_ZONE_TEMP
+          - LIB_LSPACE_STAB
+        controls:
+          - TREND_TIMESPAN_SELECT
+          - TREND_TAG_SELECT

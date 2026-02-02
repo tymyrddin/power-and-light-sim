@@ -145,14 +145,19 @@ class BaseDevice(ABC):
         self.logger.info(f"Starting device '{self.device_name}'")
 
         try:
-            # Register with DataStore
-            await self.data_store.register_device(
-                device_name=self.device_name,
-                device_type=self._device_type(),
-                device_id=self.device_id,
-                protocols=self._supported_protocols(),
-                metadata=self.metadata,
-            )
+            # Register with DataStore if not already registered
+            device_state = await self.data_store.get_device_state(self.device_name)
+            if not device_state:
+                await self.data_store.register_device(
+                    device_name=self.device_name,
+                    device_type=self._device_type(),
+                    device_id=self.device_id,
+                    protocols=self._supported_protocols(),
+                    metadata=self.metadata,
+                )
+                self.logger.debug(f"Registered device '{self.device_name}'")
+            else:
+                self.logger.debug(f"Device '{self.device_name}' already registered, skipping registration")
 
             # Initialise memory map
             await self._initialise_memory_map()

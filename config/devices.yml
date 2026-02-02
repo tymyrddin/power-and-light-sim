@@ -31,11 +31,12 @@ devices:
     scan_interval: 0.1  # 100ms scan cycle
 
   - name: hex_turbine_safety_plc
-    type: safety_plc
+    type: turbine_safety_plc
     device_id: 2
     description: Turbine Safety Instrumented System
     location: Turbine Hall - Basement Level 3
     zone: control_zone
+    physics_engine: turbine_physics  # Monitors turbine_physics for safety
     protocols:
       modbus:
         host: 0.0.0.0
@@ -67,11 +68,12 @@ devices:
     scan_interval: 0.1
 
   - name: reactor_safety_plc
-    type: safety_plc
+    type: reactor_safety_plc
     device_id: 11
     description: Reactor Safety PLC (Independent SIL-rated)
     location: Reactor Building - Sub-basement
     zone: control_zone
+    physics_engine: reactor_physics  # Monitors reactor_physics for safety
     protocols:
       s7:
         host: 0.0.0.0
@@ -127,6 +129,10 @@ devices:
         port: 20000
         master_address: 1
         outstation_address: 100
+      iec104:
+        host: 0.0.0.0
+        port: 2404
+        common_address: 1
       modbus:
         host: 0.0.0.0
         port: 10510
@@ -145,6 +151,10 @@ devices:
         port: 20001
         master_address: 1
         outstation_address: 101
+      iec104:
+        host: 0.0.0.0
+        port: 2405
+        common_address: 2
     scan_interval: 1.0
 
   - name: substation_rtu_3
@@ -159,6 +169,10 @@ devices:
         port: 20002
         master_address: 1
         outstation_address: 102
+      iec104:
+        host: 0.0.0.0
+        port: 2406
+        common_address: 3
     scan_interval: 1.0
 
   # ================================================================
@@ -172,8 +186,12 @@ devices:
     zone: operations_zone
     protocols:
       opcua:
-        endpoint: opc.tcp://0.0.0.0:4840
-        security_mode: None
+        host: 0.0.0.0
+        port: 4840
+        endpoint: opc.tcp://0.0.0.0:4840/
+        # INSECURE: No encryption (realistic for legacy SCADA systems)
+        security_policy: None
+        allow_anonymous: true
       modbus:
         host: 0.0.0.0
         port: 10520
@@ -187,8 +205,14 @@ devices:
     zone: operations_zone
     protocols:
       opcua:
-        endpoint: opc.tcp://0.0.0.0:4841
-        security_mode: None
+        host: 0.0.0.0
+        port: 4841
+        endpoint: opc.tcp://0.0.0.0:4841/
+        # SECURE: Encrypted with certificates (demonstrates proper security)
+        security_policy: Basic256Sha256
+        certificate: certs/scada_backup.crt
+        private_key: certs/scada_backup.key
+        allow_anonymous: false
 
   - name: hmi_operator_1
     type: hmi_workstation
@@ -234,9 +258,16 @@ devices:
     description: Primary Historian (10+ years operational data)
     location: Server Room
     zone: enterprise_zone
+    scada_server: scada_server_primary  # SCADA server to collect from
+    retention_days: 3650  # 10 years
     protocols:
       opcua:
-        endpoint: opc.tcp://0.0.0.0:4850
+        host: 0.0.0.0
+        port: 4850
+        endpoint: opc.tcp://0.0.0.0:4850/
+        # INSECURE: No encryption (realistic for older historians)
+        security_policy: None
+        allow_anonymous: true
 
   - name: legacy_data_collector
     type: legacy_system
@@ -245,7 +276,19 @@ devices:
     location: Turbine Hall - Control Cabinet
     zone: enterprise_zone
     notes: "25 years of turbine data - DO NOT TOUCH"
+    physics_engine: hex_turbine_plc  # Serial connection to turbine
+    scan_interval: 5.0  # Old and slow
     protocols:
       serial:
         port: COM1
         baud: 9600
+
+  - name: finance_workstation
+    type: enterprise_workstation
+    device_id: 400
+    description: Finance/Accounting Workstation (Phishing Target)
+    location: Admin Building - Finance Department
+    zone: enterprise_zone
+    notes: "Primary attack vector - has VPN access to DMZ"
+    historian_source: historian_primary  # Reads historian data
+    scan_interval: 60.0  # Check historian every minute

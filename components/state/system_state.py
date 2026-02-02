@@ -121,8 +121,8 @@ class SystemState:
         if not device_type or not isinstance(device_type, str):
             raise ValueError("device_type must be a non-empty string")
 
-        if not isinstance(protocols, list) or not protocols:
-            raise ValueError("protocols must be a non-empty list")
+        if not isinstance(protocols, list):
+            raise ValueError("protocols must be a list (can be empty for client devices)")
 
         async with self._lock:
             already_exists = device_name in self.devices

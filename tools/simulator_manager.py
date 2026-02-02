@@ -29,7 +29,9 @@ from typing import Any
 from components.devices import DEVICE_REGISTRY
 from components.network.network_simulator import NetworkSimulator
 from components.physics.grid_physics import GridParameters, GridPhysics
+from components.physics.hvac_physics import HVACParameters, HVACPhysics
 from components.physics.power_flow import PowerFlow
+from components.physics.reactor_physics import ReactorParameters, ReactorPhysics
 from components.physics.turbine_physics import TurbineParameters, TurbinePhysics
 from components.state.data_store import DataStore
 from components.state.system_state import SystemState
@@ -85,6 +87,8 @@ class SimulatorManager:
 
         # Physics engines
         self.turbine_physics: dict[str, TurbinePhysics] = {}
+        self.hvac_physics: dict[str, HVACPhysics] = {}
+        self.reactor_physics: dict[str, ReactorPhysics] = {}
         self.grid_physics: GridPhysics | None = None
         self.power_flow: PowerFlow | None = None
 
@@ -153,7 +157,15 @@ class SimulatorManager:
             logger.info("Creating device instances...")
             await self._create_devices(config)
 
-            # 6. Expose services in network (start protocol servers)
+            # 6. Configure SCADA servers with poll targets and tags
+            logger.info("Configuring SCADA servers...")
+            await self._configure_scada_servers(config)
+
+            # 7. Configure HMI workstations with SCADA connections and screens
+            logger.info("Configuring HMI workstations...")
+            await self._configure_hmi_workstations(config)
+
+            # 8. Expose services in network (start protocol servers)
             logger.info("Starting protocol servers...")
             await self._expose_services(config)
 
@@ -192,26 +204,26 @@ class SimulatorManager:
                 logger.warning(f"Skipping invalid device config: {device_cfg}")
                 continue
 
-            # Skip devices without protocols (workstations, etc. - not networked)
-            if not protocols:
-                logger.info(f"Skipping device without protocols: {device_name} ({device_type})")
-                continue
-
-            # Register device in state
+            # Register device in state (even if no protocols for network topology)
             await self.data_store.register_device(
                 device_name=device_name,
                 device_type=device_type,
                 device_id=device_id,
-                protocols=protocols,
+                protocols=protocols,  # Can be empty list
                 metadata=metadata,
             )
 
             # Set device online (in real implementation, protocols would do this)
             await self.data_store.set_device_online(device_name, True)
 
-            logger.info(
-                f"Registered device: {device_name} (type={device_type}, protocols={protocols})"
-            )
+            if protocols:
+                logger.info(
+                    f"Registered device: {device_name} (type={device_type}, protocols={protocols})"
+                )
+            else:
+                logger.info(
+                    f"Registered device: {device_name} (type={device_type}, no protocols)"
+                )
 
     async def _create_physics_engines(self, config: dict[str, Any]) -> None:
         """Create physics engines for devices.
@@ -238,6 +250,52 @@ class SimulatorManager:
             self.turbine_physics[device_name] = turbine
 
             logger.info(f"Created turbine physics: {device_name}")
+
+        # Create HVAC physics for each HVAC PLC
+        hvac_devices = await self.data_store.get_devices_by_type("hvac_plc")
+
+        for hvac_device in hvac_devices:
+            device_name = hvac_device.device_name
+
+            # Get HVAC-specific parameters from metadata if available
+            # For now, use defaults (Library environmental system)
+            params = HVACParameters(
+                zone_thermal_mass=500.0,
+                zone_volume_m3=5000.0,
+                rated_heating_kw=50.0,
+                rated_cooling_kw=75.0,
+            )
+
+            # Create physics engine
+            hvac = HVACPhysics(device_name, self.data_store, params)
+            await hvac.initialise()
+
+            self.hvac_physics[device_name] = hvac
+
+            logger.info(f"Created HVAC physics: {device_name}")
+
+        # Create reactor physics for each reactor PLC
+        reactor_devices = await self.data_store.get_devices_by_type("reactor_plc")
+
+        for reactor_device in reactor_devices:
+            device_name = reactor_device.device_name
+
+            # Get reactor-specific parameters from metadata if available
+            # For now, use defaults (Alchemical reactor)
+            params = ReactorParameters(
+                rated_power_mw=25.0,
+                rated_temperature_c=350.0,
+                max_safe_temperature_c=400.0,
+                critical_temperature_c=450.0,
+            )
+
+            # Create physics engine
+            reactor = ReactorPhysics(device_name, self.data_store, params)
+            await reactor.initialise()
+
+            self.reactor_physics[device_name] = reactor
+
+            logger.info(f"Created reactor physics: {device_name}")
 
         # Create grid physics if we have turbines
         if self.turbine_physics:
@@ -296,6 +354,80 @@ class SimulatorManager:
                         grid_physics=self.grid_physics,
                         scan_interval=scan_interval,
                     )
+                elif device_type == "hvac_plc":
+                    if not physics_engine:
+                        logger.warning(f"No physics engine for {device_name}, skipping")
+                        continue
+
+                    device = device_class(
+                        device_name=device_name,
+                        device_id=device_id,
+                        data_store=self.data_store,
+                        hvac_physics=physics_engine,
+                        scan_interval=scan_interval,
+                    )
+                elif device_type == "reactor_plc":
+                    if not physics_engine:
+                        logger.warning(f"No physics engine for {device_name}, skipping")
+                        continue
+
+                    device = device_class(
+                        device_name=device_name,
+                        device_id=device_id,
+                        data_store=self.data_store,
+                        reactor_physics=physics_engine,
+                        scan_interval=scan_interval,
+                    )
+                elif device_type == "historian":
+                    # Historian with SCADA server connection
+                    device = device_class(
+                        device_name=device_name,
+                        device_id=device_id,
+                        data_store=self.data_store,
+                        scada_server=device_cfg.get("scada_server", "scada_server_primary"),
+                        retention_days=device_cfg.get("retention_days", 3650),
+                        description=device_cfg.get("description", ""),
+                        scan_interval=scan_interval,
+                    )
+                elif device_type == "turbine_safety_plc":
+                    # Turbine safety PLC with physics engine
+                    if not physics_engine:
+                        logger.warning(f"No physics engine for {device_name}, skipping")
+                        continue
+
+                    device = device_class(
+                        device_name=device_name,
+                        device_id=device_id,
+                        data_store=self.data_store,
+                        turbine_physics=physics_engine,
+                        description=device_cfg.get("description", ""),
+                        scan_interval=scan_interval,
+                    )
+                elif device_type == "reactor_safety_plc":
+                    # Reactor safety PLC with physics engine
+                    if not physics_engine:
+                        logger.warning(f"No physics engine for {device_name}, skipping")
+                        continue
+
+                    device = device_class(
+                        device_name=device_name,
+                        device_id=device_id,
+                        data_store=self.data_store,
+                        reactor_physics=physics_engine,
+                        description=device_cfg.get("description", ""),
+                        scan_interval=scan_interval,
+                    )
+                elif device_type in ["legacy_system", "legacy_workstation"]:
+                    # Legacy workstation (Windows 98 data collector)
+                    # Optionally connect to turbine physics if specified
+                    device = device_class(
+                        device_name=device_name,
+                        device_id=device_id,
+                        data_store=self.data_store,
+                        turbine_physics=physics_engine,  # May be None
+                        description=device_cfg.get("description", ""),
+                        scan_interval=scan_interval,
+                    )
                 else:
                     # Generic device creation (adjust as needed for other device types)
                     device = device_class(
@@ -315,6 +447,153 @@ class SimulatorManager:
             except Exception as e:
                 logger.error(f"Failed to create device {device_name} ({device_type}): {e}", exc_info=True)
 
+    async def _configure_scada_servers(self, config: dict[str, Any]) -> None:
+        """Configure SCADA servers with poll targets and tags from config.
+
+        Args:
+            config: Loaded configuration dictionary
+        """
+        scada_servers_config = config.get("scada_servers", {})
+
+        if not scada_servers_config:
+            logger.info("No SCADA server configuration found, skipping")
+            return
+
+        for scada_name, scada_config in scada_servers_config.items():
+            # Get SCADA server device instance
+            scada_device = self.device_instances.get(scada_name)
+            if not scada_device:
+                logger.warning(f"SCADA server '{scada_name}' not found in device instances, skipping")
+                continue
+
+            # Configure poll targets
+            poll_targets = scada_config.get("poll_targets", [])
+            for target_cfg in poll_targets:
+                device_name = target_cfg.get("device")
+                protocol = target_cfg.get("protocol")
+                poll_rate = target_cfg.get("poll_rate", 1.0)
+                enabled = target_cfg.get("enabled", True)
+
+                if not device_name or not protocol:
+                    logger.warning(f"Invalid poll target config: {target_cfg}")
+                    continue
+
+                scada_device.add_poll_target(
+                    device_name=device_name,
+                    protocol=protocol,
+                    poll_rate_s=poll_rate,
+                    enabled=enabled,
+                )
+                logger.debug(
+                    f"Added poll target to {scada_name}: {device_name} ({protocol}) @ {poll_rate}s"
+                )
+
+            # Configure tags
+            tags = scada_config.get("tags", [])
+            for tag_cfg in tags:
+                tag_name = tag_cfg.get("name")
+                device_name = tag_cfg.get("device")
+                address_type = tag_cfg.get("address_type")
+                address = tag_cfg.get("address")
+
+                if not all([tag_name, device_name, address_type, address is not None]):
+                    logger.warning(f"Invalid tag config: {tag_cfg}")
+                    continue
+
+                scada_device.add_tag(
+                    tag_name=tag_name,
+                    device_name=device_name,
+                    address_type=address_type,
+                    address=address,
+                    data_type=tag_cfg.get("data_type", "int"),
+                    description=tag_cfg.get("description", ""),
+                    unit=tag_cfg.get("unit", ""),
+                    alarm_high=tag_cfg.get("alarm_high"),
+                    alarm_low=tag_cfg.get("alarm_low"),
+                )
+                logger.debug(
+                    f"Added tag to {scada_name}: {tag_name} -> {device_name}:{address_type}[{address}]"
+                )
+
+            logger.info(
+                f"Configured SCADA server '{scada_name}': "
+                f"{len(poll_targets)} poll targets, {len(tags)} tags"
+            )
+
+    async def _configure_hmi_workstations(self, config: dict[str, Any]) -> None:
+        """Configure HMI workstations with SCADA connections and screens from config.
+
+        Args:
+            config: Loaded configuration dictionary
+        """
+        hmi_workstations_config = config.get("hmi_workstations", {})
+
+        if not hmi_workstations_config:
+            logger.info("No HMI workstation configuration found, skipping")
+            return
+
+        for hmi_name, hmi_config in hmi_workstations_config.items():
+            # Get HMI workstation device instance
+            hmi_device = self.device_instances.get(hmi_name)
+            if not hmi_device:
+                logger.warning(f"HMI workstation '{hmi_name}' not found in device instances, skipping")
+                continue
+
+            # Update SCADA server connection
+            scada_server = hmi_config.get("scada_server")
+            if scada_server:
+                hmi_device.scada_server = scada_server
+
+                # Update poll target with correct SCADA server
+                # Remove old poll targets first
+                hmi_device.poll_targets.clear()
+
+                # Add correct SCADA server as poll target
+                scan_interval = hmi_config.get("scan_interval", 0.5)
+                hmi_device.add_poll_target(
+                    device_name=scada_server,
+                    protocol="internal",
+                    poll_rate_s=scan_interval,
+                )
+                logger.debug(f"HMI '{hmi_name}' connected to SCADA server '{scada_server}'")
+
+            # Update OS and software info if provided
+            if "os_version" in hmi_config:
+                hmi_device.os_version = hmi_config["os_version"]
+            if "hmi_software" in hmi_config:
+                hmi_device.hmi_software = hmi_config["hmi_software"]
+
+            # Configure screens
+            screens = hmi_config.get("screens", [])
+            for screen_cfg in screens:
+                screen_name = screen_cfg.get("name")
+                tags = screen_cfg.get("tags", [])
+                controls = screen_cfg.get("controls", [])
+
+                if not screen_name:
+                    logger.warning(f"Invalid screen config for {hmi_name}: {screen_cfg}")
+                    continue
+
+                hmi_device.add_screen(
+                    screen_name=screen_name,
+                    tags=tags,
+                    controls=controls,
+                )
+                logger.debug(
+                    f"Added screen to {hmi_name}: {screen_name} "
+                    f"({len(tags)} tags, {len(controls)} controls)"
+                )
+
+            # Set initial screen if available
+            if screens:
+                first_screen = screens[0].get("name")
+                hmi_device.navigate_to_screen(first_screen)
+
+            logger.info(
+                f"Configured HMI workstation '{hmi_name}': "
+                f"SCADA={scada_server}, {len(screens)} screens"
+            )
+
     def _get_physics_engine(self, engine_name: str | None) -> Any:
         """Get physics engine by name from config.
 
@@ -328,11 +607,20 @@ class SimulatorManager:
             return None
 
         # Map engine names to actual instances
+        # For named engines, look up by device name in config
+        if engine_name in self.turbine_physics:
+            return self.turbine_physics[engine_name]
+        if engine_name in self.hvac_physics:
+            return self.hvac_physics[engine_name]
+        if engine_name in self.reactor_physics:
+            return self.reactor_physics[engine_name]
+
+        # Fallback to type-based lookup
         engine_map = {
             "turbine_physics": lambda: next(iter(self.turbine_physics.values())) if self.turbine_physics else None,
+            "hvac_physics": lambda: next(iter(self.hvac_physics.values())) if self.hvac_physics else None,
+            "reactor_physics": lambda: next(iter(self.reactor_physics.values())) if self.reactor_physics else None,
             "grid_physics": lambda: self.grid_physics,
-            "reactor_physics": None,  # TODO: Add when implemented
-            "hvac_physics": None,  # TODO: Add when implemented
         }
 
         engine_getter = engine_map.get(engine_name)
@@ -343,15 +631,29 @@ class SimulatorManager:
     async def _expose_services(self, config: dict[str, Any]) -> None:
         """Start protocol servers for devices based on config.
 
+        Creates network-accessible attack surfaces for external tools.
+        Protocol servers open real TCP/IP ports that can be targeted
+        from another terminal using tools like mbtget, nmap, Metasploit.
+
+        Servers are started in PARALLEL for fast initialization.
+
         Args:
             config: Loaded configuration dictionary
         """
-        from components.protocols.modbus import ModbusTCPServer
+        from components.network.servers import (
+            ModbusTCPServer, S7TCPServer, DNP3TCPServer,
+            IEC104TCPServer, OPCUAServer
+        )
 
         devices = config.get("devices", [])
 
+        # Collect all server start tasks for parallel execution
+        server_tasks = []
+        server_metadata = []  # Store (device_name, proto_name, server_obj) for each task
+
         for device_cfg in devices:
             device_name = device_cfg.get("name")
+            device_id = device_cfg.get("device_id", 1)
             protocols_cfg = device_cfg.get("protocols", {})
 
             for proto_name, proto_cfg in protocols_cfg.items():
@@ -374,7 +676,7 @@ class SimulatorManager:
                 # Expose service in network simulator (topology)
                 await self.network_sim.expose_service(device_name, proto_name, port)
 
-                # Create and start protocol server
+                # Create protocol server (will be started in parallel later)
                 if proto_name == "modbus":
                     try:
                         host = proto_cfg.get("host", "0.0.0.0")
@@ -391,21 +693,133 @@ class SimulatorManager:
                             num_input_registers=256,
                         )
 
-                        # Start server
-                        await server.start()
-
-                        # Store reference
-                        server_key = f"{device_name}:{proto_name}"
-                        self.protocol_servers[server_key] = server
-
-                        logger.info(f"Started Modbus TCP server: {device_name}:{port}")
+                        # Collect for parallel start
+                        server_tasks.append(server.start())
+                        server_metadata.append((device_name, proto_name, server, port))
 
                     except Exception as e:
-                        logger.error(f"Failed to start {proto_name} server for {device_name}: {e}")
+                        logger.error(f"Failed to create {proto_name} server for {device_name}: {e}")
+
+                elif proto_name == "s7":
+                    try:
+                        host = proto_cfg.get("host", "0.0.0.0")
+                        rack = proto_cfg.get("rack", 0)
+                        slot = proto_cfg.get("slot", 2)
+
+                        # Create S7 TCP server with snap7
+                        server = S7TCPServer(
+                            host=host,
+                            port=port,
+                            rack=rack,
+                            slot=slot,
+                            db1_size=256,  # Input registers
+                            db2_size=256,  # Holding registers
+                            db3_size=64,   # Discrete inputs
+                            db4_size=64,   # Coils
+                        )
+
+                        # Collect for parallel start
+                        server_tasks.append(server.start())
+                        server_metadata.append((device_name, proto_name, server, port))
+
+                    except Exception as e:
+                        logger.error(f"Failed to create {proto_name} server for {device_name}: {e}")
+
+                elif proto_name == "dnp3":
+                    try:
+                        host = proto_cfg.get("host", "0.0.0.0")
+                        master_address = proto_cfg.get("master_address", 1)
+                        outstation_address = proto_cfg.get("outstation_address", device_id)
+
+                        # Create DNP3 TCP server (outstation)
+                        server = DNP3TCPServer(
+                            host=host,
+                            port=port,
+                            master_address=master_address,
+                            outstation_address=outstation_address,
+                            num_binary_inputs=64,
+                            num_analog_inputs=32,
+                            num_counters=16,
+                        )
+
+                        # Collect for parallel start
+                        server_tasks.append(server.start())
+                        server_metadata.append((device_name, proto_name, server, port))
+
+                    except Exception as e:
+                        logger.error(f"Failed to create {proto_name} server for {device_name}: {e}")
+
+                elif proto_name == "iec104":
+                    try:
+                        host = proto_cfg.get("host", "0.0.0.0")
+                        common_address = proto_cfg.get("common_address", 1)
+
+                        # Create IEC 104 TCP server
+                        server = IEC104TCPServer(
+                            host=host,
+                            port=port,
+                            common_address=common_address,
+                        )
+
+                        # Collect for parallel start
+                        server_tasks.append(server.start())
+                        server_metadata.append((device_name, proto_name, server, port))
+
+                    except Exception as e:
+                        logger.error(f"Failed to create {proto_name} server for {device_name}: {e}")
+
+                elif proto_name == "opcua":
+                    try:
+                        endpoint_url = proto_cfg.get("endpoint", f"opc.tcp://{proto_cfg.get('host', '0.0.0.0')}:{port}/")
+
+                        # Security configuration (optional)
+                        security_policy = proto_cfg.get("security_policy", "None")
+                        certificate_path = proto_cfg.get("certificate")
+                        private_key_path = proto_cfg.get("private_key")
+                        allow_anonymous = proto_cfg.get("allow_anonymous", True)
+
+                        # Create OPC UA server with optional security
+                        server = OPCUAServer(
+                            endpoint=endpoint_url,
+                            security_policy=security_policy,
+                            certificate_path=certificate_path,
+                            private_key_path=private_key_path,
+                            allow_anonymous=allow_anonymous,
+                        )
+
+                        # Collect for parallel start
+                        server_tasks.append(server.start())
+                        server_metadata.append((device_name, proto_name, server, port))
+
+                    except Exception as e:
+                        logger.error(f"Failed to create {proto_name} server for {device_name}: {e}")
 
                 else:
                     # Protocol not yet implemented
                     logger.info(f"Exposed {proto_name} service (server not implemented): {device_name}:{port}")
+
+        # Start all servers in PARALLEL for fast initialization
+        if server_tasks:
+            logger.info(f"Starting {len(server_tasks)} protocol servers in parallel...")
+
+            # Run all server.start() calls concurrently
+            results = await asyncio.gather(*server_tasks, return_exceptions=True)
+
+            # Process results and store successful servers
+            for i, (device_name, proto_name, server, port) in enumerate(server_metadata):
+                result = results[i]
+
+                if isinstance(result, Exception):
+                    logger.error(f"Failed to start {proto_name} server for {device_name}:{port}: {result}")
+                elif result:  # Server started successfully
+                    server_key = f"{device_name}:{proto_name}"
+                    self.protocol_servers[server_key] = server
+                    logger.info(f"Started {proto_name} server: {device_name}:{port}")
+                else:
+                    logger.warning(
+                        f"{proto_name} server for {device_name}:{port} failed to start - "
+                        "library may not be installed or port unavailable"
+                    )
 
     async def _log_summary(self) -> None:
         """Log initialisation summary."""
@@ -420,6 +834,8 @@ class SimulatorManager:
         logger.info(f"Services exposed: {net_summary['services']['count']}")
         logger.info(f"Protocol servers: {len(self.protocol_servers)}")
         logger.info(f"Turbine physics engines: {len(self.turbine_physics)}")
+        logger.info(f"HVAC physics engines: {len(self.hvac_physics)}")
+        logger.info(f"Reactor physics engines: {len(self.reactor_physics)}")
         logger.info(f"Grid physics: {'enabled' if self.grid_physics else 'disabled'}")
         logger.info(f"Power flow: {'enabled' if self.power_flow else 'disabled'}")
         logger.info("-------------------------")
@@ -562,6 +978,12 @@ class SimulatorManager:
         for turbine in self.turbine_physics.values():
             await turbine.initialise()
 
+        for hvac in self.hvac_physics.values():
+            await hvac.initialise()
+
+        for reactor in self.reactor_physics.values():
+            await reactor.initialise()
+
         if self.grid_physics:
             await self.grid_physics.initialise()
 
@@ -640,6 +1062,12 @@ class SimulatorManager:
         for turbine in self.turbine_physics.values():
             turbine.update(dt)
 
+        for hvac in self.hvac_physics.values():
+            hvac.update(dt)
+
+        for reactor in self.reactor_physics.values():
+            reactor.update(dt)
+
         if self.grid_physics:
             self.grid_physics.update(dt)
 
@@ -649,6 +1077,12 @@ class SimulatorManager:
         # 3. Write telemetry back to device memory maps
         for turbine in self.turbine_physics.values():
             await turbine.write_telemetry()
+
+        for hvac in self.hvac_physics.values():
+            await hvac.write_telemetry()
+
+        for reactor in self.reactor_physics.values():
+            await reactor.write_telemetry()
 
         # 4. Sync protocol servers with device registers
         await self._sync_protocol_servers()
@@ -661,59 +1095,106 @@ class SimulatorManager:
 
         Device → Server: Push telemetry (input_registers, discrete_inputs)
         Server → Device: Pull commands (coils, holding_registers)
+
+        Handles Modbus, S7, and DNP3 protocol servers.
         """
         for device_name, device in self.device_instances.items():
-            # Find Modbus server for this device
-            server_key = f"{device_name}:modbus"
-            server = self.protocol_servers.get(server_key)
+            # Check for Modbus server
+            modbus_key = f"{device_name}:modbus"
+            modbus_server = self.protocol_servers.get(modbus_key)
 
-            if not server:
-                continue
+            # Check for S7 server
+            s7_key = f"{device_name}:s7"
+            s7_server = self.protocol_servers.get(s7_key)
 
-            try:
-                # Extract registers from device memory_map
-                memory_map = device.memory_map
+            # Check for DNP3 server
+            dnp3_key = f"{device_name}:dnp3"
+            dnp3_server = self.protocol_servers.get(dnp3_key)
 
-                # Device → Server (telemetry)
-                input_registers = {}
-                discrete_inputs = {}
-                for key, value in memory_map.items():
-                    if key.startswith("input_registers["):
-                        # Extract address from "input_registers[100]"
-                        addr = int(key.split("[")[1].split("]")[0])
-                        input_registers[addr] = value
-                    elif key.startswith("discrete_inputs["):
-                        addr = int(key.split("[")[1].split("]")[0])
-                        discrete_inputs[addr] = value
+            # Sync with Modbus/S7 servers (same data model)
+            for server in [modbus_server, s7_server]:
+                if not server:
+                    continue
 
-                if input_registers:
-                    await server.sync_from_device(input_registers, "input_registers")
-                if discrete_inputs:
-                    await server.sync_from_device(discrete_inputs, "discrete_inputs")
+                try:
+                    # Extract registers from device memory_map
+                    memory_map = device.memory_map
 
-                # Server → Device (commands)
-                # Find coils range
-                coil_addrs = [int(k.split("[")[1].split("]")[0]) for k in memory_map.keys() if k.startswith("coils[")]
-                if coil_addrs:
-                    min_addr = min(coil_addrs)
-                    max_addr = max(coil_addrs)
-                    coils_from_server = await server.sync_to_device(min_addr, max_addr - min_addr + 1, "coils")
-                    for addr, value in coils_from_server.items():
-                        device.memory_map[f"coils[{addr}]"] = value
+                    # Device → Server (telemetry)
+                    input_registers = {}
+                    discrete_inputs = {}
+                    for key, value in memory_map.items():
+                        if key.startswith("input_registers["):
+                            # Extract address from "input_registers[100]"
+                            addr = int(key.split("[")[1].split("]")[0])
+                            input_registers[addr] = value
+                        elif key.startswith("discrete_inputs["):
+                            addr = int(key.split("[")[1].split("]")[0])
+                            discrete_inputs[addr] = value
 
-                # Find holding registers range
-                hr_addrs = [int(k.split("[")[1].split("]")[0]) for k in memory_map.keys() if k.startswith("holding_registers[")]
-                if hr_addrs:
-                    min_addr = min(hr_addrs)
-                    max_addr = max(hr_addrs)
-                    regs_from_server = await server.sync_to_device(min_addr, max_addr - min_addr + 1, "holding_registers")
-                    for addr, value in regs_from_server.items():
-                        key = f"holding_registers[{addr}]"
-                        if key in device.memory_map:
-                            device.memory_map[key] = value
+                    if input_registers:
+                        await server.sync_from_device(input_registers, "input_registers")
+                    if discrete_inputs:
+                        await server.sync_from_device(discrete_inputs, "discrete_inputs")
 
-            except Exception as e:
-                logger.error(f"Failed to sync {device_name} with protocol server: {e}")
+                    # Server → Device (commands)
+                    # Find coils range
+                    coil_addrs = [int(k.split("[")[1].split("]")[0]) for k in memory_map.keys() if k.startswith("coils[")]
+                    if coil_addrs:
+                        min_addr = min(coil_addrs)
+                        max_addr = max(coil_addrs)
+                        coils_from_server = await server.sync_to_device(min_addr, max_addr - min_addr + 1, "coils")
+                        for addr, value in coils_from_server.items():
+                            device.memory_map[f"coils[{addr}]"] = value
+
+                    # Find holding registers range
+                    hr_addrs = [int(k.split("[")[1].split("]")[0]) for k in memory_map.keys() if k.startswith("holding_registers[")]
+                    if hr_addrs:
+                        min_addr = min(hr_addrs)
+                        max_addr = max(hr_addrs)
+                        regs_from_server = await server.sync_to_device(min_addr, max_addr - min_addr + 1, "holding_registers")
+                        for addr, value in regs_from_server.items():
+                            key = f"holding_registers[{addr}]"
+                            if key in device.memory_map:
+                                device.memory_map[key] = value
+
+                except Exception as e:
+                    logger.error(f"Failed to sync {device_name} with protocol server: {e}")
+
+            # Sync with DNP3 server (different data model)
+            if dnp3_server:
+                try:
+                    # Extract data from device memory_map
+                    memory_map = device.memory_map
+
+                    # Device → Server (telemetry)
+                    # Map Modbus-style registers to DNP3 data model
+                    analog_inputs = {}  # DNP3 analog inputs
+                    binary_inputs = {}  # DNP3 binary inputs
+
+                    for key, value in memory_map.items():
+                        if key.startswith("input_registers["):
+                            # Map input_registers → analog_inputs
+                            addr = int(key.split("[")[1].split("]")[0])
+                            analog_inputs[addr] = value
+                        elif key.startswith("discrete_inputs["):
+                            # Map discrete_inputs → binary_inputs
+                            addr = int(key.split("[")[1].split("]")[0])
+                            binary_inputs[addr] = value
+
+                    # Sync to DNP3 server
+                    if analog_inputs:
+                        await dnp3_server.sync_from_device(analog_inputs, "analog_inputs")
+                    if binary_inputs:
+                        await dnp3_server.sync_from_device(binary_inputs, "binary_inputs")
+
+                    # Server → Device (commands)
+                    # DNP3 commands (Binary/Analog Outputs) would be synced here
+                    # Currently not fully implemented in DNP3 adapter
+                    # TODO: Add DNP3 command handling when adapter supports it
+
+                except Exception as e:
+                    logger.error(f"Failed to sync {device_name} with DNP3 server: {e}")
 
     # ----------------------------------------------------------------
     # Status and monitoring
@@ -738,6 +1219,14 @@ class SimulatorManager:
         for name, turbine in self.turbine_physics.items():
             turbine_status[name] = turbine.get_telemetry()
 
+        hvac_status = {}
+        for name, hvac in self.hvac_physics.items():
+            hvac_status[name] = hvac.get_telemetry()
+
+        reactor_status = {}
+        for name, reactor in self.reactor_physics.items():
+            reactor_status[name] = reactor.get_telemetry()
+
         return {
             "running": self._running,
             "paused": self._paused,
@@ -749,6 +1238,8 @@ class SimulatorManager:
             "physics": {
                 "grid": physics_status.get("grid"),
                 "turbines": turbine_status,
+                "hvac": hvac_status,
+                "reactors": reactor_status,
                 "power_flow": self.power_flow is not None,
             },
         }

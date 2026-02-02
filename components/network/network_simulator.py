@@ -80,12 +80,30 @@ class NetworkSimulator:
             try:
                 config = self.config_loader.load_all()
 
-                # Load network definitions
-                networks = config.get("networks", [])
-                if not networks:
+                # Load network definitions from zones hierarchy
+                # Support both flat "networks" list and hierarchical "zones" structure
+                zones = config.get("zones", [])
+                flat_networks = config.get("networks", [])
+
+                all_networks = []
+
+                # Extract networks from zones (Purdue model hierarchy)
+                for zone in zones:
+                    zone_networks = zone.get("networks", [])
+                    for net in zone_networks:
+                        # Add zone metadata to network
+                        net["zone"] = zone.get("name")
+                        net["zone_description"] = zone.get("description")
+                        net["security_level"] = zone.get("security_level")
+                        all_networks.append(net)
+
+                # Add flat networks if present (backwards compatibility)
+                all_networks.extend(flat_networks)
+
+                if not all_networks:
                     self.logger.warning("No networks defined in network.yml")
 
-                self.networks = {net["name"]: net for net in networks}
+                self.networks = {net["name"]: net for net in all_networks}
                 self.logger.info(
                     f"Loaded {len(self.networks)} network(s): {list(self.networks.keys())}"
                 )
@@ -107,19 +125,44 @@ class NetworkSimulator:
                         )
                         continue
 
-                    for device in devices:
+                    for device_entry in devices:
+                        # Extract device name from connection entry
+                        # Supports both string format and dict format with "device" key
+                        if isinstance(device_entry, str):
+                            device_name = device_entry
+                            device_ip = None
+                        elif isinstance(device_entry, dict):
+                            device_name = device_entry.get("device")
+                            device_ip = device_entry.get("ip")
+                            if not device_name:
+                                self.logger.warning(
+                                    f"Connection entry missing 'device' field in {network_name}"
+                                )
+                                continue
+                        else:
+                            self.logger.warning(
+                                f"Invalid connection entry format in {network_name}: {device_entry}"
+                            )
+                            continue
+
                         # Validate device exists in system state if available
                         if self.system_state:
-                            device_state = await self.system_state.get_device(device)
+                            device_state = await self.system_state.get_device(device_name)
                             if not device_state:
                                 self.logger.warning(
-                                    f"Network config references unregistered device: {device}"
+                                    f"Network config references unregistered device: {device_name}"
                                 )
 
-                        self.device_networks.setdefault(device, set()).add(network_name)
-                        self.logger.debug(
-                            f"Device {device} connected to network {network_name}"
-                        )
+                        self.device_networks.setdefault(device_name, set()).add(network_name)
+
+                        if device_ip:
+                            self.logger.debug(
+                                f"Device {device_name} ({device_ip}) connected to network {network_name}"
+                            )
+                        else:
+                            self.logger.debug(
+                                f"Device {device_name} connected to network {network_name}"
+                            )
 
                 device_count = len(self.device_networks)
                 self.logger.info(f"Mapped {device_count} device(s) to networks")

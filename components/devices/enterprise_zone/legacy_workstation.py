@@ -375,17 +375,21 @@ class LegacyWorkstation(BaseDevice):
             return
 
         try:
-            # Read turbine state
+            # Read turbine state (returns TurbineState object, not dict)
             state = self.turbine_physics.get_state()
 
-            # Create log entry
+            # Create log entry - access TurbineState attributes directly
+            # Note: Governor position is a control system parameter, not in TurbineState
+            # Estimate from power output (normalized 0-1)
+            governor_estimate = min(1.0, state.power_output_mw / 50.0) if state.power_output_mw > 0 else 0.0
+
             entry = CSVLogEntry(
                 timestamp=self.sim_time.now(),
-                turbine_speed_rpm=state.get("speed_rpm", 0.0),
-                power_output_mw=state.get("power_output_mw", 0.0),
-                bearing_temp_c=state.get("bearing_temp_c", 65.0),
-                vibration_mm_s=state.get("vibration_mm_s", 0.5),
-                governor_position=state.get("governor_position", 0.5),
+                turbine_speed_rpm=float(state.shaft_speed_rpm),
+                power_output_mw=float(state.power_output_mw),
+                bearing_temp_c=float((state.bearing_temperature_f - 32) * 5/9),  # Convert F to C
+                vibration_mm_s=float(state.vibration_mils * 0.0254),  # Convert mils to mm/s
+                governor_position=float(governor_estimate),
             )
 
             self.log_entries.append(entry)

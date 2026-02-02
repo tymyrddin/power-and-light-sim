@@ -71,6 +71,42 @@ class ReactorPLC(BasePLC):
     - Emergency shutdown (SCRAM)
     """
 
+    # Modbus register definitions for adapter setup
+    DEFAULT_SETUP = {
+        "coils": {
+            0: False,  # SCRAM command
+            1: False,  # SCRAM reset
+            2: True,   # Thaumic dampener enable
+        },
+        "discrete_inputs": {
+            0: False,  # Reactor active
+            1: False,  # High temp warning
+            2: False,  # High pressure warning
+            3: False,  # Thaumic warning
+            4: False,  # Containment warning
+            5: False,  # SCRAM active
+            6: False,  # Severe damage
+            7: False,  # Coolant flow low
+        },
+        "input_registers": {
+            0: 25,   # Core temp degC
+            1: 25,   # Coolant temp degC
+            2: 10,   # Pressure bar * 10
+            3: 0,    # Power MW * 10
+            4: 100,  # Thaumic strength %
+            5: 0,    # Reaction rate %
+            6: 0,    # Coolant flow %
+            7: 100,  # Containment %
+            8: 0,    # Overtemp time sec
+            9: 0,    # Damage %
+        },
+        "holding_registers": {
+            0: 0,    # Power setpoint % * 10
+            1: 0,    # Coolant pump speed %
+            2: 1000, # Control rods % * 10 (100% = inserted)
+        },
+    }
+
     def __init__(
         self,
         device_name: str,

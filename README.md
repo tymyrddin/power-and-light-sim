@@ -36,11 +36,13 @@ protective relays, PMUs, and yes, a Windows 98 machine that's been collecting tu
 
 This simulator provides:
 
-- **Physics-aware devices**: PLCs and RTUs with realistic scan cycles (10-100ms)
+- **Physics-aware devices**: PLCs, RTUs, and safety controllers with realistic scan cycles (25-100ms)
 - **Time-synchronised behaviour**: deterministic stepping for reproducible scenarios
-- **OT protocols**: Modbus, DNP3, IEC 60870-5-104, IEC 61850, OPC UA, S7comm
+- **Real network attack surfaces**: Protocol servers on actual TCP/IP ports for external tool access
+- **OT protocols**: Modbus TCP/RTU, DNP3, IEC 60870-5-104, IEC 61850, OPC UA, S7comm
 - **Network segmentation**: control zones, DMZs, and firewall simulation
 - **Security layers**: authentication, logging, and anomaly detection
+- **External attack tools**: Use mbtget, nmap, Metasploit against running simulation
 - **Scenario framework**: both white-box internal tests and black-box external PoCs
 
 ## Project structure
@@ -49,22 +51,22 @@ This simulator provides:
 .
 ├── components/
 │   ├── devices/       # PLCs, RTUs, HMIs, historians, safety controllers
-│   ├── network/       # network simulation, TCP proxy, protocol simulation
-│   ├── physics/       # turbine dynamics, power flow, thermal models
+│   ├── network/       # Network simulation, attack surfaces (protocol servers)
+│   ├── physics/       # Turbine dynamics, power flow, thermal models
 │   ├── protocols/     # Modbus, DNP3, IEC-104, S7, OPC UA semantics
-│   ├── security/      # logging, authentication, anomaly detection
-│   ├── state/         # shared state fabric and data store
-│   └── time/          # deterministic time orchestration
-├── config/            # YAML scenarios, network topologies, device definitions
+│   ├── security/      # Logging, authentication, anomaly detection
+│   ├── state/         # Shared state fabric and data store
+│   └── time/          # Deterministic time orchestration
+├── config/            # YAML device configs, network topologies, SCADA tag databases
 ├── scripts/
-│   ├── assessment/    # internal white-box scenario scripts
-│   └── recon/         # external black-box PoC tools
+│   ├── assessment/    # Internal white-box scenario scripts
+│   └── recon/         # External black-box PoC tools
 ├── tests/
-│   ├── unit/          # component-level tests
-│   ├── integration/   # cross-component tests
-│   └── scenario/      # end-to-end scenario validation
-├── tools/             # simulator manager, test clients
-└── docs/              # additional documentation
+│   ├── unit/          # Component-level tests
+│   ├── integration/   # Cross-component tests
+│   └── scenario/      # End-to-end scenario validation
+├── tools/             # Simulator manager, test clients
+└── docs/              # Architecture documentation, wiring guides
 ```
 
 Think of this as an engineer's workbench where:
@@ -109,7 +111,49 @@ The simulator follows a strict **causal layering**: higher layers consume, never
 This maps roughly to the Purdue Model levels you'd find in real ICS environments: from Level 0 field devices
 up through control, operations, and enterprise zones.
 
+### Network Attack Surface
+
+The simulator exposes **real network services** on TCP/IP ports that external tools can target:
+
+```
+┌────────────────────────────────────────────────────────┐
+│  External Attack Tools (Terminal 2)                    │
+│  - nmap: Port scanning                                 │
+│  - mbtget: Modbus client                               │
+│  - Metasploit: SCADA exploits                          │
+│  - Custom scripts: pymodbus, python-snap7              │
+└───────────────────┬────────────────────────────────────┘
+                    │ Real TCP/IP connections
+                    ↓
+┌────────────────────────────────────────────────────────┐
+│  Network Protocol Servers (components/network/servers) │
+│  - ModbusTCPServer: ports 10502-10506                  │
+│  - S7Server: port 102                                  │
+│  - DNP3Server: ports 20000-20002                       │
+└───────────────────┬────────────────────────────────────┘
+                    │ Memory map sync
+                    ↓
+┌────────────────────────────────────────────────────────┐
+│  Device Logic (components/devices)                     │
+│  - TurbinePLC, ReactorPLC, SafetyPLCs                  │
+│  - SCADA servers, HMI workstations                     │
+│  - Historians, engineering workstations                │
+└───────────────────┬────────────────────────────────────┘
+                    │ Physics interaction
+                    ↓
+┌────────────────────────────────────────────────────────┐
+│  Physics Engines (components/physics)                  │
+│  - TurbinePhysics, ReactorPhysics, GridPhysics         │
+└────────────────────────────────────────────────────────┘
+```
+
+This architecture allows **realistic attack demonstrations** where:
+1. Simulation runs in Terminal 1 with exposed services
+2. Attacker tools run in Terminal 2 using standard ICS tooling
+3. Attacks have observable impact on simulated physical processes
+
 For detailed testing strategy, see [tests/README.md](tests/README.md).
+For SCADA wiring documentation, see [docs/SCADA_WIRING.md](docs/scada_wiring.md).
 
 ## Getting started
 
@@ -119,51 +163,114 @@ git clone https://github.com/tymyrddin/power-and-light-sim.git
 cd power-and-light-sim
 pip install -r requirements.txt
 
-# Run tests
+# Run the simulator
+python tools/simulator_manager.py
+
+# The simulation opens real network ports:
+# - Modbus TCP: ports 10502-10506 (PLCs, safety controllers)
+# - S7: port 102 (reactor PLC)
+# - DNP3: ports 20000-20002 (RTUs)
+
+# Run tests (in another terminal)
 pytest tests/unit                    # Component tests
 pytest tests/unit -m "not slow"      # Skip slower tests
 pytest tests/integration             # Cross-component tests
-
-# Run a scenario
-python scripts/assessment/example_scenario.py
 ```
 
 Configuration files in `config/` define:
-- Device definitions and control zones
-- Network topology and segmentation
-- Protocol bindings and behaviour
-- Simulation parameters
+- Device definitions and control zones (`devices.yml`)
+- Network topology and segmentation (`network.yml`)
+- Protocol bindings and behavior (`protocols.yml`)
+- SCADA tag databases (`scada_tags.yml`)
+- HMI screen configurations (`hmi_screens.yml`)
+- Simulation parameters (`simulation.yml`)
 
 ## Example use cases
 
-**Reconnaissance PoC**: Scan the simulated network, enumerate exposed services, fingerprint PLCs:
+### External Attack Simulation (Two Terminal Approach)
+
+**Terminal 1: Run the simulation**
 ```bash
-python scripts/recon/network_scan.py --target control_zone
+$ python tools/simulator_manager.py
+
+# Output shows exposed attack surfaces:
+Protocol servers running: 7
+  - hex_turbine_plc:modbus (port 10502)
+  - hex_turbine_safety_plc:modbus (port 10503)
+  - reactor_plc:modbus (port 10504)
+  - library_hvac_plc:modbus (port 10505)
+  ...
 ```
 
-**Protocol exploitation**: Test Modbus function code abuse against the turbine controller:
+**Terminal 2: Reconnaissance with real ICS tools**
 ```bash
-python scripts/assessment/modbus_fc_test.py --device hex_turbine_plc
+# Scan for exposed services
+$ nmap -p 10500-10600 localhost
+
+# Enumerate Modbus devices
+$ mbtget -r -a 0 -n 10 localhost:10502  # Read turbine PLC registers
+
+# Fingerprint device
+$ nmap -sV -p 10502 localhost
 ```
 
-**Detection testing**: Validate that anomaly detection catches unauthorised writes:
+**Terminal 2: Malicious write attack**
+```bash
+# Trigger emergency trip on turbine
+$ mbtget -w -a 1 -v 1 localhost:10502  # Write to coil[1] = Emergency trip
+
+# Watch Terminal 1 for impact:
+# [SIM: 5.23s] [WARNING] TurbinePLC: Emergency trip commanded!
+# [SIM: 5.23s] [CRITICAL] TurbineSafetyPLC: FORCING SAFE STATE
+```
+
+**Terminal 2: Python-based attack script**
+```python
+# Custom attack using pymodbus
+from pymodbus.client import AsyncModbusTcpClient
+
+client = AsyncModbusTcpClient("localhost", port=10502)
+await client.connect()
+
+# Read current turbine speed
+speed = await client.read_input_registers(0, 1)
+print(f"Turbine speed: {speed.registers[0]} RPM")
+
+# Malicious setpoint change
+await client.write_register(0, 5000)  # Dangerous overspeed setpoint
+```
+
+### Internal Assessment Scripts
+
+**Detection testing**: Validate that anomaly detection catches unauthorized writes:
 ```bash
 pytest tests/scenario/test_unauthorized_write_detection.py
 ```
 
+**Protocol exploitation**: Test Modbus function code abuse:
+```bash
+python scripts/assessment/modbus_fc_test.py --device hex_turbine_plc
+```
+
 ## Status
 
-This project is under active development. Some modules are more complete than others:
+This project is under active development. Current implementation status:
 
-| Component                    | Status      |
-|------------------------------|-------------|
-| Core devices (PLC, RTU, HMI) | Functional  |
-| Network simulation           | Functional  |
-| Modbus protocol              | Functional  |
-| DNP3 protocol                | In progress |
-| Physics engines              | In progress |
-| Security logging             | Functional  |
-| Scenario framework           | Partial     |
+| Component                          | Status         | External Access          |
+|------------------------------------|----------------|--------------------------|
+| Core devices (PLC, RTU, HMI)       | ✅ Functional   | Via Modbus TCP           |
+| Safety controllers (SIL2/SIL3)     | ✅ Functional   | Via Modbus TCP           |
+| SCADA servers (tag database)       | ✅ Functional   | Via Modbus TCP           |
+| Historian (10-year data retention) | ✅ Functional   | Via OPC UA               |
+| Network attack surfaces            | ✅ Functional   | Real TCP ports           |
+| Modbus TCP/RTU protocol            | ✅ Functional   | mbtget, pymodbus         |
+| S7 protocol                        | 🔄 Partial     | Not exposed yet          |
+| DNP3 protocol                      | 🔄 In progress | Not exposed yet          |
+| Physics engines (turbine, reactor) | ✅ Functional   | Via device PLCs          |
+| Security logging                   | ✅ Functional   | ICS log format           |
+| External tool testing              | ✅ Ready        | nmap, mbtget, Metasploit |
+
+**Legend:** ✅ = Complete, 🔄 = In Progress, ❌ = Not Started
 
 ## Contributing
 

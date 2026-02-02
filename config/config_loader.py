@@ -34,9 +34,13 @@ class ConfigLoader:
         if network_path.exists():
             with open(network_path) as f:
                 network_data = yaml.safe_load(f)
+                config["zones"] = network_data.get("zones", [])
                 config["networks"] = network_data.get("networks", [])
                 config["connections"] = network_data.get("connections", {})
+                config["inter_zone_routing"] = network_data.get("inter_zone_routing", [])
+                config["physical_topology"] = network_data.get("physical_topology", {})
         else:
+            config["zones"] = []
             config["networks"] = []
             config["connections"] = {}
 
@@ -59,6 +63,24 @@ class ConfigLoader:
                 config["simulation"] = simulation_data.get("simulation", {})
         else:
             config["simulation"] = {}
+
+        # Load SCADA tags config
+        scada_tags_path = self.config_dir / "scada_tags.yml"
+        if scada_tags_path.exists():
+            with open(scada_tags_path) as f:
+                scada_data = yaml.safe_load(f)
+                config["scada_servers"] = scada_data.get("scada_servers", {})
+        else:
+            config["scada_servers"] = {}
+
+        # Load HMI screens config
+        hmi_screens_path = self.config_dir / "hmi_screens.yml"
+        if hmi_screens_path.exists():
+            with open(hmi_screens_path) as f:
+                hmi_data = yaml.safe_load(f)
+                config["hmi_workstations"] = hmi_data.get("hmi_workstations", {})
+        else:
+            config["hmi_workstations"] = {}
 
         return config
 

@@ -1,0 +1,574 @@
+# config/scada_tags.yml
+# SCADA Server Configuration - Poll Targets and Tag Database
+#
+# Defines which devices SCADA servers poll and what tags (data points) they collect.
+# Tags map SCADA mnemonics to device memory addresses with alarm limits.
+
+scada_servers:
+  # ================================================================
+  # PRIMARY SCADA SERVER
+  # Main control room SCADA (Wonderware System Platform)
+  # ================================================================
+  scada_server_primary:
+    poll_targets:
+      # Turbine control system
+      - device: hex_turbine_plc
+        protocol: modbus
+        poll_rate: 1.0  # Poll every 1 second
+        enabled: true
+
+      # Reactor control system
+      - device: reactor_plc
+        protocol: modbus
+        poll_rate: 1.0  # Poll every 1 second
+        enabled: true
+
+      # Library HVAC system
+      - device: library_hvac_plc
+        protocol: modbus
+        poll_rate: 2.0  # Poll every 2 seconds (slower for HVAC)
+        enabled: true
+
+      # Substations
+      - device: substation_rtu_1
+        protocol: modbus
+        poll_rate: 2.0
+        enabled: true
+
+    tags:
+      # ================================================================
+      # HEX STEAM TURBINE TAGS
+      # ================================================================
+
+      # Turbine speed and power
+      - name: TURB1_SPEED
+        device: hex_turbine_plc
+        address_type: input_register
+        address: 0
+        data_type: int
+        unit: RPM
+        description: Turbine shaft speed
+        alarm_high: 3960  # 110% overspeed
+
+      - name: TURB1_POWER
+        device: hex_turbine_plc
+        address_type: input_register
+        address: 1
+        data_type: int
+        unit: MW_x10
+        description: Power output (MW * 10)
+
+      - name: TURB1_STEAM_PRESS
+        device: hex_turbine_plc
+        address_type: input_register
+        address: 2
+        data_type: int
+        unit: PSI
+        description: Steam pressure
+        alarm_low: 500
+        alarm_high: 1200
+
+      - name: TURB1_STEAM_TEMP
+        device: hex_turbine_plc
+        address_type: input_register
+        address: 3
+        data_type: int
+        unit: degF
+        description: Steam temperature
+        alarm_high: 1050
+
+      - name: TURB1_BEARING_TEMP
+        device: hex_turbine_plc
+        address_type: input_register
+        address: 4
+        data_type: int
+        unit: degF
+        description: Bearing temperature
+        alarm_high: 180
+
+      - name: TURB1_VIBRATION
+        device: hex_turbine_plc
+        address_type: input_register
+        address: 5
+        data_type: int
+        unit: mils_x10
+        description: Vibration (mils * 10)
+        alarm_high: 80  # 8.0 mils
+
+      - name: TURB1_DAMAGE
+        device: hex_turbine_plc
+        address_type: input_register
+        address: 7
+        data_type: int
+        unit: percent
+        description: Cumulative damage level
+        alarm_high: 50
+
+      - name: TURB1_GRID_FREQ
+        device: hex_turbine_plc
+        address_type: input_register
+        address: 8
+        data_type: int
+        unit: Hz_x100
+        description: Grid frequency (Hz * 100)
+        alarm_low: 4950  # 49.5 Hz
+        alarm_high: 5050  # 50.5 Hz
+
+      # Turbine status bits
+      - name: TURB1_RUNNING
+        device: hex_turbine_plc
+        address_type: discrete_input
+        address: 0
+        data_type: bool
+        description: Turbine running status
+
+      - name: TURB1_GOVERNOR_ONLINE
+        device: hex_turbine_plc
+        address_type: discrete_input
+        address: 1
+        data_type: bool
+        description: Governor online
+
+      - name: TURB1_TRIP_ACTIVE
+        device: hex_turbine_plc
+        address_type: discrete_input
+        address: 2
+        data_type: bool
+        description: Trip active
+
+      - name: TURB1_OVERSPEED
+        device: hex_turbine_plc
+        address_type: discrete_input
+        address: 3
+        data_type: bool
+        description: Overspeed condition
+
+      # Turbine control
+      - name: TURB1_SPEED_SP
+        device: hex_turbine_plc
+        address_type: holding_register
+        address: 0
+        data_type: int
+        unit: RPM
+        description: Speed setpoint (low word)
+
+      - name: TURB1_GOV_ENABLE
+        device: hex_turbine_plc
+        address_type: coil
+        address: 0
+        data_type: bool
+        description: Governor enable command
+
+      - name: TURB1_EMERG_TRIP
+        device: hex_turbine_plc
+        address_type: coil
+        address: 1
+        data_type: bool
+        description: Emergency trip command
+
+      # ================================================================
+      # ALCHEMICAL REACTOR TAGS
+      # ================================================================
+
+      # Reactor temperatures and power
+      - name: RX1_CORE_TEMP
+        device: reactor_plc
+        address_type: input_register
+        address: 0
+        data_type: int
+        unit: degC
+        description: Reactor core temperature
+        alarm_high: 400  # Max safe temperature
+
+      - name: RX1_COOLANT_TEMP
+        device: reactor_plc
+        address_type: input_register
+        address: 1
+        data_type: int
+        unit: degC
+        description: Coolant temperature
+        alarm_high: 120
+
+      - name: RX1_PRESSURE
+        device: reactor_plc
+        address_type: input_register
+        address: 2
+        data_type: int
+        unit: bar_x10
+        description: Vessel pressure (bar * 10)
+        alarm_high: 1500  # 150 bar
+
+      - name: RX1_POWER
+        device: reactor_plc
+        address_type: input_register
+        address: 3
+        data_type: int
+        unit: MW_x10
+        description: Thermal power output (MW * 10)
+
+      - name: RX1_THAUMIC_FIELD
+        device: reactor_plc
+        address_type: input_register
+        address: 4
+        data_type: int
+        unit: percent
+        description: Thaumic field strength
+        alarm_low: 50  # Warning threshold
+
+      - name: RX1_REACTION_RATE
+        device: reactor_plc
+        address_type: input_register
+        address: 5
+        data_type: int
+        unit: percent
+        description: Reaction rate
+
+      - name: RX1_COOLANT_FLOW
+        device: reactor_plc
+        address_type: input_register
+        address: 6
+        data_type: int
+        unit: percent
+        description: Coolant flow rate
+        alarm_low: 20  # Low flow alarm
+
+      - name: RX1_CONTAINMENT
+        device: reactor_plc
+        address_type: input_register
+        address: 7
+        data_type: int
+        unit: percent
+        description: Containment integrity
+        alarm_low: 80  # Containment warning
+
+      - name: RX1_DAMAGE
+        device: reactor_plc
+        address_type: input_register
+        address: 9
+        data_type: int
+        unit: percent
+        description: Thermal damage level
+        alarm_high: 50
+
+      # Reactor status bits
+      - name: RX1_ACTIVE
+        device: reactor_plc
+        address_type: discrete_input
+        address: 0
+        data_type: bool
+        description: Reactor active (reaction ongoing)
+
+      - name: RX1_HIGH_TEMP
+        device: reactor_plc
+        address_type: discrete_input
+        address: 1
+        data_type: bool
+        description: High temperature warning
+
+      - name: RX1_HIGH_PRESS
+        device: reactor_plc
+        address_type: discrete_input
+        address: 2
+        data_type: bool
+        description: High pressure warning
+
+      - name: RX1_THAUMIC_WARN
+        device: reactor_plc
+        address_type: discrete_input
+        address: 3
+        data_type: bool
+        description: Thaumic field warning
+
+      - name: RX1_CONTAIN_WARN
+        device: reactor_plc
+        address_type: discrete_input
+        address: 4
+        data_type: bool
+        description: Containment warning
+
+      - name: RX1_SCRAM_ACTIVE
+        device: reactor_plc
+        address_type: discrete_input
+        address: 5
+        data_type: bool
+        description: SCRAM active status
+
+      - name: RX1_SEVERE_DAMAGE
+        device: reactor_plc
+        address_type: discrete_input
+        address: 6
+        data_type: bool
+        description: Severe damage indicator
+
+      # Reactor control
+      - name: RX1_POWER_SP
+        device: reactor_plc
+        address_type: holding_register
+        address: 0
+        data_type: int
+        unit: percent_x10
+        description: Power setpoint (% * 10)
+
+      - name: RX1_COOLANT_PUMP
+        device: reactor_plc
+        address_type: holding_register
+        address: 1
+        data_type: int
+        unit: percent
+        description: Coolant pump speed
+
+      - name: RX1_CONTROL_RODS
+        device: reactor_plc
+        address_type: holding_register
+        address: 2
+        data_type: int
+        unit: percent_x10
+        description: Control rod position (% * 10)
+
+      - name: RX1_SCRAM_CMD
+        device: reactor_plc
+        address_type: coil
+        address: 0
+        data_type: bool
+        description: SCRAM command
+
+      - name: RX1_SCRAM_RESET
+        device: reactor_plc
+        address_type: coil
+        address: 1
+        data_type: bool
+        description: SCRAM reset command
+
+      - name: RX1_THAUMIC_DAMP
+        device: reactor_plc
+        address_type: coil
+        address: 2
+        data_type: bool
+        description: Thaumic dampener enable
+
+      # ================================================================
+      # LIBRARY HVAC TAGS
+      # ================================================================
+
+      # Library environmental conditions
+      - name: LIB_ZONE_TEMP
+        device: library_hvac_plc
+        address_type: input_register
+        address: 0
+        data_type: int
+        unit: degC_x10
+        description: Library zone temperature (°C * 10)
+        alarm_low: 180  # 18°C
+        alarm_high: 220  # 22°C
+
+      - name: LIB_HUMIDITY
+        device: library_hvac_plc
+        address_type: input_register
+        address: 1
+        data_type: int
+        unit: percent_x10
+        description: Relative humidity (% * 10)
+        alarm_low: 400  # 40%
+        alarm_high: 550  # 55%
+
+      - name: LIB_SUPPLY_TEMP
+        device: library_hvac_plc
+        address_type: input_register
+        address: 2
+        data_type: int
+        unit: degC_x10
+        description: Supply air temperature (°C * 10)
+
+      - name: LIB_DUCT_PRESS
+        device: library_hvac_plc
+        address_type: input_register
+        address: 3
+        data_type: int
+        unit: Pa
+        description: Duct static pressure
+
+      - name: LIB_LSPACE_STAB
+        device: library_hvac_plc
+        address_type: input_register
+        address: 4
+        data_type: int
+        unit: percent
+        description: L-space dimensional stability
+        alarm_low: 50  # Warning threshold
+
+      - name: LIB_FAN_SPEED
+        device: library_hvac_plc
+        address_type: input_register
+        address: 5
+        data_type: int
+        unit: percent
+        description: Supply fan speed
+
+      - name: LIB_HEATING_VALVE
+        device: library_hvac_plc
+        address_type: input_register
+        address: 6
+        data_type: int
+        unit: percent
+        description: Heating valve position
+
+      - name: LIB_COOLING_VALVE
+        device: library_hvac_plc
+        address_type: input_register
+        address: 7
+        data_type: int
+        unit: percent
+        description: Cooling valve position
+
+      - name: LIB_DAMPER_POS
+        device: library_hvac_plc
+        address_type: input_register
+        address: 8
+        data_type: int
+        unit: percent
+        description: Outside air damper position
+
+      - name: LIB_ENERGY
+        device: library_hvac_plc
+        address_type: input_register
+        address: 9
+        data_type: int
+        unit: kW_x10
+        description: Energy consumption (kW * 10)
+
+      # Library HVAC status
+      - name: LIB_FAN_RUNNING
+        device: library_hvac_plc
+        address_type: discrete_input
+        address: 0
+        data_type: bool
+        description: Fan running status
+
+      - name: LIB_HEATING_ACTIVE
+        device: library_hvac_plc
+        address_type: discrete_input
+        address: 1
+        data_type: bool
+        description: Heating active
+
+      - name: LIB_COOLING_ACTIVE
+        device: library_hvac_plc
+        address_type: discrete_input
+        address: 2
+        data_type: bool
+        description: Cooling active
+
+      - name: LIB_TEMP_ALARM
+        device: library_hvac_plc
+        address_type: discrete_input
+        address: 3
+        data_type: bool
+        description: Temperature alarm
+
+      - name: LIB_HUMID_ALARM
+        device: library_hvac_plc
+        address_type: discrete_input
+        address: 4
+        data_type: bool
+        description: Humidity alarm
+
+      - name: LIB_LSPACE_WARN
+        device: library_hvac_plc
+        address_type: discrete_input
+        address: 5
+        data_type: bool
+        description: L-space warning
+
+      - name: LIB_LSPACE_CRIT
+        device: library_hvac_plc
+        address_type: discrete_input
+        address: 6
+        data_type: bool
+        description: L-space critical
+
+      - name: LIB_SYSTEM_ENABLED
+        device: library_hvac_plc
+        address_type: discrete_input
+        address: 7
+        data_type: bool
+        description: HVAC system enabled
+
+      # Library HVAC control
+      - name: LIB_TEMP_SP
+        device: library_hvac_plc
+        address_type: holding_register
+        address: 0
+        data_type: int
+        unit: degC_x10
+        description: Temperature setpoint (°C * 10)
+
+      - name: LIB_HUMID_SP
+        device: library_hvac_plc
+        address_type: holding_register
+        address: 1
+        data_type: int
+        unit: percent_x10
+        description: Humidity setpoint (% * 10)
+
+      - name: LIB_FAN_CMD
+        device: library_hvac_plc
+        address_type: holding_register
+        address: 2
+        data_type: int
+        unit: percent
+        description: Fan speed command
+
+      - name: LIB_MODE
+        device: library_hvac_plc
+        address_type: holding_register
+        address: 3
+        data_type: int
+        unit: enum
+        description: Operating mode (0=off, 1=heat, 2=cool, 3=auto)
+
+      - name: LIB_DAMPER_CMD
+        device: library_hvac_plc
+        address_type: holding_register
+        address: 4
+        data_type: int
+        unit: percent
+        description: Damper position command
+
+      - name: LIB_SYS_ENABLE
+        device: library_hvac_plc
+        address_type: coil
+        address: 0
+        data_type: bool
+        description: System enable command
+
+      - name: LIB_LSPACE_DAMP
+        device: library_hvac_plc
+        address_type: coil
+        address: 1
+        data_type: bool
+        description: L-space dampener enable
+
+  # ================================================================
+  # BACKUP SCADA SERVER
+  # Hot standby with same configuration
+  # ================================================================
+  scada_server_backup:
+    poll_targets:
+      - device: hex_turbine_plc
+        protocol: modbus
+        poll_rate: 1.0
+        enabled: true
+
+      - device: reactor_plc
+        protocol: modbus
+        poll_rate: 1.0
+        enabled: true
+
+      - device: library_hvac_plc
+        protocol: modbus
+        poll_rate: 2.0
+        enabled: true
+
+    # Backup server has same tags as primary
+    # (Could be extended with different tag set if needed)
+    tags: []  # Empty - will inherit from primary in future enhancement

@@ -1,9 +1,25 @@
-# components/protocols/modbus/modbus_tcp_endpoint.py
+# components/network/servers/modbus_tcp_server.py
 """
-Modbus TCP Server using PyModbus 3.11.4 simulator.
+Modbus TCP Server - ICS Attack Surface
 
-Opens a REAL network port. External tools can connect and interact.
-Based on pymodbus_3114.py - the working pymodbus async simulator.
+Opens a REAL network port that external attack tools can target.
+This is a network-accessible attack surface for demonstrating ICS attacks.
+
+External Attack Tools:
+- mbtget: Modbus TCP client for read/write operations
+- nmap: Port scanning and service detection
+- Metasploit: exploit/scada/modbusdetect, modbus_write
+- Custom Python: pymodbus AsyncModbusTcpClient
+
+Example Attack from Terminal:
+    # Reconnaissance
+    $ nmap -p 10500-10600 localhost
+    $ mbtget -r -a 0 -n 10 localhost:10502
+
+    # Malicious write
+    $ mbtget -w -a 1 -v 1 localhost:10502  # Trigger emergency trip
+
+Based on pymodbus 3.11.4 async simulator.
 """
 
 import asyncio
@@ -55,7 +71,7 @@ class ModbusTCPServer:
         return self._running
 
     async def start(self) -> bool:
-        """Start Modbus TCP server."""
+        """Start Modbus TCP server with retry logic for port binding."""
         if self._running:
             return True
 
@@ -104,42 +120,97 @@ class ModbusTCPServer:
         self._simulator = ModbusSimulatorContext(config=config, custom_actions=None)
         self._context = ModbusServerContext(self._simulator, single=True)
 
-        # Create server task with exception callback
-        self._server_task = asyncio.create_task(
-            StartAsyncTcpServer(
-                context=self._context,
-                address=(self.host, self.port),
-            )
+        # Retry logic for port binding (handles TIME_WAIT from previous runs)
+        max_retries = 3
+        retry_delay = 0.5
+
+        for attempt in range(max_retries):
+            try:
+                # Create server task
+                self._server_task = asyncio.create_task(
+                    StartAsyncTcpServer(
+                        context=self._context,
+                        address=(self.host, self.port),
+                    )
+                )
+
+                # Add callback to catch unhandled exceptions
+                def _handle_server_exception(task):
+                    try:
+                        task.result()
+                    except asyncio.CancelledError:
+                        pass  # Expected during shutdown
+                    except OSError as e:
+                        if "Address already in use" not in str(e):
+                            # Only suppress "address already in use" - log others
+                            import logging
+                            logging.getLogger(__name__).warning(
+                                f"Modbus server error on {self.host}:{self.port}: {e}"
+                            )
+                    except Exception as e:
+                        # Log unexpected errors
+                        import logging
+                        logging.getLogger(__name__).error(
+                            f"Unexpected Modbus server error on {self.host}:{self.port}: {e}"
+                        )
+
+                self._server_task.add_done_callback(_handle_server_exception)
+
+                # Give server time to bind
+                await asyncio.sleep(retry_delay)
+
+                # Create internal client for sync operations and verify connection
+                self._client = AsyncModbusTcpClient(host=self.host, port=self.port)
+                self._client.unit_id = self.unit_id
+                connected = await self._client.connect()
+
+                if connected:
+                    self._running = True
+                    return True
+
+                # Connection failed, cleanup and retry
+                if self._server_task and not self._server_task.done():
+                    self._server_task.cancel()
+                    try:
+                        await asyncio.wait_for(self._server_task, timeout=1.0)
+                    except (asyncio.CancelledError, TimeoutError):
+                        pass
+
+                if attempt < max_retries - 1:
+                    await asyncio.sleep(retry_delay * (attempt + 1))  # Exponential backoff
+
+            except Exception as e:
+                # Cleanup on error
+                if self._client:
+                    self._client.close()
+                    self._client = None
+                if self._server_task and not self._server_task.done():
+                    self._server_task.cancel()
+                    try:
+                        await asyncio.wait_for(self._server_task, timeout=1.0)
+                    except (asyncio.CancelledError, TimeoutError):
+                        pass
+                    self._server_task = None
+
+                if attempt < max_retries - 1:
+                    await asyncio.sleep(retry_delay * (attempt + 1))
+                else:
+                    raise RuntimeError(
+                        f"Failed to start Modbus TCP server on {self.host}:{self.port} after {max_retries} attempts: {e}"
+                    )
+
+        raise RuntimeError(
+            f"Failed to start Modbus TCP server on {self.host}:{self.port} - client connection failed"
         )
 
-        # Add callback to catch unhandled exceptions
-        def _handle_server_exception(task):
-            try:
-                task.result()
-            except asyncio.CancelledError:
-                pass  # Expected during shutdown
-            except Exception:
-                pass  # Server errors are logged by pymodbus
-
-        self._server_task.add_done_callback(_handle_server_exception)
-
-        # Give server time to bind
-        await asyncio.sleep(0.5)
-
-        # Create internal client for sync operations
-        self._client = AsyncModbusTcpClient(host=self.host, port=self.port)
-        self._client.unit_id = self.unit_id
-        await self._client.connect()
-
-        self._running = True
-        return True
-
     async def stop(self) -> None:
-        """Stop Modbus TCP server."""
+        """Stop Modbus TCP server and release port."""
+        # Close client connection first
         if self._client:
             self._client.close()
             self._client = None
 
+        # Cancel and wait for server task to finish
         if self._server_task and not self._server_task.done():
             self._server_task.cancel()
             try:
@@ -148,7 +219,9 @@ class ModbusTCPServer:
                 # Suppress all exceptions during shutdown - server is stopping anyway
                 pass
             self._server_task = None
-            await asyncio.sleep(0.1)  # Let OS release port
+
+        # Give OS more time to release port (helps avoid TIME_WAIT conflicts)
+        await asyncio.sleep(0.3)
 
         self._running = False
         self._simulator = None

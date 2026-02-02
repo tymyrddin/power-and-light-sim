@@ -66,6 +66,40 @@ class TurbineSafetyPLC(BaseSafetyController):
     Uses 2oo3 voting on speed sensors for overspeed protection.
     """
 
+    # Modbus register definitions for adapter setup (reference only)
+    DEFAULT_SETUP = {
+        "discrete_inputs": {
+            0: False,  # Turbine running
+            1: False,  # Overspeed condition
+            2: False,  # High vibration
+            3: False,  # High bearing temp
+            4: True,   # System healthy
+            5: False,  # Trip output active
+            6: False,  # Bypass active
+            7: False,  # Proof test due
+        },
+        "input_registers": {
+            0: 0,    # Speed channel A (RPM)
+            1: 0,    # Speed channel B (RPM)
+            2: 0,    # Vibration channel A (mils * 10)
+            3: 0,    # Vibration channel B (mils * 10)
+            4: 70,   # Bearing temperature (degF)
+            5: 0,    # Diagnostic status
+            6: 0,    # Demand count
+            7: 0,    # Fault count
+        },
+        "coils": {
+            0: False,  # Manual trip command
+            1: False,  # Trip reset command
+            2: False,  # Bypass enable
+        },
+        "holding_registers": {
+            0: 3960,  # Overspeed trip setpoint (RPM) - 110% of 3600
+            1: 100,   # Vibration trip setpoint (mils * 10)
+            2: 200,   # Bearing temp trip setpoint (degF)
+        },
+    }
+
     def __init__(
         self,
         device_name: str,
