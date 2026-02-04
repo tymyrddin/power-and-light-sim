@@ -64,31 +64,40 @@ Features discovered missing during PoC script validation.
 
 ---
 
-## EtherNet/IP Protocol
-**Status:** NOT IMPLEMENTED
-**Issue:** No EtherNet/IP (CIP) server implementation
+## EtherNet/IP Protocol ✅
+**Status:** IMPLEMENTED (Simplified CIP)
+**Implementation:** `components/network/servers/ethernet_ip_server.py`
 
-**What's missing:**
-- EtherNet/IP server using cpppo or similar library
-- Configured in devices.yml on port 44818 but no server code exists
-- Protocol included in simulator_manager filter list but no creation logic
+**What works:**
+- EtherNet/IP server on port 44818 (non-privileged)
+- CIP session registration/unregistration
+- Tag-based addressing (like Allen-Bradley ControlLogix)
+- Tag enumeration for vulnerability assessment
+- Sync with device registers (setpoints, telemetry, alarms)
 
-**Impact:**
-- Cannot test Allen-Bradley/Rockwell Automation protocol attacks
-- `enumerate-device.py` script fails with connection refused
+**Implementation details:**
+- Simplified CIP protocol (not full protocol stack)
+- Responds to Register Session (0x0065) and basic commands
+- Tag database maps to device registers:
+  - Setpoints: SpeedSetpoint, PowerSetpoint (writable)
+  - Telemetry: CurrentSpeed, BearingTemp, etc. (read-only)
+  - Control: ControlMode, EmergencyStop (writable)
+  - Alarms: OverspeedAlarm, LowOilPressure (read-only)
 
-**Implementation needed:**
-- Create `components/network/servers/ethernetip_server.py`
-- Implement CIP Identity Object (Class 0x01)
-- Add server creation in `simulator_manager._expose_services()`
+**Limitations:**
+- Not full CIP protocol implementation (sufficient for demonstrations)
+- pycomm3 client may not work perfectly (use simplified client in scripts)
+- Tag list is hardcoded (18 predefined tags)
 
-**Script blocked:** `enumerate-device.py`
+**Scripts that now work:**
+- ✅ `enumerate-device.py` - Now works with simplified EtherNet/IP
+- ✅ `ab_logix_tag_inventory.py` - Tag enumeration works (simulator mode)
 
 ---
 
-## S7 Privileged Ports
-**Status:** PARTIAL FAILURE
-**Issue:** S7 servers cannot bind to ports 102/103 without root privileges
+## S7 Privileged Ports ⚠️
+**Status:** WORKING (Requires sudo)
+**Issue:** S7 port 102 requires root/sudo (privileged port <1024)
 
 **Current situation:**
 - S7 servers implemented and code works

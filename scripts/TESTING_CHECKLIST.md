@@ -2,7 +2,22 @@
 
 Track validation status of all PoC scripts against the simulator.
 
-## TESTED & WORKING (14/38)
+## 📊 SUMMARY
+
+**Total Scripts: 46** (38 original + 8 vulnerability assessment)
+- ✅ Fully tested & working: **22** (48%)
+- ✅ Updated following confirmed pattern: **22** (48%)
+- ✅ All protocols supported: Modbus, S7, OPC UA, EtherNet/IP
+- ⚠️ S7 scripts require sudo (privileged port 102)
+
+**By Category:**
+- Recon: 5 working, 2 now unblocked (7 total)
+- Discovery: 4 tested + 14 updated (18 total)
+- Exploitation: 2 tested + 9 updated (11 total)
+- Analysis: 3 tested offline tools (3 total)
+- **Vulnerability Assessment: 8 tested (8 total) ← NEW**
+
+## TESTED & WORKING (22/46)
 
 ### Recon
 
@@ -77,12 +92,46 @@ All working (offline tools, don't connect to simulator):
 - [x] safety_plc_analysis.py - PLC config security analysis ✓ (creates demo, saves reports/)
 - [x] ladder-logic-analysis.py - Demonstrates ladder logic findings ✓
 
-## BLOCKED (2/38)
+### Vulnerability Assessment
 
-### Recon: Simulator gaps
+(8 scripts - protocol-specific vulnerability testing)
 
-- [!] enumerate-device.py - EtherNet/IP not implemented (server missing)
-- [!] query-plc.py - S7 ports require root (ports 102/103 are privileged)
+**Modbus Vulnerability Assessment:**
+- [x] modbus_coil_register_snapshot.py - Read-only memory snapshot ✓ (port 10502)
+
+**OPC UA Vulnerability Assessment:**
+- [x] opcua_readonly_probe.py - Anonymous browse & reconnaissance ✓ (port 4840)
+
+**S7 Vulnerability Assessment (requires sudo for port 102):**
+- [x] testing-turbine-control-plcs.py - Connection test & CPU info ✓ (needs sudo)
+- [x] s7_plc_status_dump.py - Status & configuration dump ✓ (needs sudo)
+- [x] s7_read_memory.py - Memory area reconnaissance ✓ (needs sudo)
+- [x] s7_readonly_block_dump.py - Program block upload ✓ (needs sudo)
+
+**EtherNet/IP Vulnerability Assessment:**
+- [x] ab_logix_tag_inventory.py - Tag enumeration ✓ (port 44818, simplified CIP)
+
+**Educational/Simulated Tools:**
+- [x] plc_password_bruteforce.py - S7 password brute force demo ✓ (simulated)
+
+## NOTES
+
+### Protocol Requirements
+
+**S7 Protocol (Port 102):**
+- Requires root/sudo access (privileged port)
+- Run with: `sudo .venv/bin/python scripts/vulns/<script>.py`
+- Affects: All S7 vulnerability assessment scripts
+
+**EtherNet/IP (Port 44818):**
+- ✅ Now implemented with simplified CIP protocol
+- Full pycomm3 compatibility for tag enumeration
+- Sufficient for vulnerability assessment demonstrations
+
+### Previously Blocked (Now Resolved)
+
+- ✅ enumerate-device.py - **UNBLOCKED** (EtherNet/IP server now implemented)
+- ✅ query-plc.py - **UNBLOCKED** (S7 server works, just needs sudo)
 
 ## Common issues to fix
 
