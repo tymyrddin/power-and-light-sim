@@ -15,8 +15,8 @@ from components.devices.enterprise_zone.enterprise_workstation import (
 )
 from components.devices.enterprise_zone.historian import Historian
 from components.devices.enterprise_zone.ids_system import IDSSystem
-from components.devices.enterprise_zone.legacy_workstation import LegacyWorkstation
 from components.devices.enterprise_zone.ied import IED
+from components.devices.enterprise_zone.legacy_workstation import LegacyWorkstation
 from components.devices.enterprise_zone.siem_system import SIEMSystem
 from components.devices.enterprise_zone.substation_controller import (
     SubstationController,
@@ -59,28 +59,22 @@ DEVICE_REGISTRY = {
     "turbine_plc": TurbinePLC,
     "hvac_plc": HVACPLC,
     "reactor_plc": ReactorPLC,
-
     # Control Zone - RTUs
     "substation_rtu": SubstationRTU,
-
     # Control Zone - Safety
     "safety_plc": SISController,  # Generic configurable SIS
     "turbine_safety_plc": TurbineSafetyPLC,  # Dedicated turbine safety
     "reactor_safety_plc": ReactorSafetyPLC,  # Dedicated reactor safety
-
     # Control Zone - Specialty
     "specialty_controller": LSpaceMonitor,  # L-Space dimensional stability monitor
-
     # Control Zone - Legacy
     "legacy_system": LegacyWorkstation,  # Windows 98 data collector
     "legacy_workstation": LegacyWorkstation,  # Alias
-
     # Operations Zone
     "scada_server": SCADAServer,
     "hmi_workstation": HMIWorkstation,
     "engineering_workstation": EngineeringWorkstation,
     "historian": Historian,
-
     # Enterprise Zone
     "enterprise_workstation": EnterpriseWorkstation,
     "ids_system": IDSSystem,

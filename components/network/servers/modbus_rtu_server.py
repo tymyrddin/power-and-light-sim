@@ -20,6 +20,7 @@ from pymodbus.datastore import ModbusServerContext
 from pymodbus.datastore.simulator import ModbusSimulatorContext
 from pymodbus.server import StartAsyncSerialServer
 
+
 class ModbusRTUServer:
     """
     Modbus RTU server using pymodbus simulator.
@@ -207,7 +208,6 @@ class ModbusRTUServer:
         self._running = False
         self._simulator = None
         self._context = None
-
 
     # ------------------------------------------------------------------
     # Direct access for external tools testing

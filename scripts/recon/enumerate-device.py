@@ -6,10 +6,11 @@ Queries device identity using EtherNet/IP protocol (CIP)
 
 sudo setcap cap_net_raw=eip .venv/bin/python3
 """
+
 from cpppo.server.enip import client
 
 # Simulator: Hex Turbine PLC on localhost:44818 (EtherNet/IP)
-host = '127.0.0.1'
+host = "127.0.0.1"
 port = 44818
 
 print(f"[*] Connecting to EtherNet/IP device at {host}:{port}...")

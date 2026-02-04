@@ -5,13 +5,25 @@ Identify likely rogue access points by MAC OUI analysis
 
 # MAC OUI database (first 6 characters identify manufacturer)
 consumer_vendors = [
-    'NETGEAR', 'TP-LINK', 'Linksys', 'ASUS', 'D-Link',
-    'Belkin', 'Buffalo', 'TRENDnet', 'Huawei'
+    "NETGEAR",
+    "TP-LINK",
+    "Linksys",
+    "ASUS",
+    "D-Link",
+    "Belkin",
+    "Buffalo",
+    "TRENDnet",
+    "Huawei",
 ]
 
 industrial_vendors = [
-    'Cisco', 'Hirschmann', 'Moxa', 'Phoenix Contact',
-    'Siemens', 'Rockwell', 'Schneider Electric'
+    "Cisco",
+    "Hirschmann",
+    "Moxa",
+    "Phoenix Contact",
+    "Siemens",
+    "Rockwell",
+    "Schneider Electric",
 ]
 
 
@@ -25,13 +37,13 @@ def analyse_access_points(survey_csv):
     authorised = []
 
     # Parse airodump-ng CSV output
-    with open(survey_csv, 'r') as f:
+    with open(survey_csv) as f:
         lines = f.readlines()
 
     # Find AP section (before client section)
     ap_section = []
     for line in lines:
-        if 'Station MAC' in line:
+        if "Station MAC" in line:
             break
         ap_section.append(line)
 
@@ -42,7 +54,7 @@ def analyse_access_points(survey_csv):
         if not line.strip():
             continue
 
-        parts = line.split(',')
+        parts = line.split(",")
         if len(parts) < 14:
             continue
 
@@ -52,26 +64,32 @@ def analyse_access_points(survey_csv):
 
         # Check if MAC indicates consumer device
         # In reality, you'd look up the OUI in a database
-        is_consumer = any(vendor.lower() in bssid.lower()
-                          for vendor in consumer_vendors)
+        is_consumer = any(
+            vendor.lower() in bssid.lower() for vendor in consumer_vendors
+        )
 
-        is_industrial = any(vendor.lower() in bssid.lower()
-                            for vendor in industrial_vendors)
+        is_industrial = any(
+            vendor.lower() in bssid.lower() for vendor in industrial_vendors
+        )
 
         if is_consumer:
-            rogues.append({
-                'bssid': bssid,
-                'essid': essid,
-                'power': power,
-                'reason': 'Consumer-grade MAC address'
-            })
-        elif not is_industrial and 'UU_' not in essid:
-            suspicious.append({
-                'bssid': bssid,
-                'essid': essid,
-                'power': power,
-                'reason': 'Unknown vendor, suspicious ESSID'
-            })
+            rogues.append(
+                {
+                    "bssid": bssid,
+                    "essid": essid,
+                    "power": power,
+                    "reason": "Consumer-grade MAC address",
+                }
+            )
+        elif not is_industrial and "UU_" not in essid:
+            suspicious.append(
+                {
+                    "bssid": bssid,
+                    "essid": essid,
+                    "power": power,
+                    "reason": "Unknown vendor, suspicious ESSID",
+                }
+            )
 
     print(f"[!] Found {len(rogues)} likely rogue access points:")
     for rogue in rogues:
@@ -80,10 +98,12 @@ def analyse_access_points(survey_csv):
         print(f"    Signal: {rogue['power']} dBm")
         print(f"    Reason: {rogue['reason']}")
 
-    print(f"\n[!] Found {len(suspicious)} suspicious access points requiring investigation")
+    print(
+        f"\n[!] Found {len(suspicious)} suspicious access points requiring investigation"
+    )
 
     return rogues, suspicious
 
 
-if __name__ == '__main__':
-    analyse_access_points('site_survey-01.csv')
+if __name__ == "__main__":
+    analyse_access_points("site_survey-01.csv")

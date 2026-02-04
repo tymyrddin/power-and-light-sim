@@ -1,10 +1,13 @@
-from pymodbus.client import ModbusTcpClient
 import time
 
-client = ModbusTcpClient('127.0.0.1', port=10520)
+from pymodbus.client import ModbusTcpClient
+
+client = ModbusTcpClient("127.0.0.1", port=10520)
 
 print("Tracking counter values across ID groups over time")
-print("Time     | Group A (ID 1) | Group B (ID 32) | Group C (ID 255) | A-B Diff | A-C Diff")
+print(
+    "Time     | Group A (ID 1) | Group B (ID 32) | Group C (ID 255) | A-B Diff | A-C Diff"
+)
 print("-" * 80)
 
 # Representative IDs for each group
@@ -19,19 +22,27 @@ for sample in range(6):
         client.connect()
 
         # Read all three groups
-        response_a = client.read_holding_registers(address=0, count=1, device_id=group_a_id)
+        response_a = client.read_holding_registers(
+            address=0, count=1, device_id=group_a_id
+        )
         time.sleep(0.05)
 
-        response_b = client.read_holding_registers(address=0, count=1, device_id=group_b_id)
+        response_b = client.read_holding_registers(
+            address=0, count=1, device_id=group_b_id
+        )
         time.sleep(0.05)
 
-        response_c = client.read_holding_registers(address=0, count=1, device_id=group_c_id)
+        response_c = client.read_holding_registers(
+            address=0, count=1, device_id=group_c_id
+        )
 
         client.close()
 
-        if (not response_a.isError() and
-                not response_b.isError() and
-                not response_c.isError()):
+        if (
+            not response_a.isError()
+            and not response_b.isError()
+            and not response_c.isError()
+        ):
 
             val_a = response_a.registers[0]
             val_b = response_b.registers[0]
@@ -41,12 +52,14 @@ for sample in range(6):
             diff_ac = val_c - val_a
 
             timestamp = time.strftime("%H:%M:%S")
-            print(f"{timestamp} | {val_a:13d} | {val_b:13d} | {val_c:13d} | {diff_ab:8d} | {diff_ac:8d}")
+            print(
+                f"{timestamp} | {val_a:13d} | {val_b:13d} | {val_c:13d} | {diff_ab:8d} | {diff_ac:8d}"
+            )
 
             # Store for change detection
             current = (val_a, val_b, val_c)
             if sample > 0 and current != previous_values.get(sample - 1):
-                print(f"          ^ Changed from previous sample")
+                print("          ^ Changed from previous sample")
 
             previous_values[sample] = current
 

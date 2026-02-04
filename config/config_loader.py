@@ -37,7 +37,9 @@ class ConfigLoader:
                 config["zones"] = network_data.get("zones", [])
                 config["networks"] = network_data.get("networks", [])
                 config["connections"] = network_data.get("connections", {})
-                config["inter_zone_routing"] = network_data.get("inter_zone_routing", [])
+                config["inter_zone_routing"] = network_data.get(
+                    "inter_zone_routing", []
+                )
                 config["physical_topology"] = network_data.get("physical_topology", {})
         else:
             config["zones"] = []

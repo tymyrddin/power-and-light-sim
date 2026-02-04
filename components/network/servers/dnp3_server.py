@@ -30,6 +30,7 @@ from typing import Any
 
 try:
     from components.protocols.dnp3.dnp3_adapter import DNP3Adapter
+
     DNP3_AVAILABLE = True
 except ImportError:
     DNP3_AVAILABLE = False
@@ -102,9 +103,9 @@ class DNP3TCPServer:
             try:
                 # Initialize DNP3 adapter in outstation (server) mode
                 setup = {
-                    "binary_inputs": {i: False for i in range(self.num_binary_inputs)},
-                    "analog_inputs": {i: 0.0 for i in range(self.num_analog_inputs)},
-                    "counters": {i: 0 for i in range(self.num_counters)},
+                    "binary_inputs": dict.fromkeys(range(self.num_binary_inputs), False),
+                    "analog_inputs": dict.fromkeys(range(self.num_analog_inputs), 0.0),
+                    "counters": dict.fromkeys(range(self.num_counters), 0),
                 }
 
                 self._adapter = DNP3Adapter(
@@ -139,7 +140,9 @@ class DNP3TCPServer:
                     self._adapter = None
 
                 if attempt < max_retries - 1:
-                    await asyncio.sleep(retry_delay * (attempt + 1))  # Exponential backoff
+                    await asyncio.sleep(
+                        retry_delay * (attempt + 1)
+                    )  # Exponential backoff
 
             except Exception as e:
                 logger.warning(
@@ -188,7 +191,9 @@ class DNP3TCPServer:
     # Device sync methods (similar to ModbusTCPServer / S7TCPServer)
     # ------------------------------------------------------------------
 
-    async def sync_from_device(self, device_registers: dict[int, Any], register_type: str) -> None:
+    async def sync_from_device(
+        self, device_registers: dict[int, Any], register_type: str
+    ) -> None:
         """
         Write device registers to DNP3 server (device → server telemetry).
 
@@ -221,7 +226,9 @@ class DNP3TCPServer:
         except Exception as e:
             logger.debug(f"Error syncing from device to DNP3 server: {e}")
 
-    async def sync_to_device(self, address: int, count: int, register_type: str) -> dict[int, Any]:
+    async def sync_to_device(
+        self, address: int, count: int, register_type: str
+    ) -> dict[int, Any]:
         """
         Read DNP3 server data to sync back to device (server → device commands).
 

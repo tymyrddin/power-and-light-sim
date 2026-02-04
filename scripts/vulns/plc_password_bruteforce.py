@@ -2,6 +2,9 @@
 """
 S7-400 PLC Password Bruteforce
 Brute forces a 4-digit numeric password on Siemens S7-400 PLCs.
+
+EDUCATIONAL/SIMULATED: This script uses simulated authentication for demonstration.
+Tests against UU P&L simulator reactor PLC (port 102, rack 0, slot 2).
 """
 
 import sys
@@ -26,17 +29,16 @@ class SimulatedPLC:
         """Attempt connection with current password."""
         # Simulated connection logic - checks against hardcoded password
         # In real implementation, this would be actual PLC connection attempt
-        current_password = getattr(self, '_current_password', None)
+        current_password = getattr(self, "_current_password", None)
         if current_password == self.actual_password:
             self.connected = True
             return True
         return False
 
 
-def brute_force_plc(plc_ip: str = '192.168.30.10',
-                    rack: int = 0,
-                    slot: int = 1,
-                    max_attempts: int = 10000) -> Optional[str]:
+def brute_force_plc(
+    plc_ip: str = "127.0.0.1", rack: int = 0, slot: int = 2, max_attempts: int = 10000
+) -> str | None:
     """
     Brute force a 4-digit numeric password on Siemens S7-400 PLC.
 
@@ -50,7 +52,7 @@ def brute_force_plc(plc_ip: str = '192.168.30.10',
         The found password as string, or None if not found
     """
     print(f"[*] Starting brute force attack on {plc_ip}")
-    print(f"[*] Testing all 4-digit combinations (0000-9999)")
+    print("[*] Testing all 4-digit combinations (0000-9999)")
     print(f"[*] Rack: {rack}, Slot: {slot}")
     print("-" * 50)
 
@@ -76,7 +78,9 @@ def brute_force_plc(plc_ip: str = '192.168.30.10',
                 print(f"\n[+] Password found: {password_str}")
                 print(f"[+] Attempts: {attempts + 1}")
                 print(f"[+] Time elapsed: {elapsed:.2f} seconds")
-                print(f"[+] Average speed: {(attempts + 1) / elapsed:.1f} attempts/second")
+                print(
+                    f"[+] Average speed: {(attempts + 1) / elapsed:.1f} attempts/second"
+                )
                 return password_str
 
             attempts += 1
@@ -102,7 +106,9 @@ def brute_force_plc(plc_ip: str = '192.168.30.10',
             continue
         except Exception as e:
             # Log unexpected errors but continue
-            print(f"[!] Unexpected error on attempt {attempts}: {type(e).__name__}: {e}")
+            print(
+                f"[!] Unexpected error on attempt {attempts}: {type(e).__name__}: {e}"
+            )
             continue
 
     elapsed = time.time() - start_time
@@ -118,23 +124,33 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(
         description="Brute force 4-digit password on Siemens S7-400 PLC"
     )
-    parser.add_argument("--ip", default="192.168.30.10", help="PLC IP address")
+    parser.add_argument(
+        "--ip", default="127.0.0.1", help="PLC IP address (default: simulator)"
+    )
     parser.add_argument("--rack", type=int, default=0, help="Rack number")
-    parser.add_argument("--slot", type=int, default=1, help="Slot number")
-    parser.add_argument("--timeout", type=float, default=1.0,
-                        help="Connection timeout in seconds (simulation)")
+    parser.add_argument(
+        "--slot", type=int, default=2, help="Slot number (default: S7-400 slot 2)"
+    )
+    parser.add_argument(
+        "--timeout",
+        type=float,
+        default=1.0,
+        help="Connection timeout in seconds (simulation)",
+    )
 
     args = parser.parse_args()
 
     password = brute_force_plc(args.ip, args.rack, args.slot)
 
     if password:
-        print(f"\n[!] SECURITY WARNING: Using 4-digit passwords on critical infrastructure is insecure!")
-        print(f"[!] Recommendations:")
-        print(f"    1. Use longer, complex passwords (8+ characters)")
-        print(f"    2. Implement account lockout policies")
-        print(f"    3. Use network segmentation and firewalls")
-        print(f"    4. Enable PLC access logging")
-        print(f"    5. Consider using S7-1500 with enhanced security features")
+        print(
+            "\n[!] SECURITY WARNING: Using 4-digit passwords on critical infrastructure is insecure!"
+        )
+        print("[!] Recommendations:")
+        print("    1. Use longer, complex passwords (8+ characters)")
+        print("    2. Implement account lockout policies")
+        print("    3. Use network segmentation and firewalls")
+        print("    4. Enable PLC access logging")
+        print("    5. Consider using S7-1500 with enhanced security features")
     else:
         sys.exit(1)

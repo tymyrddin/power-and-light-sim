@@ -7,6 +7,7 @@ Purdue Level 0-2 devices including:
 - RTUs: BaseRTU (substation RTUs)
 - Safety Controllers: TurbineSafetyPLC, ReactorSafetyPLC
 """
+
 from components.devices.control_zone.plc import (
     HVACPLC,
     BasePLC,

@@ -263,7 +263,9 @@ class TestEngineeringWorkstationProjects:
         """
         test_eng_ws.add_project("myproject", "device", "plc_program")
 
-        assert test_eng_ws.projects[0].file_path == "C:\\Projects\\myproject.plc_program"
+        assert (
+            test_eng_ws.projects[0].file_path == "C:\\Projects\\myproject.plc_program"
+        )
 
     def test_add_multiple_projects(self, test_eng_ws):
         """Test adding multiple projects.
@@ -512,7 +514,9 @@ class TestEngineeringWorkstationIntegration:
         assert devices[0].device_name == "test_eng_ws_1"
 
     @pytest.mark.asyncio
-    async def test_memory_accessible_via_datastore(self, started_eng_ws, datastore_setup):
+    async def test_memory_accessible_via_datastore(
+        self, started_eng_ws, datastore_setup
+    ):
         """Test that memory is accessible via DataStore.
 
         WHY: Other systems may need state.

@@ -148,7 +148,7 @@ class LegacyWorkstation(BaseDevice):
         self.hdd_free_gb = 0.3  # Almost full after 25 years of logs
         self.serial_ports = ["COM1", "COM2"]  # COM1 connected to turbine
         self.network_card = "3Com EtherLink III"
-        self.monitor = "ViewSonic G773 17\" CRT"
+        self.monitor = 'ViewSonic G773 17" CRT'
 
         # Physical condition
         self.dust_level = "extreme"  # 'light', 'moderate', 'heavy', 'extreme'
@@ -381,14 +381,20 @@ class LegacyWorkstation(BaseDevice):
             # Create log entry - access TurbineState attributes directly
             # Note: Governor position is a control system parameter, not in TurbineState
             # Estimate from power output (normalized 0-1)
-            governor_estimate = min(1.0, state.power_output_mw / 50.0) if state.power_output_mw > 0 else 0.0
+            governor_estimate = (
+                min(1.0, state.power_output_mw / 50.0)
+                if state.power_output_mw > 0
+                else 0.0
+            )
 
             entry = CSVLogEntry(
                 timestamp=self.sim_time.now(),
                 turbine_speed_rpm=float(state.shaft_speed_rpm),
                 power_output_mw=float(state.power_output_mw),
                 bearing_temp_c=float(state.bearing_temperature_c),  # Already in Celsius
-                vibration_mm_s=float(state.vibration_mils * 0.0254),  # Convert mils to mm/s
+                vibration_mm_s=float(
+                    state.vibration_mils * 0.0254
+                ),  # Convert mils to mm/s
                 governor_position=float(governor_estimate),
             )
 
@@ -484,7 +490,9 @@ class LegacyWorkstation(BaseDevice):
             "shares": self.smb_shares,
         }
 
-    def access_share(self, share_name: str, username: str = "", password: str = "") -> dict[str, Any]:
+    def access_share(
+        self, share_name: str, username: str = "", password: str = ""
+    ) -> dict[str, Any]:
         """
         Access an SMB share.
 
@@ -635,7 +643,7 @@ class LegacyWorkstation(BaseDevice):
             DiscoveredArtifact(
                 artifact_type="hardware",
                 name="Floppy Drive A:",
-                description="3.5\" floppy drive, still functional",
+                description='3.5" floppy drive, still functional',
                 security_relevant=False,
                 contents={"floppies_in_drawer": len(self.floppy_disks_in_drawer)},
             ),

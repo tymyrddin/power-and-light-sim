@@ -34,6 +34,7 @@ from typing import Any
 
 try:
     from components.protocols.opcua.opcua_asyncua_118 import OPCUAAsyncua118Adapter
+
     OPCUA_AVAILABLE = True
 except ImportError:
     OPCUA_AVAILABLE = False
@@ -136,9 +137,7 @@ class OPCUAServer:
 
                 if success:
                     self._running = True
-                    logger.info(
-                        f"OPC UA server started on {self.endpoint}"
-                    )
+                    logger.info(f"OPC UA server started on {self.endpoint}")
                     return True
 
                 # Server didn't start, cleanup and retry
@@ -194,9 +193,7 @@ class OPCUAServer:
     # Device Synchronization (Option C: Manual Sync)
     # ================================================================
 
-    async def sync_from_device(
-        self, data: dict[str, Any], data_type: str
-    ) -> None:
+    async def sync_from_device(self, data: dict[str, Any], data_type: str) -> None:
         """
         Sync data from device to OPC UA server.
 

@@ -73,20 +73,20 @@ class TurbineSafetyPLC(BaseSafetyController):
             1: False,  # Overspeed condition
             2: False,  # High vibration
             3: False,  # High bearing temp
-            4: True,   # System healthy
+            4: True,  # System healthy
             5: False,  # Trip output active
             6: False,  # Bypass active
             7: False,  # Proof test due
         },
         "input_registers": {
-            0: 0,    # Speed channel A (RPM)
-            1: 0,    # Speed channel B (RPM)
-            2: 0,    # Vibration channel A (mils * 10)
-            3: 0,    # Vibration channel B (mils * 10)
-            4: 70,   # Bearing temperature (degF)
-            5: 0,    # Diagnostic status
-            6: 0,    # Demand count
-            7: 0,    # Fault count
+            0: 0,  # Speed channel A (RPM)
+            1: 0,  # Speed channel B (RPM)
+            2: 0,  # Vibration channel A (mils * 10)
+            3: 0,  # Vibration channel B (mils * 10)
+            4: 70,  # Bearing temperature (degF)
+            5: 0,  # Diagnostic status
+            6: 0,  # Demand count
+            7: 0,  # Fault count
         },
         "coils": {
             0: False,  # Manual trip command
@@ -95,8 +95,8 @@ class TurbineSafetyPLC(BaseSafetyController):
         },
         "holding_registers": {
             0: 3960,  # Overspeed trip setpoint (RPM) - 110% of 3600
-            1: 100,   # Vibration trip setpoint (mils * 10)
-            2: 200,   # Bearing temp trip setpoint (degF)
+            1: 100,  # Vibration trip setpoint (mils * 10)
+            2: 200,  # Bearing temp trip setpoint (degF)
         },
     }
 
@@ -214,7 +214,9 @@ class TurbineSafetyPLC(BaseSafetyController):
         # Get base values
         actual_speed = turbine_telem.get("shaft_speed_rpm", 0)
         actual_vibration = turbine_telem.get("vibration_mils", 0)
-        actual_bearing_temp = turbine_telem.get("bearing_temperature_c", 21)  # 21°C = 70°F
+        actual_bearing_temp = turbine_telem.get(
+            "bearing_temperature_c", 21
+        )  # 21°C = 70°F
 
         # Simulate dual-channel sensors with small discrepancy (0.5%)
         import random

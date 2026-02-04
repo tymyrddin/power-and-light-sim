@@ -1,7 +1,8 @@
-from pymodbus.client import ModbusTcpClient
 import time
 
-client = ModbusTcpClient('127.0.0.1', port=10520)
+from pymodbus.client import ModbusTcpClient
+
+client = ModbusTcpClient("127.0.0.1", port=10520)
 
 print("Comparing memory layout between Unit ID 1 and Unit ID 2")
 print("Address | Unit 1 (Holding) | Unit 2 (Holding) | Match?")
@@ -31,8 +32,12 @@ for address in test_addresses:
             print(f"{address:6d} | {val1:15d} | {val2:15d} | {match}")
         else:
             # Handle errors
-            err1 = "OK" if not response1.isError() else f"Err:{response1.exception_code}"
-            err2 = "OK" if not response2.isError() else f"Err:{response2.exception_code}"
+            err1 = (
+                "OK" if not response1.isError() else f"Err:{response1.exception_code}"
+            )
+            err2 = (
+                "OK" if not response2.isError() else f"Err:{response2.exception_code}"
+            )
             print(f"{address:6d} | {err1:15s} | {err2:15s} | N/A")
 
     except Exception as e:

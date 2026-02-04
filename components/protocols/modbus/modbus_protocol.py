@@ -83,7 +83,9 @@ class ModbusProtocol(BaseProtocol):
         if hasattr(result, "bits"):
             for i, val in enumerate(result.bits):
                 memory_map[f"coils[{i}]"] = bool(val)
-        result = await self.adapter.read_holding_registers(0, self.adapter.num_holding_registers)
+        result = await self.adapter.read_holding_registers(
+            0, self.adapter.num_holding_registers
+        )
         if hasattr(result, "registers"):
             for i, val in enumerate(result.registers):
                 memory_map[f"holding_registers[{i}]"] = int(val)

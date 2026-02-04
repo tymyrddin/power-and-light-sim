@@ -207,8 +207,12 @@ class TurbinePLC(BasePLC):
         turbine_telem = self.turbine_physics.get_telemetry()
 
         # Update discrete inputs (status bits)
-        self.memory_map["discrete_inputs[0]"] = turbine_telem.get("turbine_running", False)
-        self.memory_map["discrete_inputs[1]"] = turbine_telem.get("governor_online", False)
+        self.memory_map["discrete_inputs[0]"] = turbine_telem.get(
+            "turbine_running", False
+        )
+        self.memory_map["discrete_inputs[1]"] = turbine_telem.get(
+            "governor_online", False
+        )
         self.memory_map["discrete_inputs[2]"] = turbine_telem.get("trip_active", False)
 
         # Overspeed condition (>110% rated)
@@ -217,26 +221,50 @@ class TurbinePLC(BasePLC):
         self.memory_map["discrete_inputs[3]"] = shaft_speed > (rated_speed * 1.1)
 
         # Alarm conditions
-        self.memory_map["discrete_inputs[6]"] = turbine_telem.get("vibration_mils", 0) > 8.0
-        self.memory_map["discrete_inputs[7]"] = turbine_telem.get("bearing_temperature_c", 0) > 82  # 82°C = 180°F
+        self.memory_map["discrete_inputs[6]"] = (
+            turbine_telem.get("vibration_mils", 0) > 8.0
+        )
+        self.memory_map["discrete_inputs[7]"] = (
+            turbine_telem.get("bearing_temperature_c", 0) > 82
+        )  # 82°C = 180°F
 
         # Update input registers (analog telemetry)
-        self.memory_map["input_registers[0]"] = int(turbine_telem.get("shaft_speed_rpm", 0))
-        self.memory_map["input_registers[1]"] = int(turbine_telem.get("power_output_mw", 0) * 10)
-        self.memory_map["input_registers[2]"] = int(turbine_telem.get("steam_pressure_psi", 0))
-        self.memory_map["input_registers[3]"] = int(turbine_telem.get("steam_temperature_c", 0))
-        self.memory_map["input_registers[4]"] = int(turbine_telem.get("bearing_temperature_c", 0))
-        self.memory_map["input_registers[5]"] = int(turbine_telem.get("vibration_mils", 0) * 10)
-        self.memory_map["input_registers[6]"] = int(turbine_telem.get("overspeed_time_sec", 0))
-        self.memory_map["input_registers[7]"] = int(turbine_telem.get("damage_percent", 0))
+        self.memory_map["input_registers[0]"] = int(
+            turbine_telem.get("shaft_speed_rpm", 0)
+        )
+        self.memory_map["input_registers[1]"] = int(
+            turbine_telem.get("power_output_mw", 0) * 10
+        )
+        self.memory_map["input_registers[2]"] = int(
+            turbine_telem.get("steam_pressure_psi", 0)
+        )
+        self.memory_map["input_registers[3]"] = int(
+            turbine_telem.get("steam_temperature_c", 0)
+        )
+        self.memory_map["input_registers[4]"] = int(
+            turbine_telem.get("bearing_temperature_c", 0)
+        )
+        self.memory_map["input_registers[5]"] = int(
+            turbine_telem.get("vibration_mils", 0) * 10
+        )
+        self.memory_map["input_registers[6]"] = int(
+            turbine_telem.get("overspeed_time_sec", 0)
+        )
+        self.memory_map["input_registers[7]"] = int(
+            turbine_telem.get("damage_percent", 0)
+        )
 
         # Get grid telemetry (if available)
         if self.grid_physics:
             grid_telem = self.grid_physics.get_telemetry()
 
             # Grid trip conditions
-            self.memory_map["discrete_inputs[4]"] = grid_telem.get("under_frequency_trip", False)
-            self.memory_map["discrete_inputs[5]"] = grid_telem.get("over_frequency_trip", False)
+            self.memory_map["discrete_inputs[4]"] = grid_telem.get(
+                "under_frequency_trip", False
+            )
+            self.memory_map["discrete_inputs[5]"] = grid_telem.get(
+                "over_frequency_trip", False
+            )
 
             # Grid measurements (scaled for 16-bit registers)
             # Frequency: Hz * 100 (e.g., 50.00 Hz -> 5000)
@@ -328,7 +356,9 @@ class TurbinePLC(BasePLC):
 
         # Split into two 16-bit registers
         self.memory_map["holding_registers[0]"] = rpm_int & 0xFFFF  # Lower 16 bits
-        self.memory_map["holding_registers[1]"] = (rpm_int >> 16) & 0xFFFF  # Upper 16 bits
+        self.memory_map["holding_registers[1]"] = (
+            rpm_int >> 16
+        ) & 0xFFFF  # Upper 16 bits
 
         logger.info(
             f"TurbinePLC '{self.device_name}': Speed setpoint set to {rpm_int} RPM"

@@ -1,7 +1,8 @@
-from pymodbus.client import ModbusTcpClient
 import time
 
-client = ModbusTcpClient('127.0.0.1', port=10520)  # Constructor: only host and port
+from pymodbus.client import ModbusTcpClient
+
+client = ModbusTcpClient("127.0.0.1", port=10520)  # Constructor: only host and port
 
 for i in range(5):
     client.connect()

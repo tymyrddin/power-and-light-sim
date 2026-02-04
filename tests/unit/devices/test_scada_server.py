@@ -630,7 +630,9 @@ class TestSCADAServerIntegration:
         assert devices[0].device_name == "test_scada_1"
 
     @pytest.mark.asyncio
-    async def test_memory_accessible_via_datastore(self, started_scada, datastore_setup):
+    async def test_memory_accessible_via_datastore(
+        self, started_scada, datastore_setup
+    ):
         """Test that SCADA memory is accessible via DataStore.
 
         WHY: Other devices may need to access SCADA data.
@@ -770,10 +772,10 @@ class TestSCADAServerAPICompatibility:
 
         WHY: Class hierarchy must be correct.
         """
+        from components.devices.core.base_device import BaseDevice
         from components.devices.operations_zone.base_supervisory import (
             BaseSupervisoryDevice,
         )
-        from components.devices.core.base_device import BaseDevice
 
         assert isinstance(test_scada, BaseSupervisoryDevice)
         assert isinstance(test_scada, BaseDevice)

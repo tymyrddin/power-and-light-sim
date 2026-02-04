@@ -8,10 +8,11 @@ REQUIRES ROOT: S7 protocol uses privileged port 102.
 Run with: sudo .venv/bin/python scripts/vulns/s7_plc_status_dump.py
 """
 
-import snap7
+import json
 from datetime import datetime
 from pathlib import Path
-import json
+
+import snap7
 
 
 def main():
@@ -41,7 +42,7 @@ def main():
 
         # Get CPU information
         cpu_info = plc.get_cpu_info()
-        print(f"\n[*] CPU Information:")
+        print("\n[*] CPU Information:")
         print(f"    Module Type: {cpu_info.ModuleTypeName}")
         print(f"    Serial Number: {cpu_info.SerialNumber}")
         print(f"    Module Name: {cpu_info.ModuleName}")
@@ -61,17 +62,17 @@ def main():
                 "module_name": cpu_info.ModuleName,
                 "as_name": cpu_info.ASName,
                 "copyright": cpu_info.Copyright,
-            }
+            },
         }
 
         # Save to reports
         reports_dir = Path(__file__).parent.parent.parent / "reports"
         reports_dir.mkdir(exist_ok=True)
 
-        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         report_file = reports_dir / f"s7_status_{timestamp}.json"
 
-        with open(report_file, 'w') as f:
+        with open(report_file, "w") as f:
             json.dump(results, f, indent=2)
 
         print(f"\n[*] Status dump saved to: {report_file}")

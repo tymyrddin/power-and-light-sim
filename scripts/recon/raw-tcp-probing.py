@@ -3,6 +3,7 @@
 Raw TCP Probing - Basic Modbus connectivity test
 Tests if we can connect to and read from a Modbus device
 """
+
 from pymodbus.client import ModbusTcpClient
 
 # Simulator: Hex Turbine PLC on localhost:10502
@@ -25,4 +26,3 @@ else:
 
 client.close()
 print("[*] Connection closed")
-

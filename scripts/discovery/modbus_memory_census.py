@@ -3,9 +3,10 @@
 Modbus Memory Census - Memory Map Discovery
 Discovers what memory regions are accessible on a Modbus device
 """
+
 from pymodbus.client import ModbusTcpClient
 
-client = ModbusTcpClient('127.0.0.1', port=10502)
+client = ModbusTcpClient("127.0.0.1", port=10502)
 client.slave_id = 1
 
 if not client.connect():

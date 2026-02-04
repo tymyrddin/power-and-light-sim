@@ -1,7 +1,8 @@
-from pymodbus.client import ModbusTcpClient
 import struct
 
-client = ModbusTcpClient('127.0.0.1', port=10520)
+from pymodbus.client import ModbusTcpClient
+
+client = ModbusTcpClient("127.0.0.1", port=10520)
 client.connect()
 
 # Read registers 0 and 1 as a potential 32-bit value
@@ -19,9 +20,11 @@ if not response.isError():
 
     # Also try interpreting as a 32-bit float (IEEE 754)
     # Pack the two registers as big-endian 16-bit values, then interpret as 32-bit float
-    bytes_for_float = reg0.to_bytes(2, byteorder='big') + reg1.to_bytes(2, byteorder='big')
+    bytes_for_float = reg0.to_bytes(2, byteorder="big") + reg1.to_bytes(
+        2, byteorder="big"
+    )
     try:
-        float_value = struct.unpack('>f', bytes_for_float)[0]  # '>' for big-endian
+        float_value = struct.unpack(">f", bytes_for_float)[0]  # '>' for big-endian
         print(f"As 32-bit float: {float_value}")
     except Exception as e:
         print(f"Could not interpret as float: {e}")

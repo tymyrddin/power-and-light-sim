@@ -185,9 +185,7 @@ class EngineeringWorkstation(BaseDevice):
             "admin_privileges": self.admin_privileges,
         }
 
-        self.logger.debug(
-            f"Memory map initialised with {len(self.projects)} projects"
-        )
+        self.logger.debug(f"Memory map initialised with {len(self.projects)} projects")
 
     async def _scan_cycle(self) -> None:
         """

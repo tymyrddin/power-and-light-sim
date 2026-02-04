@@ -21,12 +21,12 @@ Test Coverage:
 import asyncio
 
 import pytest
-
 from components.devices.control_zone.legacy_workstation import (
     CSVLogEntry,
     DiscoveredArtifact,
     LegacyWorkstation,
 )
+
 from components.state.data_store import DataStore
 from components.state.system_state import SystemState
 from components.time.simulation_time import SimulationTime
@@ -310,9 +310,7 @@ class TestLegacyWorkstationArchaeology:
         assert all(isinstance(a, DiscoveredArtifact) for a in artifacts)
 
         # Should find config.ini with credentials
-        config_artifact = next(
-            (a for a in artifacts if "config.ini" in a.name), None
-        )
+        config_artifact = next((a for a in artifacts if "config.ini" in a.name), None)
         assert config_artifact is not None
         assert config_artifact.security_relevant is True
 
@@ -336,9 +334,7 @@ class TestLegacyWorkstationArchaeology:
         """
         artifacts = test_legacy.explore_filesystem()
 
-        postit = next(
-            (a for a in artifacts if "Post-it" in a.name), None
-        )
+        postit = next((a for a in artifacts if "Post-it" in a.name), None)
         assert postit is not None
         assert postit.security_relevant is True
 
@@ -357,7 +353,8 @@ class TestLegacyWorkstationArchaeology:
         """Test reading a floppy disk that works."""
         # Find a readable disk
         readable_idx = next(
-            i for i, d in enumerate(test_legacy.floppy_disks_in_drawer)
+            i
+            for i, d in enumerate(test_legacy.floppy_disks_in_drawer)
             if d.get("readable", False)
         )
 
@@ -371,7 +368,8 @@ class TestLegacyWorkstationArchaeology:
         """
         # Find an unreadable disk
         unreadable_idx = next(
-            i for i, d in enumerate(test_legacy.floppy_disks_in_drawer)
+            i
+            for i, d in enumerate(test_legacy.floppy_disks_in_drawer)
             if not d.get("readable", True)
         )
 
@@ -399,7 +397,9 @@ class TestLegacyWorkstationDataCollection:
         assert len(started_legacy.log_entries) > 0
 
     @pytest.mark.asyncio
-    async def test_log_entries_have_correct_format(self, started_legacy, mock_turbine_physics):
+    async def test_log_entries_have_correct_format(
+        self, started_legacy, mock_turbine_physics
+    ):
         """Test that log entries match turbine data."""
         await asyncio.sleep(0.03)
 

@@ -76,7 +76,7 @@ class ReactorPLC(BasePLC):
         "coils": {
             0: False,  # SCRAM command
             1: False,  # SCRAM reset
-            2: True,   # Thaumic dampener enable
+            2: True,  # Thaumic dampener enable
         },
         "discrete_inputs": {
             0: False,  # Reactor active
@@ -89,21 +89,21 @@ class ReactorPLC(BasePLC):
             7: False,  # Coolant flow low
         },
         "input_registers": {
-            0: 25,   # Core temp degC
-            1: 25,   # Coolant temp degC
-            2: 10,   # Pressure bar * 10
-            3: 0,    # Power MW * 10
+            0: 25,  # Core temp degC
+            1: 25,  # Coolant temp degC
+            2: 10,  # Pressure bar * 10
+            3: 0,  # Power MW * 10
             4: 100,  # Thaumic strength %
-            5: 0,    # Reaction rate %
-            6: 0,    # Coolant flow %
+            5: 0,  # Reaction rate %
+            6: 0,  # Coolant flow %
             7: 100,  # Containment %
-            8: 0,    # Overtemp time sec
-            9: 0,    # Damage %
+            8: 0,  # Overtemp time sec
+            9: 0,  # Damage %
         },
         "holding_registers": {
-            0: 0,    # Power setpoint % * 10
-            1: 0,    # Coolant pump speed %
-            2: 1000, # Control rods % * 10 (100% = inserted)
+            0: 0,  # Power setpoint % * 10
+            1: 0,  # Coolant pump speed %
+            2: 1000,  # Control rods % * 10 (100% = inserted)
         },
     }
 

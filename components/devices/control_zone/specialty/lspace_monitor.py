@@ -50,25 +50,25 @@ class LSpaceMonitor(BasePLC):
 
     DEFAULT_SETUP = {
         "input_registers": {
-            0: 45,   # Thaumic field strength
-            1: 95,   # Dimensional stability
-            2: 5,    # L-space penetration
-            3: 12,   # Octarine radiation
-            4: 50,   # Narrative causality
+            0: 45,  # Thaumic field strength
+            1: 95,  # Dimensional stability
+            2: 5,  # L-space penetration
+            3: 12,  # Octarine radiation
+            4: 50,  # Narrative causality
         },
         "discrete_inputs": {
-            0: True,   # L-space link active
-            1: True,   # Boundary stable
-            2: True,   # Field nominal
+            0: True,  # L-space link active
+            1: True,  # Boundary stable
+            2: True,  # Field nominal
             3: False,  # Octarine alarm
             4: False,  # Narrative cascade
         },
         "holding_registers": {
-            0: 60,   # Damping setpoint
-            1: 80,   # Stability threshold
+            0: 60,  # Damping setpoint
+            1: 80,  # Stability threshold
         },
         "coils": {
-            0: True,   # Damping enabled
+            0: True,  # Damping enabled
             1: False,  # Emergency seal
         },
     }
@@ -102,16 +102,16 @@ class LSpaceMonitor(BasePLC):
     async def _initialise_memory_map(self) -> None:
         """Initialise L-space monitoring memory map."""
         # Input registers (telemetry)
-        self.memory_map["input_registers[0]"] = 45   # Thaumic field
-        self.memory_map["input_registers[1]"] = 95   # Stability
-        self.memory_map["input_registers[2]"] = 5    # Penetration
-        self.memory_map["input_registers[3]"] = 12   # Octarine radiation
-        self.memory_map["input_registers[4]"] = 50   # Narrative causality
+        self.memory_map["input_registers[0]"] = 45  # Thaumic field
+        self.memory_map["input_registers[1]"] = 95  # Stability
+        self.memory_map["input_registers[2]"] = 5  # Penetration
+        self.memory_map["input_registers[3]"] = 12  # Octarine radiation
+        self.memory_map["input_registers[4]"] = 50  # Narrative causality
 
         # Discrete inputs (status)
-        self.memory_map["discrete_inputs[0]"] = True   # Link active
-        self.memory_map["discrete_inputs[1]"] = True   # Boundary stable
-        self.memory_map["discrete_inputs[2]"] = True   # Field nominal
+        self.memory_map["discrete_inputs[0]"] = True  # Link active
+        self.memory_map["discrete_inputs[1]"] = True  # Boundary stable
+        self.memory_map["discrete_inputs[2]"] = True  # Field nominal
         self.memory_map["discrete_inputs[3]"] = False  # Octarine alarm
         self.memory_map["discrete_inputs[4]"] = False  # Narrative cascade
 
@@ -120,7 +120,7 @@ class LSpaceMonitor(BasePLC):
         self.memory_map["holding_registers[1]"] = 80  # Stability threshold
 
         # Coils (commands)
-        self.memory_map["coils[0]"] = True   # Damping enabled
+        self.memory_map["coils[0]"] = True  # Damping enabled
         self.memory_map["coils[1]"] = False  # Emergency seal
 
         self.logger.debug(f"LSpaceMonitor '{self.device_name}' memory map initialised")
@@ -144,11 +144,15 @@ class LSpaceMonitor(BasePLC):
         # Octarine radiation readings
         octarine = self.memory_map.get("input_registers[3]", 12)
         octarine_drift = random.uniform(-1, 1)
-        self.memory_map["input_registers[3]"] = max(0, min(50, int(octarine + octarine_drift)))
+        self.memory_map["input_registers[3]"] = max(
+            0, min(50, int(octarine + octarine_drift))
+        )
 
         # Narrative causality index (mostly stable)
         narrative = self.memory_map.get("input_registers[4]", 50)
-        self.memory_map["input_registers[4]"] = max(0, min(100, int(narrative + random.uniform(-0.5, 0.5))))
+        self.memory_map["input_registers[4]"] = max(
+            0, min(100, int(narrative + random.uniform(-0.5, 0.5)))
+        )
 
         # Update status inputs
         self.memory_map["discrete_inputs[2]"] = 30 <= new_field <= 70  # Field nominal
@@ -175,7 +179,9 @@ class LSpaceMonitor(BasePLC):
         self.memory_map["input_registers[1]"] = int(new_stability)
 
         # Update status based on stability
-        self.memory_map["discrete_inputs[1]"] = new_stability >= stability_threshold  # Boundary stable
+        self.memory_map["discrete_inputs[1]"] = (
+            new_stability >= stability_threshold
+        )  # Boundary stable
 
         # Emergency seal overrides
         if emergency_seal:
@@ -188,7 +194,9 @@ class LSpaceMonitor(BasePLC):
         field_strength = self.memory_map.get("input_registers[0]", 45)
         octarine = self.memory_map.get("input_registers[3]", 12)
         self.memory_map["discrete_inputs[3]"] = octarine > 30  # Octarine alarm
-        self.memory_map["discrete_inputs[4]"] = new_stability < 50  # Narrative cascade warning
+        self.memory_map["discrete_inputs[4]"] = (
+            new_stability < 50
+        )  # Narrative cascade warning
 
         # Rare temporal anomalies (1% chance)
         if random.random() < 0.01:

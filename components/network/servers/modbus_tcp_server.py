@@ -135,12 +135,18 @@ class ModbusTCPServer:
         if self.device_identity:
             # Populate standard device information objects
             self._identity.VendorName = self.device_identity.get("vendor", "Generic")
-            self._identity.ProductCode = self.device_identity.get("product_code", "UNKNOWN")
-            self._identity.MajorMinorRevision = self.device_identity.get("revision", "1.0")
+            self._identity.ProductCode = self.device_identity.get(
+                "product_code", "UNKNOWN"
+            )
+            self._identity.MajorMinorRevision = self.device_identity.get(
+                "revision", "1.0"
+            )
             self._identity.VendorUrl = self.device_identity.get("vendor_url", "")
             self._identity.ProductName = self.device_identity.get("product_name", "")
             self._identity.ModelName = self.device_identity.get("model", "")
-            self._identity.UserApplicationName = self.device_identity.get("application", "")
+            self._identity.UserApplicationName = self.device_identity.get(
+                "application", ""
+            )
 
         # Retry logic for port binding (handles TIME_WAIT from previous runs)
         max_retries = 3
@@ -167,12 +173,14 @@ class ModbusTCPServer:
                         if "Address already in use" not in str(e):
                             # Only suppress "address already in use" - log others
                             import logging
+
                             logging.getLogger(__name__).warning(
                                 f"Modbus server error on {self.host}:{self.port}: {e}"
                             )
                     except Exception as e:
                         # Log unexpected errors
                         import logging
+
                         logging.getLogger(__name__).error(
                             f"Unexpected Modbus server error on {self.host}:{self.port}: {e}"
                         )
@@ -200,7 +208,9 @@ class ModbusTCPServer:
                         pass
 
                 if attempt < max_retries - 1:
-                    await asyncio.sleep(retry_delay * (attempt + 1))  # Exponential backoff
+                    await asyncio.sleep(
+                        retry_delay * (attempt + 1)
+                    )  # Exponential backoff
 
             except Exception as e:
                 # Cleanup on error
@@ -292,7 +302,9 @@ class ModbusTCPServer:
     # Sync methods for SimulatorManager (device ↔ server)
     # ------------------------------------------------------------------
 
-    async def sync_from_device(self, device_registers: dict[int, Any], register_type: str) -> None:
+    async def sync_from_device(
+        self, device_registers: dict[int, Any], register_type: str
+    ) -> None:
         """
         Write device registers to server (device → server telemetry).
 
@@ -311,16 +323,22 @@ class ModbusTCPServer:
                 if self._context:
                     # Access simulator context directly to write input registers
                     slave = self._context[self.unit_id]
-                    slave.setValues(4, address, [int(value)])  # Function code 4 = input registers
+                    slave.setValues(
+                        4, address, [int(value)]
+                    )  # Function code 4 = input registers
 
         elif register_type == "discrete_inputs":
             for address, value in device_registers.items():
                 if self._context:
                     # Access simulator context directly to write discrete inputs
                     slave = self._context[self.unit_id]
-                    slave.setValues(2, address, [bool(value)])  # Function code 2 = discrete inputs
+                    slave.setValues(
+                        2, address, [bool(value)]
+                    )  # Function code 2 = discrete inputs
 
-    async def sync_to_device(self, address: int, count: int, register_type: str) -> dict[int, Any]:
+    async def sync_to_device(
+        self, address: int, count: int, register_type: str
+    ) -> dict[int, Any]:
         """
         Read server registers to sync back to device (server → device commands).
 

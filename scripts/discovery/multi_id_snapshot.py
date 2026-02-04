@@ -1,7 +1,8 @@
-from pymodbus.client import ModbusTcpClient
 import time
 
-client = ModbusTcpClient('127.0.0.1', port=10520)
+from pymodbus.client import ModbusTcpClient
+
+client = ModbusTcpClient("127.0.0.1", port=10520)
 
 print("Snapshot of register 0 across multiple Unit IDs")
 print("Unit ID | Value (Holding Reg 0) | Delta from ID 1")

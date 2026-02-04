@@ -1,7 +1,8 @@
-from pymodbus.client import ModbusTcpClient
 import time
 
-client = ModbusTcpClient('127.0.0.1', port=10520)
+from pymodbus.client import ModbusTcpClient
+
+client = ModbusTcpClient("127.0.0.1", port=10520)
 
 # Checkpoints in input register space
 # We know 0 and 100 exist. Let's find boundaries.
@@ -18,7 +19,7 @@ scan_points = [
     300,  # Common area for process variables
     400,
     500,
-    1000
+    1000,
 ]
 
 print("Sparse scan of Input Registers...")
@@ -39,7 +40,7 @@ for address in scan_points:
             print(f"{address:4d}    : {value:5d} | {note}")
         else:
             # Check if it's illegal address or other error
-            if hasattr(response, 'exception_code'):
+            if hasattr(response, "exception_code"):
                 if response.exception_code == 2:
                     print(f"{address:4d}    : ILLEGAL ADDRESS")
                 else:

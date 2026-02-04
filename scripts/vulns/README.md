@@ -24,7 +24,7 @@
 #### opcua_readonly_probe.py
 **Status:** WORKING
 **Purpose:** Anonymous browsing and reconnaissance of OPC UA server
-**Target:** OPC UA server on port 63342
+**Target:** OPC UA server on port 4840 (primary SCADA server)
 **Output:** JSON report with node tree and accessible values
 
 **What it demonstrates:**
@@ -100,7 +100,7 @@ Run with: `sudo .venv/bin/python scripts/vulns/<script>.py`
 #### plc_password_bruteforce.py
 **Status:** WORKING (simulated)
 **Purpose:** Demonstrate S7 password brute force methodology
-**Target:** Simulated PLC authentication
+**Target:** Simulated PLC authentication (reactor PLC: 127.0.0.1, rack 0, slot 2)
 **Output:** Console output with timing and success metrics
 
 **What it demonstrates:**
@@ -120,14 +120,22 @@ These scripts demonstrate critical vulnerabilities in industrial control systems
 ## Protocol Requirements
 
 **Modbus TCP (Port 10502):** No special requirements, runs as regular user
+- Turbine PLC: 127.0.0.1:10502 (unit ID 1)
+- Safety PLC: 127.0.0.1:10503 (unit ID 2)
+- Reactor PLC: 127.0.0.1:10504 (unit ID 10)
 
-**OPC UA (Port 63342):** No special requirements, runs as regular user
+**OPC UA (Port 4840):** No special requirements, runs as regular user
+- Primary SCADA: 127.0.0.1:4840 (anonymous access enabled)
+- Backup SCADA: 127.0.0.1:4841 (requires authentication)
 
 **S7 (Port 102):** Requires root/sudo access for privileged port binding
+- Reactor PLC: 127.0.0.1:102 (rack 0, slot 2)
+- Safety PLC: 127.0.0.1:103 (rack 0, slot 3)
 - Use: `sudo .venv/bin/python scripts/vulns/<script>.py`
 - Alternative: Use `setcap` or port forwarding for regular user access
 
 **EtherNet/IP (Port 44818):** No special requirements, runs as regular user
+- Turbine PLC: 127.0.0.1:44818 (Allen-Bradley ControlLogix)
 - Simulator mode: Works with simplified CIP implementation
 - Real hardware mode: Requires pycomm3 and actual Allen-Bradley PLCs
 

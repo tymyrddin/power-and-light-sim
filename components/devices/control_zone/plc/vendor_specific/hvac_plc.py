@@ -82,7 +82,7 @@ class HVACPLC(BasePLC):
     DEFAULT_SETUP = {
         "coils": {
             0: False,  # System enable command
-            1: True,   # L-space dampener enable
+            1: True,  # L-space dampener enable
         },
         "discrete_inputs": {
             0: False,  # Fan running
@@ -98,20 +98,20 @@ class HVACPLC(BasePLC):
             0: 200,  # Zone temp degC * 10
             1: 450,  # Humidity % * 10
             2: 200,  # Supply temp degC * 10
-            3: 0,    # Duct pressure Pa
+            3: 0,  # Duct pressure Pa
             4: 100,  # L-space stability %
-            5: 0,    # Fan speed %
-            6: 0,    # Heating valve %
-            7: 0,    # Cooling valve %
-            8: 0,    # Damper position %
-            9: 0,    # Energy kW * 10
+            5: 0,  # Fan speed %
+            6: 0,  # Heating valve %
+            7: 0,  # Cooling valve %
+            8: 0,  # Damper position %
+            9: 0,  # Energy kW * 10
         },
         "holding_registers": {
             0: 200,  # Temp setpoint degC * 10
             1: 450,  # Humidity setpoint % * 10
-            2: 0,    # Fan speed command %
-            3: 0,    # Operating mode
-            4: 0,    # Damper position %
+            2: 0,  # Fan speed command %
+            3: 0,  # Operating mode
+            4: 0,  # Damper position %
         },
     }
 

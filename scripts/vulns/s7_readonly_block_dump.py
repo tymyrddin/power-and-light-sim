@@ -16,16 +16,17 @@ Block Types:
 - DB: Data Blocks (memory storage)
 """
 
-import snap7
-from pathlib import Path
 from datetime import datetime
+from pathlib import Path
+
+import snap7
 
 PLC_IP = "127.0.0.1"
 RACK = 0
 SLOT = 2
 
 # Define protocol block type codes
-BLOCK_TYPE_MAP = {'OB': 0x38, 'FC': 0x43, 'FB': 0x45, 'DB': 0x41}
+BLOCK_TYPE_MAP = {"OB": 0x38, "FC": 0x43, "FB": 0x45, "DB": 0x41}
 
 print("[*] S7 Read-Only Block Dump")
 print(f"[*] Target: {PLC_IP} (Rack {RACK}, Slot {SLOT})")
@@ -41,7 +42,7 @@ try:
     if not plc.get_connected():
         raise RuntimeError("Failed to connect to PLC")
 
-    print(f"[+] Connected to PLC")
+    print("[+] Connected to PLC")
     cpu_state = plc.get_cpu_state()
     print(f"[*] CPU state: {cpu_state}\n")
 
@@ -54,10 +55,12 @@ try:
     blocks = plc.list_blocks()
 
     block_count = 0
-    for block_name, block_numbers in [('OB', blocks.OB),
-                                      ('FC', blocks.FC),
-                                      ('FB', blocks.FB),
-                                      ('DB', blocks.DB)]:
+    for block_name, block_numbers in [
+        ("OB", blocks.OB),
+        ("FC", blocks.FC),
+        ("FB", blocks.FB),
+        ("DB", blocks.DB),
+    ]:
         if not block_numbers:
             print(f"    {block_name}: No blocks found")
             continue

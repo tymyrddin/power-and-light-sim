@@ -82,19 +82,19 @@ class ReactorSafetyPLC(BaseSafetyController):
             4: False,  # Containment breach (SIF-R04)
             5: False,  # Low coolant flow (SIF-R05)
             6: False,  # SCRAM active
-            7: True,   # System healthy
+            7: True,  # System healthy
         },
         "input_registers": {
-            0: 25,   # Core temp channel A (degC)
-            1: 25,   # Core temp channel B (degC)
-            2: 10,   # Vessel pressure channel A (bar * 10)
-            3: 10,   # Vessel pressure channel B (bar * 10)
+            0: 25,  # Core temp channel A (degC)
+            1: 25,  # Core temp channel B (degC)
+            2: 10,  # Vessel pressure channel A (bar * 10)
+            3: 10,  # Vessel pressure channel B (bar * 10)
             4: 100,  # Thaumic field strength (%)
             5: 100,  # Containment integrity (%)
-            6: 0,    # Coolant flow rate (%)
-            7: 0,    # Demand count
-            8: 0,    # Fault count
-            9: 0,    # Diagnostic status
+            6: 0,  # Coolant flow rate (%)
+            7: 0,  # Demand count
+            8: 0,  # Fault count
+            9: 0,  # Diagnostic status
         },
         "coils": {
             0: False,  # Manual SCRAM command
@@ -103,10 +103,10 @@ class ReactorSafetyPLC(BaseSafetyController):
         },
         "holding_registers": {
             0: 450,  # Temperature trip setpoint (degC)
-            1: 1500, # Pressure trip setpoint (bar * 10)
-            2: 30,   # Thaumic stability trip (%)
-            3: 50,   # Containment trip (%)
-            4: 10,   # Coolant flow trip (%)
+            1: 1500,  # Pressure trip setpoint (bar * 10)
+            2: 30,  # Thaumic stability trip (%)
+            3: 50,  # Containment trip (%)
+            4: 10,  # Coolant flow trip (%)
         },
     }
 

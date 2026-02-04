@@ -3,9 +3,10 @@
 Check Input Registers - Discovery of readable input register addresses
 Tests which input register addresses are accessible
 """
+
 from pymodbus.client import ModbusTcpClient
 
-client = ModbusTcpClient('127.0.0.1', port=10502)
+client = ModbusTcpClient("127.0.0.1", port=10502)
 client.slave_id = 1
 
 print("Probing Input Registers (function code 04)...")
@@ -30,7 +31,7 @@ for address in test_addresses:
         else:
             # Don't print errors for all addresses - too noisy
             # Just note if we get a different error than illegal address
-            if hasattr(response, 'exception_code'):
+            if hasattr(response, "exception_code"):
                 if response.exception_code != 2:  # Not "Illegal Data Address"
                     print(f"Input Register {address:4d} : Exception - {response}")
             else:

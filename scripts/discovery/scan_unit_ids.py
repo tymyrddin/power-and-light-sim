@@ -3,8 +3,10 @@
 Scan Unit IDs - Modbus Unit ID Discovery
 Scans for responsive unit IDs on a Modbus TCP server
 """
-from pymodbus.client import ModbusTcpClient
+
 import time
+
+from pymodbus.client import ModbusTcpClient
 
 # Scan multiple ports to find all devices
 ports = [10502, 10503, 10504, 10505, 10506, 10510, 10520]
@@ -17,7 +19,7 @@ print("-" * 70)
 unit_ids_to_test = [1, 2, 3, 10, 20, 21, 100, 200]
 
 for port in ports:
-    client = ModbusTcpClient('127.0.0.1', port=port)
+    client = ModbusTcpClient("127.0.0.1", port=port)
 
     for unit_id in unit_ids_to_test:
         try:
@@ -50,9 +52,11 @@ for port in ports:
 
             if responsive:
                 status = "YES"
-                print(f"{port:<7} | {unit_id:<8} | {str(hr_value):<12} | {str(ir_value):<12} | {status}")
+                print(
+                    f"{port:<7} | {unit_id:<8} | {str(hr_value):<12} | {str(ir_value):<12} | {status}"
+                )
 
-        except Exception as e:
+        except Exception:
             pass  # Suppress errors for non-responsive unit IDs
 
     client.close()

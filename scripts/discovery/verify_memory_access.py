@@ -1,6 +1,6 @@
 from pymodbus.client import ModbusTcpClient
 
-client = ModbusTcpClient('127.0.0.1', port=10520)
+client = ModbusTcpClient("127.0.0.1", port=10520)
 
 # Test specific addresses that showed data before
 test_addresses = [0, 400, 500]

@@ -15,6 +15,7 @@ Security Impact:
 import json
 from datetime import datetime
 from pathlib import Path
+
 from pymodbus.client import ModbusTcpClient
 from pymodbus.constants import DeviceInformation
 
@@ -37,7 +38,7 @@ def probe_device_identity(host: str, port: int, unit_id: int = 1) -> dict:
         "unit_id": unit_id,
         "supported": False,
         "information": {},
-        "error": None
+        "error": None,
     }
 
     client = ModbusTcpClient(host=host, port=port)
@@ -51,18 +52,18 @@ def probe_device_identity(host: str, port: int, unit_id: int = 1) -> dict:
 
     try:
         # Read basic device identification (Function 43 / MEI 14)
-        response = client.read_device_information(
-            read_code=DeviceInformation.BASIC
-        )
+        response = client.read_device_information(read_code=DeviceInformation.BASIC)
 
         if response.isError():
-            result["error"] = "Device does not support Read Device Identification (FC 43)"
+            result["error"] = (
+                "Device does not support Read Device Identification (FC 43)"
+            )
         else:
             result["supported"] = True
             # Extract device information (decode bytes to strings for JSON)
-            if hasattr(response, 'information'):
+            if hasattr(response, "information"):
                 result["information"] = {
-                    k: v.decode('utf-8') if isinstance(v, bytes) else v
+                    k: v.decode("utf-8") if isinstance(v, bytes) else v
                     for k, v in response.information.items()
                 }
 
@@ -105,7 +106,7 @@ def main():
 
         if result["supported"]:
             supported_count += 1
-            print(f"    ✓ Device Identification Supported")
+            print("    ✓ Device Identification Supported")
             for obj_id, value in result["information"].items():
                 print(f"      {obj_id}: {value}")
         else:
@@ -114,7 +115,9 @@ def main():
 
     # Summary
     print("=" * 70)
-    print(f"[*] Scan Complete: {supported_count}/{len(targets)} devices support Device Identification")
+    print(
+        f"[*] Scan Complete: {supported_count}/{len(targets)} devices support Device Identification"
+    )
     print("=" * 70)
 
     # Ensure reports directory exists
@@ -133,19 +136,22 @@ def main():
                 "Vendor and model information exposed without authentication",
                 "Firmware versions may reveal known vulnerabilities",
                 "Product codes enable targeted exploit searches",
-                "Identifies legacy/unsupported equipment"
+                "Identifies legacy/unsupported equipment",
             ],
             "attack_enablement": [
                 "Device fingerprinting for exploit selection",
                 "Firmware version matching against CVE databases",
                 "Identification of weak/outdated devices to target first",
-                "Supply chain and vendor enumeration"
-            ]
-        }
+                "Supply chain and vendor enumeration",
+            ],
+        },
     }
 
-    filename = reports_dir / f"device_identity_probe_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
-    with open(filename, 'w') as f:
+    filename = (
+        reports_dir
+        / f"device_identity_probe_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
+    )
+    with open(filename, "w") as f:
         json.dump(output, f, indent=2)
 
     print(f"\n[*] Results saved to {filename}")

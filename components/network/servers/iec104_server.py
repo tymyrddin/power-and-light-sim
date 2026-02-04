@@ -34,6 +34,7 @@ from typing import Any
 
 try:
     from components.protocols.iec104.c104_221 import IEC104C104Adapter
+
     IEC104_AVAILABLE = True
 except ImportError:
     IEC104_AVAILABLE = False
@@ -139,7 +140,9 @@ class IEC104TCPServer:
                     self._adapter = None
 
                 if attempt < max_retries - 1:
-                    await asyncio.sleep(retry_delay * (attempt + 1))  # Exponential backoff
+                    await asyncio.sleep(
+                        retry_delay * (attempt + 1)
+                    )  # Exponential backoff
 
             except Exception as e:
                 logger.warning(
@@ -183,9 +186,7 @@ class IEC104TCPServer:
     # Device Synchronization (Option C: Manual Sync)
     # ================================================================
 
-    async def sync_from_device(
-        self, data: dict[int, Any], data_type: str
-    ) -> None:
+    async def sync_from_device(self, data: dict[int, Any], data_type: str) -> None:
         """
         Sync data from device to IEC 104 server.
 

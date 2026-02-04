@@ -28,7 +28,7 @@ import hmac
 import secrets
 import threading
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta, timezone
 from enum import Enum
 from pathlib import Path
 
@@ -60,7 +60,7 @@ __all__ = [
 ]
 
 # Epoch for simulation time to datetime conversion (UTC)
-SIMULATION_EPOCH = datetime(2024, 1, 1, 0, 0, 0, tzinfo=timezone.utc)
+SIMULATION_EPOCH = datetime(2024, 1, 1, 0, 0, 0, tzinfo=UTC)
 
 # ----------------------------------------------------------------
 # Security Levels and Policies

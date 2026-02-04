@@ -35,18 +35,25 @@ def enumerate_tags_simple(plc_ip: str, port: int = 44818) -> list[dict]:
         print("[*] Sending Register Session request...")
 
         # Send Register Session command (0x0065)
-        register_cmd = struct.pack('<H', 0x0065)  # Command
-        register_len = struct.pack('<H', 4)  # Length
-        register_handle = struct.pack('<I', 0)  # Session handle
-        register_status = struct.pack('<I', 0)  # Status
-        register_context = b'\x00' * 8  # Sender context
-        register_options = struct.pack('<I', 0)  # Options
-        protocol_version = struct.pack('<H', 1)
-        option_flags = struct.pack('<H', 0)
+        register_cmd = struct.pack("<H", 0x0065)  # Command
+        register_len = struct.pack("<H", 4)  # Length
+        register_handle = struct.pack("<I", 0)  # Session handle
+        register_status = struct.pack("<I", 0)  # Status
+        register_context = b"\x00" * 8  # Sender context
+        register_options = struct.pack("<I", 0)  # Options
+        protocol_version = struct.pack("<H", 1)
+        option_flags = struct.pack("<H", 0)
 
-        packet = (register_cmd + register_len + register_handle +
-                 register_status + register_context + register_options +
-                 protocol_version + option_flags)
+        packet = (
+            register_cmd
+            + register_len
+            + register_handle
+            + register_status
+            + register_context
+            + register_options
+            + protocol_version
+            + option_flags
+        )
 
         sock.send(packet)
 
@@ -88,11 +95,11 @@ def enumerate_tags_simple(plc_ip: str, port: int = 44818) -> list[dict]:
             print("[!] Invalid response from server")
             return []
 
-    except socket.timeout:
-        print(f"[!] Connection timeout")
+    except TimeoutError:
+        print("[!] Connection timeout")
         return []
     except ConnectionRefusedError:
-        print(f"[!] Connection refused - server not running")
+        print("[!] Connection refused - server not running")
         return []
     except Exception as e:
         print(f"[!] Error: {e}")
@@ -133,15 +140,20 @@ def enumerate_tags_pycomm3(plc_ip: str) -> list[dict]:
 def main():
     import argparse
 
-    parser = argparse.ArgumentParser(
-        description="Enumerate Allen-Bradley PLC tags"
+    parser = argparse.ArgumentParser(description="Enumerate Allen-Bradley PLC tags")
+    parser.add_argument(
+        "--ip",
+        default="127.0.0.1",
+        help="PLC IP address (default: 127.0.0.1 for simulator)",
     )
-    parser.add_argument("--ip", default="127.0.0.1",
-                       help="PLC IP address (default: 127.0.0.1 for simulator)")
-    parser.add_argument("--port", type=int, default=44818,
-                       help="EtherNet/IP port (default: 44818)")
-    parser.add_argument("--real-hardware", action="store_true",
-                       help="Use pycomm3 for real Allen-Bradley hardware")
+    parser.add_argument(
+        "--port", type=int, default=44818, help="EtherNet/IP port (default: 44818)"
+    )
+    parser.add_argument(
+        "--real-hardware",
+        action="store_true",
+        help="Use pycomm3 for real Allen-Bradley hardware",
+    )
 
     args = parser.parse_args()
 
@@ -159,11 +171,11 @@ def main():
     if tags:
         print(f"\n[*] Found {len(tags)} tags:\n")
         for tag in tags:
-            writable = tag.get('writable', '?')
+            writable = tag.get("writable", "?")
             rw = "R/W" if writable else "R/O" if writable == False else "?"
             print(f"    {tag['tag_name']:<30} {tag['data_type']:<10} [{rw}]")
 
-        print(f"\n[+] Tag enumeration complete")
+        print("\n[+] Tag enumeration complete")
     else:
         print("\n[!] No tags retrieved")
         sys.exit(1)

@@ -157,7 +157,9 @@ class BaseDevice(ABC):
                 )
                 self.logger.debug(f"Registered device '{self.device_name}'")
             else:
-                self.logger.debug(f"Device '{self.device_name}' already registered, skipping registration")
+                self.logger.debug(
+                    f"Device '{self.device_name}' already registered, skipping registration"
+                )
 
             # Initialise memory map
             await self._initialise_memory_map()

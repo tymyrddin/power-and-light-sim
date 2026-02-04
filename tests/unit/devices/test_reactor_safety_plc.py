@@ -184,7 +184,9 @@ class TestReactorSafetyPLCSIFs:
         """Test thaumic instability SIF trips."""
         # Thaumic trip at <30% (thaumic_field_strength * 100 < 30)
         # Low thaumic field strength causes instability
-        mock_reactor._telemetry["thaumic_field_strength"] = 0.1  # 10%, below 30% threshold
+        mock_reactor._telemetry["thaumic_field_strength"] = (
+            0.1  # 10%, below 30% threshold
+        )
 
         await asyncio.sleep(0.05)
 

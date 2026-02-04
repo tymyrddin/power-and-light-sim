@@ -485,7 +485,8 @@ class TurbinePhysics:
             > self.params.max_safe_speed_rpm,  # Overspeed
             "coils[2]": self.state.vibration_mils
             > self.params.vibration_critical_mils,  # High vibration
-            "coils[3]": self.state.bearing_temperature_c > 65,  # High bearing temp (65°C = 149°F)
+            "coils[3]": self.state.bearing_temperature_c
+            > 65,  # High bearing temp (65°C = 149°F)
             "coils[4]": self.state.damage_level > 0.5,  # Severe damage
         }
 

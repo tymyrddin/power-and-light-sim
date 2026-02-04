@@ -2,20 +2,21 @@
 """
 OPC UA Anonymous Browse
 Read-only reconnaissance of OPC UA server object hierarchy.
-Tests against UU P&L simulator substation controller on port 63342.
+Tests against UU P&L simulator SCADA server on port 4840.
 """
 
 import asyncio
-from asyncua import Client
+import json
 from datetime import datetime
 from pathlib import Path
-import json
+
+from asyncua import Client
 
 
 async def opcua_anonymous_browse():
-    target_url = "opc.tcp://127.0.0.1:63342"
+    target_url = "opc.tcp://127.0.0.1:4840"
 
-    print(f"[*] OPC UA Anonymous Browse")
+    print("[*] OPC UA Anonymous Browse")
     print(f"[*] Target: {target_url}")
     print(f"[*] Time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     print("-" * 50)
@@ -29,13 +30,13 @@ async def opcua_anonymous_browse():
             # Get server info
             server_node = client.get_server_node()
             server_status = await server_node.read_server_status()
-            print(f"\n[*] Server Status:")
+            print("\n[*] Server Status:")
             print(f"    State: {server_status.State}")
             print(f"    Current Time: {server_status.CurrentTime}")
             print(f"    Build Info: {server_status.BuildInfo.ProductName}")
 
             # Browse root objects
-            print(f"\n[*] Browsing Root Objects:")
+            print("\n[*] Browsing Root Objects:")
             root = client.get_root_node()
             objects = await root.get_children()
 
@@ -43,7 +44,7 @@ async def opcua_anonymous_browse():
                 "timestamp": datetime.now().isoformat(),
                 "server_url": target_url,
                 "server_status": str(server_status.State),
-                "objects": []
+                "objects": [],
             }
 
             for obj in objects:
@@ -55,7 +56,7 @@ async def opcua_anonymous_browse():
                     obj_info = {
                         "browse_name": browse_name.Name,
                         "display_name": display_name.Text,
-                        "node_class": str(node_class)
+                        "node_class": str(node_class),
                     }
 
                     print(f"    {browse_name.Name} ({display_name.Text})")
@@ -78,10 +79,10 @@ async def opcua_anonymous_browse():
             reports_dir = Path(__file__).parent.parent.parent / "reports"
             reports_dir.mkdir(exist_ok=True)
 
-            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
             report_file = reports_dir / f"opcua_browse_{timestamp}.json"
 
-            with open(report_file, 'w') as f:
+            with open(report_file, "w") as f:
                 json.dump(results, f, indent=2)
 
             print(f"\n[*] Browse results saved to: {report_file}")

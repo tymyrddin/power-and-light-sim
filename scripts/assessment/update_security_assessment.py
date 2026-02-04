@@ -6,34 +6,34 @@ Demonstrates vulnerabilities in vendor update mechanisms
 
 import hashlib
 import hmac
-from datetime import datetime
-from typing import Dict, Any, Tuple
 import json
+from datetime import datetime
 from pathlib import Path
+from typing import Any, Dict, Tuple
 
 # ============================================================================
 # CONFIGURATION
 # ============================================================================
 
 CONFIG = {
-    'demo_mode': True,  # Create demo files for testing
-    'vendors': {
-        'scada_vendor': {
-            'name': 'SCADA Systems Inc',
-            'update_method': 'Website download with MD5',
-            'security_level': 'WEAK'
+    "demo_mode": True,  # Create demo files for testing
+    "vendors": {
+        "scada_vendor": {
+            "name": "SCADA Systems Inc",
+            "update_method": "Website download with MD5",
+            "security_level": "WEAK",
         },
-        'plc_vendor': {
-            'name': 'Industrial Controls Corp',
-            'update_method': 'Vendor remote access',
-            'security_level': 'POOR'
+        "plc_vendor": {
+            "name": "Industrial Controls Corp",
+            "update_method": "Vendor remote access",
+            "security_level": "POOR",
         },
-        'turbine_vendor': {
-            'name': 'TurbineTech',
-            'update_method': 'Automatic push',
-            'security_level': 'CRITICAL'
-        }
-    }
+        "turbine_vendor": {
+            "name": "TurbineTech",
+            "update_method": "Automatic push",
+            "security_level": "CRITICAL",
+        },
+    },
 }
 
 
@@ -41,20 +41,25 @@ CONFIG = {
 # DEMO UPDATE FILE CREATION
 # ============================================================================
 
-def create_demo_update_file(filename: str, content: str = "LEGITIMATE") -> Tuple[bytes, str, str, str]:
+
+def create_demo_update_file(
+    filename: str, content: str = "LEGITIMATE"
+) -> tuple[bytes, str, str, str]:
     """
     Create a demo update file with various hashes
 
     Returns:
         Tuple of (file_data, md5, sha1, sha256)
     """
-    file_data = f"UPDATE_FILE_{content}_VERSION_3.2.1_{datetime.now().isoformat()}".encode()
+    file_data = (
+        f"UPDATE_FILE_{content}_VERSION_3.2.1_{datetime.now().isoformat()}".encode()
+    )
 
     md5_hash = hashlib.md5(file_data).hexdigest()
     sha1_hash = hashlib.sha1(file_data).hexdigest()
     sha256_hash = hashlib.sha256(file_data).hexdigest()
 
-    with open(filename, 'wb') as f:
+    with open(filename, "wb") as f:
         f.write(file_data)
 
     return file_data, md5_hash, sha1_hash, sha256_hash
@@ -106,7 +111,8 @@ def demonstrate_md5_collision() -> None:
 # UPDATE VERIFICATION TESTS
 # ============================================================================
 
-def test_no_verification() -> Dict[str, Any]:
+
+def test_no_verification() -> dict[str, Any]:
     """Test scenario: No verification at all (worst case)"""
 
     print("\n" + "=" * 70)
@@ -118,10 +124,10 @@ def test_no_verification() -> Dict[str, Any]:
     print("[*] No hash, no signature, no approval process")
 
     results = {
-        'test': 'no_verification',
-        'vendor': 'TurbineTech',
-        'security_level': 'CRITICAL',
-        'vulnerabilities': []
+        "test": "no_verification",
+        "vendor": "TurbineTech",
+        "security_level": "CRITICAL",
+        "vulnerabilities": [],
     }
 
     print("\n[!] VULNERABILITIES:")
@@ -131,20 +137,20 @@ def test_no_verification() -> Dict[str, Any]:
         "Rogue employee at vendor → Deploy malicious code",
         "Man-in-the-middle attack → Inject malicious update in transit",
         "No audit trail → Cannot detect unauthorized changes",
-        "No rollback capability → Cannot recover from bad update"
+        "No rollback capability → Cannot recover from bad update",
     ]
 
     for i, vuln in enumerate(vulns, 1):
         print(f"    {i}. {vuln}")
-        results['vulnerabilities'].append(vuln)
+        results["vulnerabilities"].append(vuln)
 
     print("\n[!] RISK: CRITICAL - Complete lack of update security")
-    results['risk'] = 'CRITICAL'
+    results["risk"] = "CRITICAL"
 
     return results
 
 
-def test_md5_verification() -> Dict[str, Any]:
+def test_md5_verification() -> dict[str, Any]:
     """Test scenario: MD5 hash verification"""
 
     print("\n" + "=" * 70)
@@ -152,20 +158,19 @@ def test_md5_verification() -> Dict[str, Any]:
     print("=" * 70)
 
     results = {
-        'test': 'md5_verification',
-        'vendor': 'SCADA Systems Inc',
-        'security_level': 'WEAK',
-        'vulnerabilities': []
+        "test": "md5_verification",
+        "vendor": "SCADA Systems Inc",
+        "security_level": "WEAK",
+        "vulnerabilities": [],
     }
 
     # Create demo files
     print("\n[*] Creating demo update files...")
     legit_data, legit_md5, legit_sha1, legit_sha256 = create_demo_update_file(
-        'scada_update_legitimate.bin',
-        'LEGITIMATE'
+        "scada_update_legitimate.bin", "LEGITIMATE"
     )
 
-    print(f"[*] Legitimate update created")
+    print("[*] Legitimate update created")
     print(f"    MD5:    {legit_md5}")
     print(f"    SHA256: {legit_sha256}")
 
@@ -188,20 +193,20 @@ def test_md5_verification() -> Dict[str, Any]:
         "If website is compromised, attacker can replace both file AND hash",
         "No authentication - cannot verify file came from vendor",
         "Collision attacks demonstrated since 2004",
-        "NIST deprecated MD5 in 2011"
+        "NIST deprecated MD5 in 2011",
     ]
 
     for i, vuln in enumerate(vulns, 1):
         print(f"    {i}. {vuln}")
-        results['vulnerabilities'].append(vuln)
+        results["vulnerabilities"].append(vuln)
 
     print("\n[!] RISK: WEAK - Better than nothing, but not secure")
-    results['risk'] = 'WEAK'
+    results["risk"] = "WEAK"
 
     return results
 
 
-def test_sha256_verification() -> Dict[str, Any]:
+def test_sha256_verification() -> dict[str, Any]:
     """Test scenario: SHA-256 hash verification"""
 
     print("\n" + "=" * 70)
@@ -209,19 +214,18 @@ def test_sha256_verification() -> Dict[str, Any]:
     print("=" * 70)
 
     results = {
-        'test': 'sha256_verification',
-        'security_level': 'MODERATE',
-        'vulnerabilities': []
+        "test": "sha256_verification",
+        "security_level": "MODERATE",
+        "vulnerabilities": [],
     }
 
     # Create demo file
     print("\n[*] Creating demo update file...")
     legit_data, legit_md5, legit_sha1, legit_sha256 = create_demo_update_file(
-        'update_sha256.bin',
-        'LEGITIMATE'
+        "update_sha256.bin", "LEGITIMATE"
     )
 
-    print(f"[*] Update created")
+    print("[*] Update created")
     print(f"    SHA-256: {legit_sha256}")
 
     # Verify integrity
@@ -243,20 +247,20 @@ def test_sha256_verification() -> Dict[str, Any]:
         "If website is compromised, attacker can replace file AND hash",
         "No authentication - cannot verify file came from legitimate vendor",
         "No protection against compromised vendor infrastructure",
-        "Requires secure channel to obtain hash"
+        "Requires secure channel to obtain hash",
     ]
 
     for i, vuln in enumerate(vulns, 1):
         print(f"    {i}. {vuln}")
-        results['vulnerabilities'].append(vuln)
+        results["vulnerabilities"].append(vuln)
 
     print("\n[*] RISK: MODERATE - Good integrity, but no authentication")
-    results['risk'] = 'MODERATE'
+    results["risk"] = "MODERATE"
 
     return results
 
 
-def test_cryptographic_signature() -> Dict[str, Any]:
+def test_cryptographic_signature() -> dict[str, Any]:
     """Test scenario: Cryptographic signature verification"""
 
     print("\n" + "=" * 70)
@@ -264,9 +268,9 @@ def test_cryptographic_signature() -> Dict[str, Any]:
     print("=" * 70)
 
     results = {
-        'test': 'signature_verification',
-        'security_level': 'STRONG',
-        'vulnerabilities': []
+        "test": "signature_verification",
+        "security_level": "STRONG",
+        "vulnerabilities": [],
     }
 
     print("\n[*] Cryptographic signatures provide:")
@@ -277,8 +281,7 @@ def test_cryptographic_signature() -> Dict[str, Any]:
     # Create demo file
     print("\n[*] Creating demo signed update...")
     update_data, _, _, sha256 = create_demo_update_file(
-        'update_signed.bin',
-        'LEGITIMATE'
+        "update_signed.bin", "LEGITIMATE"
     )
 
     # Simulate signature (in reality, vendor signs with private key)
@@ -291,7 +294,9 @@ def test_cryptographic_signature() -> Dict[str, Any]:
     # Verify signature (customers verify with vendor's public key)
     print("\n[*] Verifying signature with vendor's public key...")
     vendor_public_key = b"VENDOR_PRIVATE_KEY_SECRET"  # In reality, public key
-    calc_signature = hmac.new(vendor_public_key, update_data, hashlib.sha256).hexdigest()
+    calc_signature = hmac.new(
+        vendor_public_key, update_data, hashlib.sha256
+    ).hexdigest()
 
     if calc_signature == signature:
         print("[✓] Signature verification PASSED")
@@ -308,15 +313,15 @@ def test_cryptographic_signature() -> Dict[str, Any]:
     vulns = [
         "Vendor private key compromise (very rare, high-value target)",
         "Weak key management at vendor",
-        "Incorrect public key distribution (MITM during initial setup)"
+        "Incorrect public key distribution (MITM during initial setup)",
     ]
 
     for i, vuln in enumerate(vulns, 1):
         print(f"    {i}. {vuln}")
-        results['vulnerabilities'].append(vuln)
+        results["vulnerabilities"].append(vuln)
 
     print("\n[✓] RISK: LOW - Best practice for software updates")
-    results['risk'] = 'LOW'
+    results["risk"] = "LOW"
 
     return results
 
@@ -324,6 +329,7 @@ def test_cryptographic_signature() -> Dict[str, Any]:
 # ============================================================================
 # ATTACK SCENARIOS
 # ============================================================================
+
 
 def demonstrate_website_compromise_attack() -> None:
     """Demonstrate attack via compromised vendor website"""
@@ -345,7 +351,7 @@ def demonstrate_website_compromise_attack() -> None:
     legit_data = b"LEGITIMATE_UPDATE_V3.2.1"
     legit_md5 = hashlib.md5(legit_data).hexdigest()
 
-    print(f"\n[*] Original legitimate update:")
+    print("\n[*] Original legitimate update:")
     print(f"    Content: {legit_data.decode()}")
     print(f"    MD5: {legit_md5}")
 
@@ -353,29 +359,30 @@ def demonstrate_website_compromise_attack() -> None:
     malicious_data = b"MALICIOUS_BACKDOOR_V3.2.1"
     malicious_md5 = hashlib.md5(malicious_data).hexdigest()
 
-    print(f"\n[!] Attacker replaces with malicious update:")
+    print("\n[!] Attacker replaces with malicious update:")
     print(f"    Content: {malicious_data.decode()}")
     print(f"    MD5: {malicious_md5}")
-    print(f"    (Attacker also updates MD5 on website)")
+    print("    (Attacker also updates MD5 on website)")
 
-    print(f"\n[*] Customer downloads and verifies:")
+    print("\n[*] Customer downloads and verifies:")
     print(f"    Downloaded MD5: {malicious_md5}")
     print(f"    Website MD5: {malicious_md5}")
-    print(f"    Verification: PASSES ✓")
+    print("    Verification: PASSES ✓")
 
-    print(f"\n[!] Result: Malicious update installed despite 'verification'")
+    print("\n[!] Result: Malicious update installed despite 'verification'")
 
-    print(f"\n[*] Defense: Cryptographic signatures")
-    print(f"    • Attacker cannot forge signature without vendor's private key")
-    print(f"    • Website compromise alone is insufficient")
-    print(f"    • Customer verification would FAIL")
+    print("\n[*] Defense: Cryptographic signatures")
+    print("    • Attacker cannot forge signature without vendor's private key")
+    print("    • Website compromise alone is insufficient")
+    print("    • Customer verification would FAIL")
 
 
 # ============================================================================
 # MAIN ASSESSMENT
 # ============================================================================
 
-def assess_update_security() -> Dict[str, Any]:
+
+def assess_update_security() -> dict[str, Any]:
     """
     Main assessment function
     """
@@ -388,17 +395,17 @@ def assess_update_security() -> Dict[str, Any]:
     print("\n[*] This assessment tests vendor update mechanisms")
     print("[*] Identifies vulnerabilities in update delivery and verification")
 
-    results: Dict[str, Any] = {
-        'assessment_start': assessment_start.isoformat(),
-        'tests': {},
-        'summary': {}
+    results: dict[str, Any] = {
+        "assessment_start": assessment_start.isoformat(),
+        "tests": {},
+        "summary": {},
     }
 
     # Run all tests
-    results['tests']['no_verification'] = test_no_verification()
-    results['tests']['md5_verification'] = test_md5_verification()
-    results['tests']['sha256_verification'] = test_sha256_verification()
-    results['tests']['signature_verification'] = test_cryptographic_signature()
+    results["tests"]["no_verification"] = test_no_verification()
+    results["tests"]["md5_verification"] = test_md5_verification()
+    results["tests"]["sha256_verification"] = test_sha256_verification()
+    results["tests"]["signature_verification"] = test_cryptographic_signature()
 
     # Demonstrate why MD5 is broken
     demonstrate_md5_collision()
@@ -412,7 +419,7 @@ def assess_update_security() -> Dict[str, Any]:
     print("=" * 70)
 
     print("\n[*] Vendor Update Security Levels:")
-    for vendor, details in CONFIG['vendors'].items():
+    for vendor, details in CONFIG["vendors"].items():
         print(f"\n    {details['name']}:")
         print(f"      Method: {details['update_method']}")
         print(f"      Security: {details['security_level']}")
@@ -428,34 +435,41 @@ def assess_update_security() -> Dict[str, Any]:
         "Disable automatic updates - require explicit approval",
         "Establish trusted public key distribution mechanism",
         "Monitor for unauthorized update attempts",
-        "Implement rollback capability for failed updates"
+        "Implement rollback capability for failed updates",
     ]
 
     for i, rec in enumerate(recommendations, 1):
         print(f"    {i}. {rec}")
 
-    results['recommendations'] = recommendations
+    results["recommendations"] = recommendations
 
     # Save report
     assessment_end = datetime.now()
-    results['assessment_end'] = assessment_end.isoformat()
-    results['duration_seconds'] = (assessment_end - assessment_start).total_seconds()
+    results["assessment_end"] = assessment_end.isoformat()
+    results["duration_seconds"] = (assessment_end - assessment_start).total_seconds()
 
     # Ensure reports directory exists
     reports_dir = Path(__file__).parent.parent.parent / "reports"
     reports_dir.mkdir(exist_ok=True)
 
-    report_file = reports_dir / f'update_security_assessment_{assessment_start.strftime("%Y%m%d_%H%M%S")}.json'
+    report_file = (
+        reports_dir
+        / f'update_security_assessment_{assessment_start.strftime("%Y%m%d_%H%M%S")}.json'
+    )
     try:
-        with open(report_file, 'w') as f:
+        with open(report_file, "w") as f:
             json.dump(results, f, indent=2)
         print(f"\n[*] Detailed report saved: {report_file}")
-    except IOError as e:
+    except OSError as e:
         print(f"\n[!] Could not save report: {e}")
 
     # Cleanup demo files
     print("\n[*] Cleaning up demo files...")
-    for filename in ['scada_update_legitimate.bin', 'update_sha256.bin', 'update_signed.bin']:
+    for filename in [
+        "scada_update_legitimate.bin",
+        "update_sha256.bin",
+        "update_signed.bin",
+    ]:
         try:
             Path(filename).unlink()
         except FileNotFoundError:
@@ -470,13 +484,13 @@ def assess_update_security() -> Dict[str, Any]:
 # MAIN EXECUTION
 # ============================================================================
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     print("\n[*] Software Update Security Assessment Tool")
     print("[*] Tests vendor update verification mechanisms")
     print("[*] Demonstrates why weak verification is dangerous\n")
 
     response = input("Run assessment? (yes/no): ")
-    if response.lower() in ['yes', 'y']:
+    if response.lower() in ["yes", "y"]:
         assess_update_security()
     else:
         print("[*] Assessment cancelled")

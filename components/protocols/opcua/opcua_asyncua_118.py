@@ -71,7 +71,11 @@ class OPCUAAsyncua118Adapter:
         self._server.set_server_name("AsyncUA OPC UA Simulator")
 
         # Configure security if certificates are provided
-        if self.security_policy != "None" and self.certificate_path and self.private_key_path:
+        if (
+            self.security_policy != "None"
+            and self.certificate_path
+            and self.private_key_path
+        ):
             if self.certificate_path.exists() and self.private_key_path.exists():
                 try:
                     # Load server certificate and private key
@@ -79,9 +83,11 @@ class OPCUAAsyncua118Adapter:
                     await self._server.load_private_key(str(self.private_key_path))
 
                     # Set security policy
-                    self._server.set_security_policy([
-                        f"http://opcfoundation.org/UA/SecurityPolicy#{self.security_policy}"
-                    ])
+                    self._server.set_security_policy(
+                        [
+                            f"http://opcfoundation.org/UA/SecurityPolicy#{self.security_policy}"
+                        ]
+                    )
 
                     # Configure user authentication
                     if not self.allow_anonymous:
@@ -92,7 +98,10 @@ class OPCUAAsyncua118Adapter:
                 except Exception as e:
                     # Fall back to no security if certificate loading fails
                     import logging
-                    logging.warning(f"Failed to load OPC UA certificates: {e}, falling back to no security")
+
+                    logging.warning(
+                        f"Failed to load OPC UA certificates: {e}, falling back to no security"
+                    )
 
         self._namespace_idx = await self._server.register_namespace(self.namespace_uri)
 

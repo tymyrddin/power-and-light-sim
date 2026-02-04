@@ -3,10 +3,12 @@
 Test Write Permissions - Discovery of writable register addresses
 Tests if holding registers can be written to (non-destructively)
 """
-from pymodbus.client import ModbusTcpClient
+
 import time
 
-client = ModbusTcpClient('127.0.0.1', port=10502)
+from pymodbus.client import ModbusTcpClient
+
+client = ModbusTcpClient("127.0.0.1", port=10502)
 
 print("Testing write permissions (non-destructive)")
 print("-" * 50)
@@ -32,7 +34,7 @@ try:
         write_response = client.write_register(address=0, value=current_value)
 
         if not write_response.isError():
-            print(f"  ✓ Write accepted")
+            print("  ✓ Write accepted")
 
             # Verify it didn't change
             time.sleep(0.2)

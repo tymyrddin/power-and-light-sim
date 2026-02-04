@@ -550,10 +550,10 @@ class TestHMIWorkstationIntegration:
 
         WHY: Class hierarchy must be correct.
         """
+        from components.devices.core.base_device import BaseDevice
         from components.devices.operations_zone.base_supervisory import (
             BaseSupervisoryDevice,
         )
-        from components.devices.core.base_device import BaseDevice
 
         assert isinstance(test_hmi, BaseSupervisoryDevice)
         assert isinstance(test_hmi, BaseDevice)

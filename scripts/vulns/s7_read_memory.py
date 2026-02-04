@@ -13,8 +13,9 @@ Memory Areas:
 - DB1: Data Block 1 (input registers/telemetry)
 """
 
-import snap7
 from datetime import datetime
+
+import snap7
 
 
 def main():

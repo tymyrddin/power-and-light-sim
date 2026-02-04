@@ -3,6 +3,7 @@
 Query Substation Controller - Raw TCP SYN Probe
 Tests if DNP3 port is open using raw TCP SYN packet
 """
+
 from scapy.layers.inet import IP, TCP
 from scapy.sendrecv import sr1
 
@@ -24,5 +25,3 @@ if resp:
     print(f"[*] Response: {resp.summary()}")
 else:
     print("[-] No response (filtered or host down)")
-
-

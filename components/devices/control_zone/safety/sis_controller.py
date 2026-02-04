@@ -54,9 +54,10 @@ Holding Registers (Read/write 16-bit):
   0-15: SIF enable flags (bit-packed)
 """
 
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Callable
+from typing import Any
 
 from components.devices.control_zone.safety.base_safety_controller import (
     BaseSafetyController,

@@ -35,6 +35,7 @@ try:
     from snap7 import SrvArea
     from snap7.server import Server as Snap7Server
     from snap7.util import get_bool, get_int, set_bool, set_int
+
     SNAP7_AVAILABLE = True
 except ImportError:
     SNAP7_AVAILABLE = False
@@ -73,8 +74,8 @@ class S7TCPServer:
         # DB sizes (bytes)
         db1_size: int = 256,  # Input registers
         db2_size: int = 256,  # Holding registers
-        db3_size: int = 64,   # Discrete inputs
-        db4_size: int = 64,   # Coils
+        db3_size: int = 64,  # Discrete inputs
+        db4_size: int = 64,  # Coils
     ):
         self.host = host
         self.port = port
@@ -83,10 +84,10 @@ class S7TCPServer:
 
         # DB configuration
         self.db_sizes = {
-            1: db1_size,   # Input registers
-            2: db2_size,   # Holding registers
-            3: db3_size,   # Discrete inputs
-            4: db4_size,   # Coils
+            1: db1_size,  # Input registers
+            2: db2_size,  # Holding registers
+            3: db3_size,  # Discrete inputs
+            4: db4_size,  # Coils
         }
 
         # Server components
@@ -128,9 +129,9 @@ class S7TCPServer:
                     self._db_buffers[db_num] = (c_uint8 * size)()
                     # Register DB with snap7 server
                     self._server.register_area(
-                        SrvArea.DB,              # Area type: Data Block
-                        db_num,                  # DB number
-                        self._db_buffers[db_num] # Memory buffer (ctypes array)
+                        SrvArea.DB,  # Area type: Data Block
+                        db_num,  # DB number
+                        self._db_buffers[db_num],  # Memory buffer (ctypes array)
                     )
 
                 # Start server in background thread
@@ -145,7 +146,11 @@ class S7TCPServer:
                 started = await asyncio.to_thread(_start_server)
 
                 # Check if server started successfully
-                if started and self._server and self._server.get_status() == SRV_RUNNING:
+                if (
+                    started
+                    and self._server
+                    and self._server.get_status() == SRV_RUNNING
+                ):
                     self._running = True
                     logger.info(f"S7 server started on {self.host}:{self.port}")
                     return True
@@ -159,7 +164,9 @@ class S7TCPServer:
                     self._server = None
 
                 if attempt < max_retries - 1:
-                    await asyncio.sleep(retry_delay * (attempt + 1))  # Exponential backoff
+                    await asyncio.sleep(
+                        retry_delay * (attempt + 1)
+                    )  # Exponential backoff
 
             except Exception as e:
                 logger.warning(
@@ -212,7 +219,9 @@ class S7TCPServer:
     # Device sync methods (similar to ModbusTCPServer)
     # ------------------------------------------------------------------
 
-    async def sync_from_device(self, device_registers: dict[int, Any], register_type: str) -> None:
+    async def sync_from_device(
+        self, device_registers: dict[int, Any], register_type: str
+    ) -> None:
         """
         Write device registers to S7 server (device → server telemetry).
 
@@ -244,7 +253,9 @@ class S7TCPServer:
         except Exception as e:
             logger.debug(f"Error syncing from device to S7 server: {e}")
 
-    async def sync_to_device(self, address: int, count: int, register_type: str) -> dict[int, Any]:
+    async def sync_to_device(
+        self, address: int, count: int, register_type: str
+    ) -> dict[int, Any]:
         """
         Read S7 server registers to sync back to device (server → device commands).
 
@@ -299,7 +310,7 @@ class S7TCPServer:
         if start + size > len(db_buffer):
             raise ValueError(f"Read beyond DB{db_number} bounds")
 
-        return bytes(db_buffer[start:start + size])
+        return bytes(db_buffer[start : start + size])
 
     async def write_db(self, db_number: int, start: int, data: bytes) -> None:
         """Write bytes to a Data Block (for testing/attacks)."""
@@ -310,7 +321,7 @@ class S7TCPServer:
         if start + len(data) > len(db_buffer):
             raise ValueError(f"Write beyond DB{db_number} bounds")
 
-        db_buffer[start:start + len(data)] = data
+        db_buffer[start : start + len(data)] = data
 
     def get_info(self) -> dict[str, Any]:
         """Get server info."""

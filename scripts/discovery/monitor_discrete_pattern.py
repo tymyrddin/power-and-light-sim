@@ -1,7 +1,8 @@
-from pymodbus.client import ModbusTcpClient
 import time
 
-client = ModbusTcpClient('127.0.0.1', port=10520)
+from pymodbus.client import ModbusTcpClient
+
+client = ModbusTcpClient("127.0.0.1", port=10520)
 
 print("Monitoring discrete pattern over time...")
 print("Time     | Coils (0-15)         | As Hex  | As Int")
@@ -17,18 +18,22 @@ for i in range(6):
 
         if not response.isError():
             bits = response.bits[:16]
-            bits_str = ''.join(['1' if b else '0' for b in bits])
+            bits_str = "".join(["1" if b else "0" for b in bits])
 
             # Convert to integer
             value = 0
             for j, bit in enumerate(bits):
                 if bit:
-                    value |= (1 << j)
+                    value |= 1 << j
 
             hex_str = f"0x{value:04X}"
 
             timestamp = time.strftime("%H:%M:%S")
-            change = " (CHANGED)" if previous_pattern is not None and previous_pattern != bits_str else ""
+            change = (
+                " (CHANGED)"
+                if previous_pattern is not None and previous_pattern != bits_str
+                else ""
+            )
             print(f"{timestamp} | {bits_str} | {hex_str:6s} | {value:5d}{change}")
 
             previous_pattern = bits_str

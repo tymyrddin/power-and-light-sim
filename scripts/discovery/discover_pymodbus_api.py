@@ -1,5 +1,6 @@
-import pymodbus.client
 import inspect
+
+import pymodbus.client
 
 # Inspect the signature of the read_holding_registers method
 sig = inspect.signature(pymodbus.client.ModbusTcpClient.read_holding_registers)

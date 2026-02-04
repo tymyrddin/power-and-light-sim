@@ -165,9 +165,7 @@ class HMIWorkstation(BaseSupervisoryDevice):
             "web_interface_port": self.web_interface_port,
         }
 
-        self.logger.debug(
-            f"Memory map initialised with {len(self.screens)} screens"
-        )
+        self.logger.debug(f"Memory map initialised with {len(self.screens)} screens")
 
     # ----------------------------------------------------------------
     # BaseSupervisoryDevice implementation
@@ -190,7 +188,9 @@ class HMIWorkstation(BaseSupervisoryDevice):
                     screen = self.screens[self.current_screen]
                     for tag_name in screen.tags_displayed:
                         if tag_name in scada_memory["tag_values"]:
-                            self.screen_data[tag_name] = scada_memory["tag_values"][tag_name]
+                            self.screen_data[tag_name] = scada_memory["tag_values"][
+                                tag_name
+                            ]
 
                 target.last_poll_success = True
                 target.consecutive_failures = 0

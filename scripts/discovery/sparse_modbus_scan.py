@@ -1,7 +1,8 @@
-from pymodbus.client import ModbusTcpClient
 import time
 
-client = ModbusTcpClient('127.0.0.1', port=10520)
+from pymodbus.client import ModbusTcpClient
+
+client = ModbusTcpClient("127.0.0.1", port=10520)
 
 # Strategic checkpoints in the memory map
 scan_points = [
@@ -14,7 +15,7 @@ scan_points = [
     2000,
     3000,
     4000,
-    5000
+    5000,
 ]
 
 print("Starting sparse memory scan...")

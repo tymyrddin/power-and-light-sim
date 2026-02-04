@@ -7,10 +7,11 @@ including setpoints, alarms, and safety limits from the turbine PLCs.
 NOTE: This is a READ-ONLY demonstration. No values are modified.
 """
 
-from pymodbus.client import ModbusTcpClient
 import json
 from datetime import datetime
 from pathlib import Path
+
+from pymodbus.client import ModbusTcpClient
 
 
 def read_turbine_config(plc_ip, port, unit_id):
@@ -30,107 +31,107 @@ def read_turbine_config(plc_ip, port, unit_id):
     # Speed setpoint (holding register 0)
     result = client.read_holding_registers(address=0, count=1)
     if not result.isError():
-        config['speed_setpoint_rpm'] = result.registers[0]
+        config["speed_setpoint_rpm"] = result.registers[0]
     else:
-        config['speed_setpoint_rpm'] = None
+        config["speed_setpoint_rpm"] = None
 
     # Current shaft speed (input register 0)
     result = client.read_input_registers(address=0, count=1)
     if not result.isError():
-        config['current_speed_rpm'] = result.registers[0]
+        config["current_speed_rpm"] = result.registers[0]
     else:
-        config['current_speed_rpm'] = None
+        config["current_speed_rpm"] = None
 
     # Power output (input register 1, MW * 10)
     result = client.read_input_registers(address=1, count=1)
     if not result.isError():
-        config['power_output_mw'] = result.registers[0] / 10.0
+        config["power_output_mw"] = result.registers[0] / 10.0
     else:
-        config['power_output_mw'] = None
+        config["power_output_mw"] = None
 
     # Steam pressure (input register 2, PSI)
     result = client.read_input_registers(address=2, count=1)
     if not result.isError():
-        config['steam_pressure_psi'] = result.registers[0]
+        config["steam_pressure_psi"] = result.registers[0]
     else:
-        config['steam_pressure_psi'] = None
+        config["steam_pressure_psi"] = None
 
     # Steam temperature (input register 3, °C)
     result = client.read_input_registers(address=3, count=1)
     if not result.isError():
-        config['steam_temperature_c'] = result.registers[0]
+        config["steam_temperature_c"] = result.registers[0]
     else:
-        config['steam_temperature_c'] = None
+        config["steam_temperature_c"] = None
 
     # Bearing temperature (input register 4, °C)
     result = client.read_input_registers(address=4, count=1)
     if not result.isError():
-        config['bearing_temperature_c'] = result.registers[0]
+        config["bearing_temperature_c"] = result.registers[0]
     else:
-        config['bearing_temperature_c'] = None
+        config["bearing_temperature_c"] = None
 
     # Vibration (input register 5, mils * 10)
     result = client.read_input_registers(address=5, count=1)
     if not result.isError():
-        config['vibration_mils'] = result.registers[0] / 10.0
+        config["vibration_mils"] = result.registers[0] / 10.0
     else:
-        config['vibration_mils'] = None
+        config["vibration_mils"] = None
 
     # Overspeed time (input register 6, seconds)
     result = client.read_input_registers(address=6, count=1)
     if not result.isError():
-        config['overspeed_time_s'] = result.registers[0]
+        config["overspeed_time_s"] = result.registers[0]
     else:
-        config['overspeed_time_s'] = None
+        config["overspeed_time_s"] = None
 
     # Damage level (input register 7, percent)
     result = client.read_input_registers(address=7, count=1)
     if not result.isError():
-        config['damage_level_pct'] = result.registers[0]
+        config["damage_level_pct"] = result.registers[0]
     else:
-        config['damage_level_pct'] = None
+        config["damage_level_pct"] = None
 
     # Grid frequency (input register 8, Hz * 100)
     result = client.read_input_registers(address=8, count=1)
     if not result.isError():
-        config['grid_frequency_hz'] = result.registers[0] / 100.0
+        config["grid_frequency_hz"] = result.registers[0] / 100.0
     else:
-        config['grid_frequency_hz'] = None
+        config["grid_frequency_hz"] = None
 
     # Grid voltage (input register 9, pu * 1000)
     result = client.read_input_registers(address=9, count=1)
     if not result.isError():
-        config['grid_voltage_pu'] = result.registers[0] / 1000.0
+        config["grid_voltage_pu"] = result.registers[0] / 1000.0
     else:
-        config['grid_voltage_pu'] = None
+        config["grid_voltage_pu"] = None
 
     # Read discrete inputs (status flags)
     result = client.read_discrete_inputs(address=0, count=6)
     if not result.isError():
-        config['turbine_running'] = result.bits[0]
-        config['governor_online'] = result.bits[1]
-        config['trip_active'] = result.bits[2]
-        config['overspeed_condition'] = result.bits[3]
-        config['underfreq_trip'] = result.bits[4]
-        config['overfreq_trip'] = result.bits[5]
+        config["turbine_running"] = result.bits[0]
+        config["governor_online"] = result.bits[1]
+        config["trip_active"] = result.bits[2]
+        config["overspeed_condition"] = result.bits[3]
+        config["underfreq_trip"] = result.bits[4]
+        config["overfreq_trip"] = result.bits[5]
     else:
-        config['turbine_running'] = None
-        config['governor_online'] = None
-        config['trip_active'] = None
-        config['overspeed_condition'] = None
-        config['underfreq_trip'] = None
-        config['overfreq_trip'] = None
+        config["turbine_running"] = None
+        config["governor_online"] = None
+        config["trip_active"] = None
+        config["overspeed_condition"] = None
+        config["underfreq_trip"] = None
+        config["overfreq_trip"] = None
 
     # Read coils (control flags)
     result = client.read_coils(address=0, count=3)
     if not result.isError():
-        config['governor_enable'] = result.bits[0]
-        config['emergency_trip'] = result.bits[1]
-        config['trip_reset'] = result.bits[2]
+        config["governor_enable"] = result.bits[0]
+        config["emergency_trip"] = result.bits[1]
+        config["trip_reset"] = result.bits[2]
     else:
-        config['governor_enable'] = None
-        config['emergency_trip'] = None
-        config['trip_reset'] = None
+        config["governor_enable"] = None
+        config["emergency_trip"] = None
+        config["trip_reset"] = None
 
     client.close()
 
@@ -148,25 +149,19 @@ def demonstrate_impact():
     # Control system targets
     targets = [
         # Device: hex_turbine_plc, Type: turbine_plc, Description: Hex Steam Turbine Controller (Allen-Bradley ControlLogix 1998)
-        ('127.0.0.1', 10502, 'Hex Steam Turbine PLC'),
-
+        ("127.0.0.1", 10502, "Hex Steam Turbine PLC"),
         # Device: hex_turbine_safety_plc, Type: turbine_safety_plc, Description: Turbine Safety Instrumented System
-        ('127.0.0.1', 10503, 'Hex Turbine Safety PLC'),
-
+        ("127.0.0.1", 10503, "Hex Turbine Safety PLC"),
         # Device: reactor_plc, Type: reactor_plc, Description: Alchemical Reactor Controller (Siemens S7-400 2003)
-        ('127.0.0.1', 10504, 'Alchemical Reactor PLC'),
-
+        ("127.0.0.1", 10504, "Alchemical Reactor PLC"),
         # Device: library_hvac_plc, Type: hvac_plc, Description: Library Environmental Controller (Schneider Modicon 1987 + Gateway)
-        ('127.0.0.1', 10505, 'Library HVAC PLC'),
-
+        ("127.0.0.1", 10505, "Library HVAC PLC"),
         # Device: library_lspace_monitor, Type: specialty_controller, Description: L-Space Dimensional Stability Monitor
-        ('127.0.0.1', 10506, 'Library L-Space Monitor'),
-
+        ("127.0.0.1", 10506, "Library L-Space Monitor"),
         # Device: substation_rtu_1, Type: substation_rtu, Description: Main Substation RTU - Unseen University Campus
-        ('127.0.0.1', 10510, 'Main Substation RTU'),
-
+        ("127.0.0.1", 10510, "Main Substation RTU"),
         # Device: scada_server_primary, Type: scada_server, Description: Primary SCADA Server (Wonderware System Platform)
-        ('127.0.0.1', 10520, 'Primary SCADA Server')
+        ("127.0.0.1", 10520, "Primary SCADA Server"),
     ]
 
     results = {}
@@ -191,14 +186,14 @@ def demonstrate_impact():
             print(f"    Damage Level: {config['damage_level_pct']}%")
             print(f"    Grid Frequency: {config['grid_frequency_hz']} Hz")
             print(f"    Grid Voltage: {config['grid_voltage_pu']} pu")
-            print(f"    Status:")
+            print("    Status:")
             print(f"      - Turbine Running: {config['turbine_running']}")
             print(f"      - Governor Online: {config['governor_online']}")
             print(f"      - Trip Active: {config['trip_active']}")
             print(f"      - Overspeed Condition: {config['overspeed_condition']}")
             print(f"      - Under-frequency Trip: {config['underfreq_trip']}")
             print(f"      - Over-frequency Trip: {config['overfreq_trip']}")
-            print(f"    Controls:")
+            print("    Controls:")
             print(f"      - Governor Enable: {config['governor_enable']}")
             print(f"      - Emergency Trip: {config['emergency_trip']}")
             print(f"      - Trip Reset: {config['trip_reset']}")
@@ -212,40 +207,43 @@ def demonstrate_impact():
 
     # Save results with timestamp
     output = {
-        'timestamp': datetime.now().isoformat(),
-        'demonstration': 'read_only_turbine_access',
-        'systems_scanned': len(targets),
-        'successful_reads': successful_reads,
-        'systems': results,
-        'impact_assessment': {
-            'data_exposure': [
-                'Operational setpoints and safety thresholds exposed',
-                'Real-time operational state visible to unauthorized parties',
-                'Safety margins and alarm thresholds revealed',
-                'System architecture and register mapping discovered'
+        "timestamp": datetime.now().isoformat(),
+        "demonstration": "read_only_turbine_access",
+        "systems_scanned": len(targets),
+        "successful_reads": successful_reads,
+        "systems": results,
+        "impact_assessment": {
+            "data_exposure": [
+                "Operational setpoints and safety thresholds exposed",
+                "Real-time operational state visible to unauthorized parties",
+                "Safety margins and alarm thresholds revealed",
+                "System architecture and register mapping discovered",
             ],
-            'attack_enablement': [
-                'Attacker could monitor operational states in real-time',
-                'Configuration data reveals safety margins and operational limits',
-                'Historical data collection could reveal production schedules',
-                'Information enables planning of precise manipulation attacks',
-                'Baseline establishment allows detection of anomalies attackers create'
+            "attack_enablement": [
+                "Attacker could monitor operational states in real-time",
+                "Configuration data reveals safety margins and operational limits",
+                "Historical data collection could reveal production schedules",
+                "Information enables planning of precise manipulation attacks",
+                "Baseline establishment allows detection of anomalies attackers create",
             ],
-            'business_impact': [
-                'Intellectual property theft (operational parameters)',
-                'Competitive intelligence (production efficiency)',
-                'Safety information leakage enables targeted attacks',
-                'Regulatory compliance violations (unauthorized access)'
-            ]
-        }
+            "business_impact": [
+                "Intellectual property theft (operational parameters)",
+                "Competitive intelligence (production efficiency)",
+                "Safety information leakage enables targeted attacks",
+                "Regulatory compliance violations (unauthorized access)",
+            ],
+        },
     }
 
     # Ensure reports directory exists
     reports_dir = Path(__file__).parent.parent.parent / "reports"
     reports_dir.mkdir(exist_ok=True)
 
-    filename = reports_dir / f'poc_turbine_read_{datetime.now().strftime("%Y%m%d_%H%M%S")}.json'
-    with open(filename, 'w') as f:
+    filename = (
+        reports_dir
+        / f'poc_turbine_read_{datetime.now().strftime("%Y%m%d_%H%M%S")}.json'
+    )
+    with open(filename, "w") as f:
         json.dump(output, f, indent=2)
 
     print("[*] " + "=" * 66)
@@ -265,7 +263,7 @@ def demonstrate_impact():
     print("    • Steal proprietary operational parameters")
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     try:
         demonstrate_impact()
     except KeyboardInterrupt:

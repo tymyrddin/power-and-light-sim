@@ -3,6 +3,7 @@
 Query PLC - Siemens S7 Protocol Reconnaissance
 Tests connectivity and reads data from S7 PLC
 """
+
 import snap7
 
 # Simulator: Reactor PLC on localhost:102, rack 0, slot 2
@@ -10,7 +11,7 @@ plc = snap7.client.Client()
 print("[*] Connecting to S7 PLC at 127.0.0.1:102...")
 
 try:
-    plc.connect('127.0.0.1', 0, 2)  # IP, rack, slot (port 102 is default)
+    plc.connect("127.0.0.1", 0, 2)  # IP, rack, slot (port 102 is default)
     print("[+] Connected!")
 
     # Read CPU status

@@ -147,13 +147,17 @@ class NetworkSimulator:
 
                         # Validate device exists in system state if available
                         if self.system_state:
-                            device_state = await self.system_state.get_device(device_name)
+                            device_state = await self.system_state.get_device(
+                                device_name
+                            )
                             if not device_state:
                                 self.logger.warning(
                                     f"Network config references unregistered device: {device_name}"
                                 )
 
-                        self.device_networks.setdefault(device_name, set()).add(network_name)
+                        self.device_networks.setdefault(device_name, set()).add(
+                            network_name
+                        )
 
                         if device_ip:
                             self.logger.debug(

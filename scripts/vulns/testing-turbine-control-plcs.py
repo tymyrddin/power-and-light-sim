@@ -14,7 +14,7 @@ Requires: python-snap7
 import snap7
 
 # UU P&L simulator reactor PLC (S7 protocol)
-PLC_IP = '127.0.0.1'
+PLC_IP = "127.0.0.1"
 RACK = 0
 SLOT = 2  # Slot 2 for S7-400 CPUs (per protocols.yml)
 
@@ -48,7 +48,9 @@ try:
 except PermissionError as e:
     print(f"\n[!] Permission denied: {e}")
     print("[*] S7 protocol requires root access for port 102")
-    print("[*] Run with: sudo .venv/bin/python scripts/vulns/testing-turbine-control-plcs.py")
+    print(
+        "[*] Run with: sudo .venv/bin/python scripts/vulns/testing-turbine-control-plcs.py"
+    )
 
 except Exception as e:
     print(f"\n[!] Error: {e}")

@@ -3,7 +3,9 @@
 Connect Remote Substation - OPC UA Reconnaissance
 Tests connectivity to OPC UA servers and browses available objects
 """
+
 import asyncio
+
 from asyncua import Client
 
 

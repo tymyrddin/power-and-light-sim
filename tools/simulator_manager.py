@@ -332,11 +332,17 @@ class SimulatorManager:
             # Look up device class from registry
             device_class = DEVICE_REGISTRY.get(device_type)
             if not device_class:
-                logger.warning(f"Unknown device type '{device_type}' for {device_name}, skipping")
+                logger.warning(
+                    f"Unknown device type '{device_type}' for {device_name}, skipping"
+                )
                 continue
 
             # Get physics engine if specified in config
-            physics_engine = self._get_physics_engine(physics_engine_name) if physics_engine_name else None
+            physics_engine = (
+                self._get_physics_engine(physics_engine_name)
+                if physics_engine_name
+                else None
+            )
 
             try:
                 # Create device instance
@@ -384,7 +390,9 @@ class SimulatorManager:
                         device_name=device_name,
                         device_id=device_id,
                         data_store=self.data_store,
-                        scada_server=device_cfg.get("scada_server", "scada_server_primary"),
+                        scada_server=device_cfg.get(
+                            "scada_server", "scada_server_primary"
+                        ),
                         retention_days=device_cfg.get("retention_days", 3650),
                         description=device_cfg.get("description", ""),
                         scan_interval=scan_interval,
@@ -442,10 +450,15 @@ class SimulatorManager:
 
                 # Store reference
                 self.device_instances[device_name] = device
-                logger.info(f"Created and started device: {device_name} ({device_type})")
+                logger.info(
+                    f"Created and started device: {device_name} ({device_type})"
+                )
 
             except Exception as e:
-                logger.error(f"Failed to create device {device_name} ({device_type}): {e}", exc_info=True)
+                logger.error(
+                    f"Failed to create device {device_name} ({device_type}): {e}",
+                    exc_info=True,
+                )
 
     async def _configure_scada_servers(self, config: dict[str, Any]) -> None:
         """Configure SCADA servers with poll targets and tags from config.
@@ -463,7 +476,9 @@ class SimulatorManager:
             # Get SCADA server device instance
             scada_device = self.device_instances.get(scada_name)
             if not scada_device:
-                logger.warning(f"SCADA server '{scada_name}' not found in device instances, skipping")
+                logger.warning(
+                    f"SCADA server '{scada_name}' not found in device instances, skipping"
+                )
                 continue
 
             # Configure poll targets
@@ -536,7 +551,9 @@ class SimulatorManager:
             # Get HMI workstation device instance
             hmi_device = self.device_instances.get(hmi_name)
             if not hmi_device:
-                logger.warning(f"HMI workstation '{hmi_name}' not found in device instances, skipping")
+                logger.warning(
+                    f"HMI workstation '{hmi_name}' not found in device instances, skipping"
+                )
                 continue
 
             # Update SCADA server connection
@@ -555,7 +572,9 @@ class SimulatorManager:
                     protocol="internal",
                     poll_rate_s=scan_interval,
                 )
-                logger.debug(f"HMI '{hmi_name}' connected to SCADA server '{scada_server}'")
+                logger.debug(
+                    f"HMI '{hmi_name}' connected to SCADA server '{scada_server}'"
+                )
 
             # Update OS and software info if provided
             if "os_version" in hmi_config:
@@ -571,7 +590,9 @@ class SimulatorManager:
                 controls = screen_cfg.get("controls", [])
 
                 if not screen_name:
-                    logger.warning(f"Invalid screen config for {hmi_name}: {screen_cfg}")
+                    logger.warning(
+                        f"Invalid screen config for {hmi_name}: {screen_cfg}"
+                    )
                     continue
 
                 hmi_device.add_screen(
@@ -617,9 +638,19 @@ class SimulatorManager:
 
         # Fallback to type-based lookup
         engine_map = {
-            "turbine_physics": lambda: next(iter(self.turbine_physics.values())) if self.turbine_physics else None,
-            "hvac_physics": lambda: next(iter(self.hvac_physics.values())) if self.hvac_physics else None,
-            "reactor_physics": lambda: next(iter(self.reactor_physics.values())) if self.reactor_physics else None,
+            "turbine_physics": lambda: (
+                next(iter(self.turbine_physics.values()))
+                if self.turbine_physics
+                else None
+            ),
+            "hvac_physics": lambda: (
+                next(iter(self.hvac_physics.values())) if self.hvac_physics else None
+            ),
+            "reactor_physics": lambda: (
+                next(iter(self.reactor_physics.values()))
+                if self.reactor_physics
+                else None
+            ),
             "grid_physics": lambda: self.grid_physics,
         }
 
@@ -627,7 +658,6 @@ class SimulatorManager:
         if callable(engine_getter):
             return engine_getter()
         return engine_getter
-
 
     async def _expose_services(self, config: dict[str, Any]) -> None:
         """Start protocol servers for devices based on config.
@@ -642,8 +672,11 @@ class SimulatorManager:
             config: Loaded configuration dictionary
         """
         from components.network.servers import (
-            ModbusTCPServer, S7TCPServer, DNP3TCPServer,
-            IEC104TCPServer, OPCUAServer
+            DNP3TCPServer,
+            IEC104TCPServer,
+            ModbusTCPServer,
+            OPCUAServer,
+            S7TCPServer,
         )
 
         devices = config.get("devices", [])
@@ -661,7 +694,15 @@ class SimulatorManager:
 
             for proto_name, proto_cfg in protocols_cfg.items():
                 # Skip non-network protocols (serial, etc.)
-                if proto_name not in ["modbus", "s7", "dnp3", "opcua", "iec61850", "ethernet_ip", "iec104"]:
+                if proto_name not in [
+                    "modbus",
+                    "s7",
+                    "dnp3",
+                    "opcua",
+                    "iec61850",
+                    "ethernet_ip",
+                    "iec104",
+                ]:
                     continue
 
                 port = proto_cfg.get("port")
@@ -673,7 +714,9 @@ class SimulatorManager:
                 try:
                     port = int(port) if isinstance(port, str) else port
                 except ValueError:
-                    logger.warning(f"Invalid port '{port}' for {device_name}:{proto_name}, skipping")
+                    logger.warning(
+                        f"Invalid port '{port}' for {device_name}:{proto_name}, skipping"
+                    )
                     continue
 
                 # Expose service in network simulator (topology)
@@ -688,7 +731,9 @@ class SimulatorManager:
                         # Get device identity from config for realistic fingerprinting
                         device_type = device_cfg.get("type", "")
                         device_identities = config.get("device_identities", {})
-                        device_identity = device_identities.get(device_type, device_identities.get("default", {}))
+                        device_identity = device_identities.get(
+                            device_type, device_identities.get("default", {})
+                        )
 
                         # Create Modbus TCP server with pymodbus simulator
                         server = ModbusTCPServer(
@@ -706,7 +751,9 @@ class SimulatorManager:
                         modbus_servers.append((device_name, proto_name, server, port))
 
                     except Exception as e:
-                        logger.error(f"Failed to create {proto_name} server for {device_name}: {e}")
+                        logger.error(
+                            f"Failed to create {proto_name} server for {device_name}: {e}"
+                        )
 
                 elif proto_name == "s7":
                     try:
@@ -722,22 +769,28 @@ class SimulatorManager:
                             slot=slot,
                             db1_size=256,  # Input registers
                             db2_size=256,  # Holding registers
-                            db3_size=64,   # Discrete inputs
-                            db4_size=64,   # Coils
+                            db3_size=64,  # Discrete inputs
+                            db4_size=64,  # Coils
                         )
 
                         # Collect for parallel start
                         other_server_tasks.append(server.start())
-                        other_server_metadata.append((device_name, proto_name, server, port))
+                        other_server_metadata.append(
+                            (device_name, proto_name, server, port)
+                        )
 
                     except Exception as e:
-                        logger.error(f"Failed to create {proto_name} server for {device_name}: {e}")
+                        logger.error(
+                            f"Failed to create {proto_name} server for {device_name}: {e}"
+                        )
 
                 elif proto_name == "dnp3":
                     try:
                         host = proto_cfg.get("host", "0.0.0.0")
                         master_address = proto_cfg.get("master_address", 1)
-                        outstation_address = proto_cfg.get("outstation_address", device_id)
+                        outstation_address = proto_cfg.get(
+                            "outstation_address", device_id
+                        )
 
                         # Create DNP3 TCP server (outstation)
                         server = DNP3TCPServer(
@@ -752,10 +805,14 @@ class SimulatorManager:
 
                         # Collect for parallel start
                         other_server_tasks.append(server.start())
-                        other_server_metadata.append((device_name, proto_name, server, port))
+                        other_server_metadata.append(
+                            (device_name, proto_name, server, port)
+                        )
 
                     except Exception as e:
-                        logger.error(f"Failed to create {proto_name} server for {device_name}: {e}")
+                        logger.error(
+                            f"Failed to create {proto_name} server for {device_name}: {e}"
+                        )
 
                 elif proto_name == "iec104":
                     try:
@@ -771,14 +828,21 @@ class SimulatorManager:
 
                         # Collect for parallel start
                         other_server_tasks.append(server.start())
-                        other_server_metadata.append((device_name, proto_name, server, port))
+                        other_server_metadata.append(
+                            (device_name, proto_name, server, port)
+                        )
 
                     except Exception as e:
-                        logger.error(f"Failed to create {proto_name} server for {device_name}: {e}")
+                        logger.error(
+                            f"Failed to create {proto_name} server for {device_name}: {e}"
+                        )
 
                 elif proto_name == "opcua":
                     try:
-                        endpoint_url = proto_cfg.get("endpoint", f"opc.tcp://{proto_cfg.get('host', '0.0.0.0')}:{port}/")
+                        endpoint_url = proto_cfg.get(
+                            "endpoint",
+                            f"opc.tcp://{proto_cfg.get('host', '0.0.0.0')}:{port}/",
+                        )
 
                         # Security configuration (optional)
                         security_policy = proto_cfg.get("security_policy", "None")
@@ -797,45 +861,63 @@ class SimulatorManager:
 
                         # Collect for parallel start
                         other_server_tasks.append(server.start())
-                        other_server_metadata.append((device_name, proto_name, server, port))
+                        other_server_metadata.append(
+                            (device_name, proto_name, server, port)
+                        )
 
                     except Exception as e:
-                        logger.error(f"Failed to create {proto_name} server for {device_name}: {e}")
+                        logger.error(
+                            f"Failed to create {proto_name} server for {device_name}: {e}"
+                        )
 
                 else:
                     # Protocol not yet implemented
-                    logger.info(f"Exposed {proto_name} service (server not implemented): {device_name}:{port}")
+                    logger.info(
+                        f"Exposed {proto_name} service (server not implemented): {device_name}:{port}"
+                    )
 
         # Start Modbus servers SEQUENTIALLY (pymodbus class attribute workaround)
         if modbus_servers:
-            logger.info(f"Starting {len(modbus_servers)} Modbus servers sequentially...")
+            logger.info(
+                f"Starting {len(modbus_servers)} Modbus servers sequentially..."
+            )
             for device_name, proto_name, server, port in modbus_servers:
                 try:
                     result = await server.start()
                     if result:
                         server_key = f"{device_name}:{proto_name}"
                         self.protocol_servers[server_key] = server
-                        logger.info(f"Started {proto_name} server: {device_name}:{port}")
+                        logger.info(
+                            f"Started {proto_name} server: {device_name}:{port}"
+                        )
                     else:
                         logger.warning(
                             f"{proto_name} server for {device_name}:{port} failed to start"
                         )
                 except Exception as e:
-                    logger.error(f"Failed to start {proto_name} server for {device_name}:{port}: {e}")
+                    logger.error(
+                        f"Failed to start {proto_name} server for {device_name}:{port}: {e}"
+                    )
 
         # Start other servers in PARALLEL for fast initialization
         if other_server_tasks:
-            logger.info(f"Starting {len(other_server_tasks)} other protocol servers in parallel...")
+            logger.info(
+                f"Starting {len(other_server_tasks)} other protocol servers in parallel..."
+            )
 
             # Run all server.start() calls concurrently
             results = await asyncio.gather(*other_server_tasks, return_exceptions=True)
 
             # Process results and store successful servers
-            for i, (device_name, proto_name, server, port) in enumerate(other_server_metadata):
+            for i, (device_name, proto_name, server, port) in enumerate(
+                other_server_metadata
+            ):
                 result = results[i]
 
                 if isinstance(result, Exception):
-                    logger.error(f"Failed to start {proto_name} server for {device_name}:{port}: {result}")
+                    logger.error(
+                        f"Failed to start {proto_name} server for {device_name}:{port}: {result}"
+                    )
                 elif result:  # Server started successfully
                     server_key = f"{device_name}:{proto_name}"
                     self.protocol_servers[server_key] = server
@@ -1158,33 +1240,51 @@ class SimulatorManager:
                             discrete_inputs[addr] = value
 
                     if input_registers:
-                        await server.sync_from_device(input_registers, "input_registers")
+                        await server.sync_from_device(
+                            input_registers, "input_registers"
+                        )
                     if discrete_inputs:
-                        await server.sync_from_device(discrete_inputs, "discrete_inputs")
+                        await server.sync_from_device(
+                            discrete_inputs, "discrete_inputs"
+                        )
 
                     # Server → Device (commands)
                     # Find coils range
-                    coil_addrs = [int(k.split("[")[1].split("]")[0]) for k in memory_map.keys() if k.startswith("coils[")]
+                    coil_addrs = [
+                        int(k.split("[")[1].split("]")[0])
+                        for k in memory_map.keys()
+                        if k.startswith("coils[")
+                    ]
                     if coil_addrs:
                         min_addr = min(coil_addrs)
                         max_addr = max(coil_addrs)
-                        coils_from_server = await server.sync_to_device(min_addr, max_addr - min_addr + 1, "coils")
+                        coils_from_server = await server.sync_to_device(
+                            min_addr, max_addr - min_addr + 1, "coils"
+                        )
                         for addr, value in coils_from_server.items():
                             device.memory_map[f"coils[{addr}]"] = value
 
                     # Find holding registers range
-                    hr_addrs = [int(k.split("[")[1].split("]")[0]) for k in memory_map.keys() if k.startswith("holding_registers[")]
+                    hr_addrs = [
+                        int(k.split("[")[1].split("]")[0])
+                        for k in memory_map.keys()
+                        if k.startswith("holding_registers[")
+                    ]
                     if hr_addrs:
                         min_addr = min(hr_addrs)
                         max_addr = max(hr_addrs)
-                        regs_from_server = await server.sync_to_device(min_addr, max_addr - min_addr + 1, "holding_registers")
+                        regs_from_server = await server.sync_to_device(
+                            min_addr, max_addr - min_addr + 1, "holding_registers"
+                        )
                         for addr, value in regs_from_server.items():
                             key = f"holding_registers[{addr}]"
                             if key in device.memory_map:
                                 device.memory_map[key] = value
 
                 except Exception as e:
-                    logger.error(f"Failed to sync {device_name} with protocol server: {e}")
+                    logger.error(
+                        f"Failed to sync {device_name} with protocol server: {e}"
+                    )
 
             # Sync with DNP3 server (different data model)
             if dnp3_server:
@@ -1209,9 +1309,13 @@ class SimulatorManager:
 
                     # Sync to DNP3 server
                     if analog_inputs:
-                        await dnp3_server.sync_from_device(analog_inputs, "analog_inputs")
+                        await dnp3_server.sync_from_device(
+                            analog_inputs, "analog_inputs"
+                        )
                     if binary_inputs:
-                        await dnp3_server.sync_from_device(binary_inputs, "binary_inputs")
+                        await dnp3_server.sync_from_device(
+                            binary_inputs, "binary_inputs"
+                        )
 
                     # Server → Device (commands)
                     # DNP3 commands (Binary/Analog Outputs) would be synced here
