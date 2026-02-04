@@ -21,12 +21,12 @@ Test Coverage:
 import asyncio
 
 import pytest
-from components.devices.control_zone.legacy_workstation import (
+
+from components.devices.enterprise_zone.legacy_workstation import (
     CSVLogEntry,
     DiscoveredArtifact,
     LegacyWorkstation,
 )
-
 from components.state.data_store import DataStore
 from components.state.system_state import SystemState
 from components.time.simulation_time import SimulationTime
@@ -35,24 +35,49 @@ from components.time.simulation_time import SimulationTime
 # ================================================================
 # MOCK TURBINE PHYSICS
 # ================================================================
+class MockTurbineState:
+    """Mock TurbineState object with attributes matching real TurbineState."""
+
+    def __init__(
+        self,
+        shaft_speed_rpm: float = 3600.0,
+        power_output_mw: float = 100.0,
+        bearing_temperature_c: float = 72.0,
+        vibration_mils: float = 31.5,  # ~0.8 mm/s converted to mils
+        steam_pressure_psi: float = 1200.0,
+        steam_temperature_c: float = 300.0,
+        cumulative_overspeed_time: float = 0.0,
+        damage_level: float = 0.0,
+    ):
+        self.shaft_speed_rpm = shaft_speed_rpm
+        self.power_output_mw = power_output_mw
+        self.bearing_temperature_c = bearing_temperature_c
+        self.vibration_mils = vibration_mils
+        self.steam_pressure_psi = steam_pressure_psi
+        self.steam_temperature_c = steam_temperature_c
+        self.cumulative_overspeed_time = cumulative_overspeed_time
+        self.damage_level = damage_level
+
+
 class MockTurbinePhysics:
     """Mock TurbinePhysics for testing serial data collection."""
 
     def __init__(self):
-        self.speed_rpm = 3600.0
-        self.power_output_mw = 100.0
-        self.bearing_temp_c = 72.0
-        self.vibration_mm_s = 0.8
-        self.governor_position = 0.75
+        self.state = MockTurbineState()
 
-    def get_state(self) -> dict:
-        return {
-            "speed_rpm": self.speed_rpm,
-            "power_output_mw": self.power_output_mw,
-            "bearing_temp_c": self.bearing_temp_c,
-            "vibration_mm_s": self.vibration_mm_s,
-            "governor_position": self.governor_position,
-        }
+    def get_state(self) -> MockTurbineState:
+        """Return TurbineState-like object, not dict."""
+        return self.state
+
+    @property
+    def speed_rpm(self) -> float:
+        """Compatibility property for tests."""
+        return self.state.shaft_speed_rpm
+
+    @property
+    def power_output_mw(self) -> float:
+        """Compatibility property for tests."""
+        return self.state.power_output_mw
 
 
 # ================================================================

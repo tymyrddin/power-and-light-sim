@@ -176,7 +176,7 @@ class TestTurbinePhysicsInitialization:
         assert state.shaft_speed_rpm == 0.0
         assert state.power_output_mw == 0.0
         assert state.steam_pressure_psi == 0.0
-        assert state.bearing_temperature_f == 70.0  # Ambient
+        assert state.bearing_temperature_c == 21.0  # Ambient (21°C = 70°F)
         assert state.vibration_mils == 0.0
         assert state.cumulative_overspeed_time == 0.0
         assert state.damage_level == 0.0
@@ -471,16 +471,16 @@ class TestTurbinePhysicsEmergencyShutdown:
         """
         turbine, data_store = turbine_with_device
 
-        # Run turbine to build up temperature
+        # Run turbine at rated speed first (40s to reach 3600 RPM + warm up)
         await data_store.write_memory("turbine_plc_1", "holding_registers[10]", 3600)
         await data_store.write_memory("turbine_plc_1", "coils[10]", True)
 
-        for _ in range(100):
+        for _ in range(400):  # 40 seconds to reach speed and heat up
             await turbine.read_control_inputs()
             turbine.update(dt=0.1)
 
-        hot_temp = turbine.state.bearing_temperature_f
-        assert hot_temp > 100  # Should be well above ambient
+        hot_temp = turbine.state.bearing_temperature_c
+        assert hot_temp > 75  # Should be hot at rated speed (3600 RPM)
 
         # Emergency trip
         await data_store.write_memory("turbine_plc_1", "coils[11]", True)
@@ -490,7 +490,7 @@ class TestTurbinePhysicsEmergencyShutdown:
             turbine.update(dt=0.1)
 
         # Temperature should be decreasing
-        assert turbine.state.bearing_temperature_f < hot_temp
+        assert turbine.state.bearing_temperature_c < hot_temp
 
 
 # ================================================================
@@ -582,7 +582,7 @@ class TestTurbinePhysicsTemperatures:
         """
         turbine, data_store = turbine_with_device
 
-        initial_temp = turbine.state.bearing_temperature_f
+        initial_temp = turbine.state.bearing_temperature_c
 
         # Spin up turbine
         await data_store.write_memory("turbine_plc_1", "holding_registers[10]", 3600)
@@ -593,7 +593,7 @@ class TestTurbinePhysicsTemperatures:
             turbine.update(dt=0.1)
 
         # Temperature should have increased
-        assert turbine.state.bearing_temperature_f > initial_temp
+        assert turbine.state.bearing_temperature_c > initial_temp
 
     @pytest.mark.asyncio
     async def test_steam_temperature_correlates_with_load(self, turbine_with_device):
@@ -607,14 +607,14 @@ class TestTurbinePhysicsTemperatures:
         turbine.state.shaft_speed_rpm = 500.0
         await turbine.read_control_inputs()
         turbine.update(dt=1.0)
-        low_speed_temp = turbine.state.steam_temperature_f
+        low_speed_temp = turbine.state.steam_temperature_c
 
         # High speed
         turbine.state.shaft_speed_rpm = 3600.0
         for _ in range(50):
             await turbine.read_control_inputs()
             turbine.update(dt=0.1)
-        high_speed_temp = turbine.state.steam_temperature_f
+        high_speed_temp = turbine.state.steam_temperature_c
 
         # High speed should have higher steam temperature
         assert high_speed_temp > low_speed_temp
@@ -632,13 +632,13 @@ class TestTurbinePhysicsTemperatures:
 
         await turbine.read_control_inputs()
         turbine.update(dt=0.1)
-        temp_after_short = turbine.state.bearing_temperature_f
+        temp_after_short = turbine.state.bearing_temperature_c
 
         # Continue running
         for _ in range(50):
             await turbine.read_control_inputs()
             turbine.update(dt=0.1)
-        temp_after_long = turbine.state.bearing_temperature_f
+        temp_after_long = turbine.state.bearing_temperature_c
 
         # Temperature should still be rising (not instant)
         assert temp_after_long > temp_after_short
@@ -1271,7 +1271,7 @@ class TestTurbinePhysicsIntegration:
         # Run turbine
         turbine.state.shaft_speed_rpm = 3600.0
         turbine.state.power_output_mw = 100.0
-        turbine.state.bearing_temperature_f = 150.0
+        turbine.state.bearing_temperature_c = 150.0
 
         await turbine.write_telemetry()
 

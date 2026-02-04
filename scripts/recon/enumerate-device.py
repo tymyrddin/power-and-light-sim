@@ -20,7 +20,7 @@ try:
         # Get_Attribute_All for Identity Object (Class 0x01, Instance 1)
         ops = client.parse_operations("get-attribute-all@1/1")
 
-        for index, descr, op in ops:
+        for _index, _descr, op in ops:
             conn.write(op)
             reply = conn.read()
             print(f"[+] Identity object: {reply}")

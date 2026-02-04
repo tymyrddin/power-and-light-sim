@@ -190,7 +190,7 @@ class TestAESEncryption:
 
         ciphertext, nonce, tag = AESEncryption.encrypt(plaintext, key1)
 
-        with pytest.raises(Exception):  # InvalidTag or similar
+        with pytest.raises(ValueError):  # Authentication fails with wrong key
             AESEncryption.decrypt(ciphertext, key2, nonce, tag)
 
     def test_decrypt_with_modified_ciphertext_fails(self):
@@ -206,7 +206,7 @@ class TestAESEncryption:
         # Modify ciphertext
         modified = bytes([ciphertext[0] ^ 0xFF]) + ciphertext[1:]
 
-        with pytest.raises(Exception):
+        with pytest.raises(ValueError):  # Authentication fails with modified ciphertext
             AESEncryption.decrypt(modified, key, nonce, tag)
 
     def test_encrypt_string_roundtrip(self):

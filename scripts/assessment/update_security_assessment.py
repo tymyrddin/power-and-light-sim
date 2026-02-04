@@ -9,7 +9,7 @@ import hmac
 import json
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, Tuple
+from typing import Any
 
 # ============================================================================
 # CONFIGURATION
@@ -419,7 +419,7 @@ def assess_update_security() -> dict[str, Any]:
     print("=" * 70)
 
     print("\n[*] Vendor Update Security Levels:")
-    for vendor, details in CONFIG["vendors"].items():
+    for _vendor, details in CONFIG["vendors"].items():
         print(f"\n    {details['name']}:")
         print(f"      Method: {details['update_method']}")
         print(f"      Security: {details['security_level']}")

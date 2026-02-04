@@ -1,5 +1,9 @@
 # UU Power & Light ICS Simulator
 
+![Version](https://img.shields.io/badge/status-active%20development-orange)
+![Python](https://img.shields.io/badge/python-3.12+-blue)
+[![codecov](https://codecov.io/github/ninabarzh/power-and-light-sim/graph/badge.svg?token=O4L0ABOK5W)](https://codecov.io/github/ninabarzh/power-and-light-sim)
+
 *"Ankh-Morpork's quietly indispensable utility, operating from repurposed university basements and one building that 
 insists it was never meant to be a building at all."*
 

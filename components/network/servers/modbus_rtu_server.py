@@ -180,7 +180,7 @@ class ModbusRTUServer:
                 else:
                     raise RuntimeError(
                         f"Failed to start Modbus RTU server on {self.port} after {max_retries} attempts: {e}"
-                    )
+                    ) from e
 
         raise RuntimeError(
             f"Failed to start Modbus RTU server on {self.port} - client connection failed"

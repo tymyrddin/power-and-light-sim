@@ -212,7 +212,7 @@ class Historian(BaseDevice):
 
     def get_all_tags(self) -> list[str]:
         """Get list of all tags with historical data."""
-        return list(set(dp.tag_name for dp in self.historical_data))
+        return list({dp.tag_name for dp in self.historical_data})
 
     def get_database_credentials(self) -> dict[str, str]:
         """

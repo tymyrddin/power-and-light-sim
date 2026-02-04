@@ -540,7 +540,7 @@ class TestAlarmFloodDetection:
 
         WHY: Excessive alarms should trigger.
         """
-        for i in range(5):
+        for _ in range(5):
             result = await detector.check_alarm_flood("plc_1")
 
         assert result is not None
@@ -758,7 +758,7 @@ class TestBaselineExport:
         await detector.add_baseline("plc_2", "temp", learning_window=5)
 
         # Only train plc_2
-        for i in range(10):
+        for _ in range(10):
             await detector.check_value("plc_2", "temp", 100.0)
 
         exported = await detector.export_baselines()
@@ -775,7 +775,7 @@ class TestBaselineExport:
         data_store, _ = mock_dependencies
 
         await detector.add_baseline("plc_1", "temp", learning_window=5)
-        for i in range(10):
+        for _ in range(10):
             await detector.check_value("plc_1", "temp", 100.0)
 
         await detector.store_baselines_in_datastore()

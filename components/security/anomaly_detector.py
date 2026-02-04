@@ -623,11 +623,6 @@ class AnomalyDetector:
         if not device_state:
             return None
 
-        current_time = self.sim_time.now()
-        last_update_time = (
-            device_state.last_update.timestamp() if device_state.last_update else 0
-        )
-
         # Calculate actual interval
         # Note: In real system, would track multiple intervals
         # This is simplified for simulation

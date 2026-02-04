@@ -422,12 +422,9 @@ class LegacyWorkstation(BaseDevice):
 
         The machine has been running since 2019 (last power outage).
         """
-        # Last reboot was 2019-08-15, calculate days since
-        last_reboot_timestamp = 1565827200.0  # 2019-08-15 00:00:00 UTC
-
-        # In simulation, we pretend current time is "now" relative to install
+        # Last reboot was 2019-08-15 (1565827200.0 Unix timestamp)
         # For fun, let's say it's been running ~1600 days since last reboot
-        return 1642  # About 4.5 years since last power outage
+        return 1642  # About 4.5 years since last power outage (2019-08-15 to now)
 
     def get_total_uptime_days(self) -> int:
         """

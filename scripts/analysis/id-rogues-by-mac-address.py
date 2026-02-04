@@ -34,7 +34,6 @@ def analyse_access_points(survey_csv):
 
     rogues = []
     suspicious = []
-    authorised = []
 
     # Parse airodump-ng CSV output
     with open(survey_csv) as f:

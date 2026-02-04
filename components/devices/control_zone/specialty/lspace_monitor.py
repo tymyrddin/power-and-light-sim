@@ -191,7 +191,6 @@ class LSpaceMonitor(BasePLC):
             self.memory_map["discrete_inputs[4]"] = False  # Clear narrative cascade
 
         # Alarm conditions
-        field_strength = self.memory_map.get("input_registers[0]", 45)
         octarine = self.memory_map.get("input_registers[3]", 12)
         self.memory_map["discrete_inputs[3]"] = octarine > 30  # Octarine alarm
         self.memory_map["discrete_inputs[4]"] = (

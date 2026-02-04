@@ -131,7 +131,7 @@ class BaseSupervisoryDevice(BaseDevice):
         current_time = self.sim_time.now()
 
         # Poll devices that are due
-        for target_name, target in self.poll_targets.items():
+        for _target_name, target in self.poll_targets.items():
             if not target.enabled:
                 continue
 

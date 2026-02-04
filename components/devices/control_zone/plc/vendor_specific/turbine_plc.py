@@ -300,7 +300,6 @@ class TurbinePLC(BasePLC):
 
         # Read control coils
         governor_enable = self.memory_map.get("coils[0]", False)
-        emergency_trip = self.memory_map.get("coils[1]", False)
         trip_reset = self.memory_map.get("coils[2]", False)
 
         # Detect trip reset edge (rising edge)

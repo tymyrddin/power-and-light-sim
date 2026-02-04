@@ -339,7 +339,7 @@ class TurbinePhysics:
             )
 
         # Temperatures decay towards ambient
-        ambient_temp = 70.0
+        ambient_temp = 21.0  # Celsius (70°F = 21°C)
         thermal_time_constant = 0.1  # Faster cooling during shutdown
 
         self.state.bearing_temperature_c += (
@@ -364,20 +364,25 @@ class TurbinePhysics:
         speed_factor = self.state.shaft_speed_rpm / self.params.rated_speed_rpm
         vibration_factor = self.state.vibration_mils / self.params.vibration_normal_mils
 
-        # Target temperature = ambient + speed heating + vibration heating
-        target_bearing_temp = 70.0 + (speed_factor * 80.0) + (vibration_factor * 20.0)
+        # Target temperature = ambient + speed heating + vibration heating (Celsius)
+        # Ambient: 21°C, Speed heating: up to 115°C, Vibration heating: up to 30°C
+        # Max: ~166°C at full speed/vibration (realistic for industrial turbines)
+        # Normal operating: ~136°C at rated speed (well above 93°C trip point)
+        target_bearing_temp = 21.0 + (speed_factor * 58.0) + (vibration_factor * 15.0)
 
-        # First-order thermal lag
-        thermal_time_constant = 0.1
+        # First-order thermal lag (faster for simulation purposes)
+        thermal_time_constant = 0.15  # Faster heating response
         temp_error = target_bearing_temp - self.state.bearing_temperature_c
         self.state.bearing_temperature_c += temp_error * thermal_time_constant * dt
 
-        # Steam temperature correlates with load
+        # Steam temperature correlates with load (Celsius)
         if self.state.shaft_speed_rpm > 100:
-            target_steam_temp = 600.0 + (speed_factor * 300.0)
+            target_steam_temp = 315.0 + (
+                speed_factor * 167.0
+            )  # 315-482°C range (600-900°F)
             target_steam_pressure = 1000.0 + (speed_factor * 800.0)
         else:
-            target_steam_temp = 70.0
+            target_steam_temp = 21.0  # Celsius ambient
             target_steam_pressure = 0.0
 
         # Steam has slower thermal response

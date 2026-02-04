@@ -8,7 +8,7 @@ import json
 import re
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 # ============================================================================
 # CONFIGURATION
@@ -257,7 +257,7 @@ def check_hard_coded_values(content: str) -> list[Finding]:
         (r"HighTemperature.*?(\d+)", "Temperature limit"),
     ]
 
-    for pattern, description in safety_patterns:
+    for pattern, _description in safety_patterns:
         matches = re.finditer(pattern, content, re.IGNORECASE)
         for match in matches:
             rung = match.group(1) if len(match.groups()) >= 1 else "unknown"

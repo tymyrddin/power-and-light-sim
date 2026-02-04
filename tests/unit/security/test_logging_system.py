@@ -650,7 +650,7 @@ class TestFileLogging:
         with tempfile.TemporaryDirectory() as tmpdir:
             log_dir = Path(tmpdir) / "nested" / "logs"
 
-            logger = ICSLogger(
+            _logger = ICSLogger(  # Intentionally unused - just creating to trigger dir creation
                 "test_nested",
                 device="dev",
                 log_dir=log_dir,

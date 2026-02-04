@@ -354,7 +354,7 @@ class ReactorPhysics:
 
         # Coolant heats up as it passes through
         if self.state.coolant_flow_rate > 0.01:
-            coolant_heat_pickup = heat_removed * 0.8  # 80% efficiency
+            # Heat removal efficiency: 80% (heat_removed * 0.8)
             # Simplified: coolant temp rises towards core temp
             coolant_target = 25.0 + (self.state.core_temperature_c - 25.0) * 0.3
             coolant_error = coolant_target - self.state.coolant_temperature_c
@@ -389,8 +389,6 @@ class ReactorPhysics:
         # Pressure proportional to absolute temperature
         # At 25°C (298K), pressure = 1 bar
         # At rated temp, pressure = rated pressure
-        temp_ratio = (self.state.core_temperature_c + 273.15) / (25.0 + 273.15)
-
         # Baseline pressure + temperature component
         base_pressure = 1.0
         temp_pressure = (self.params.max_safe_pressure_bar - base_pressure) * (

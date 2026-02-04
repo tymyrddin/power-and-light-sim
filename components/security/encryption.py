@@ -33,6 +33,7 @@ from enum import Enum
 from pathlib import Path
 
 from cryptography import x509
+from cryptography.exceptions import InvalidTag
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import padding, rsa
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
@@ -494,7 +495,10 @@ class AESEncryption:
         decryptor = cipher.decryptor()
 
         # Decrypt and verify
-        plaintext = decryptor.update(ciphertext) + decryptor.finalize()
+        try:
+            plaintext = decryptor.update(ciphertext) + decryptor.finalize()
+        except InvalidTag as e:
+            raise ValueError("Authentication tag verification failed") from e
 
         return plaintext
 

@@ -103,7 +103,9 @@ class DNP3TCPServer:
             try:
                 # Initialize DNP3 adapter in outstation (server) mode
                 setup = {
-                    "binary_inputs": dict.fromkeys(range(self.num_binary_inputs), False),
+                    "binary_inputs": dict.fromkeys(
+                        range(self.num_binary_inputs), False
+                    ),
                     "analog_inputs": dict.fromkeys(range(self.num_analog_inputs), 0.0),
                     "counters": dict.fromkeys(range(self.num_counters), 0),
                 }

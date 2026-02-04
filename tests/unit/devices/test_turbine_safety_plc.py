@@ -40,7 +40,7 @@ def create_mock_turbine_physics() -> MagicMock:
     mock._telemetry = {
         "shaft_speed_rpm": 3600,
         "vibration_mils": 2.0,
-        "bearing_temperature_f": 150,
+        "bearing_temperature_c": 65,  # Normal operating temp in Celsius (was 150°F ≈ 65°C)
         "trip_active": False,
     }
 
@@ -184,7 +184,9 @@ class TestTurbineSafetyPLCSIFs:
     @pytest.mark.asyncio
     async def test_sif_bearing_temp_trips(self, started_turbine_safety, mock_turbine):
         """Test bearing temperature SIF trips on high temp."""
-        mock_turbine._telemetry["bearing_temperature_f"] = 220  # High temp
+        mock_turbine._telemetry["bearing_temperature_c"] = (
+            105  # High temp in Celsius (was 220°F ≈ 105°C)
+        )
 
         await asyncio.sleep(0.05)
 

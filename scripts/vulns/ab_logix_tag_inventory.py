@@ -172,7 +172,7 @@ def main():
         print(f"\n[*] Found {len(tags)} tags:\n")
         for tag in tags:
             writable = tag.get("writable", "?")
-            rw = "R/W" if writable else "R/O" if writable == False else "?"
+            rw = "R/W" if writable is True else "R/O" if writable is False else "?"
             print(f"    {tag['tag_name']:<30} {tag['data_type']:<10} [{rw}]")
 
         print("\n[+] Tag enumeration complete")

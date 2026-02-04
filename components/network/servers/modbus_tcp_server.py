@@ -230,7 +230,7 @@ class ModbusTCPServer:
                 else:
                     raise RuntimeError(
                         f"Failed to start Modbus TCP server on {self.host}:{self.port} after {max_retries} attempts: {e}"
-                    )
+                    ) from e
 
         raise RuntimeError(
             f"Failed to start Modbus TCP server on {self.host}:{self.port} - client connection failed"

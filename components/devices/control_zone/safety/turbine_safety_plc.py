@@ -9,7 +9,7 @@ triggers emergency shutdown when safety limits are exceeded.
 Safety Instrumented Functions (SIFs):
 - SIF-001: Overspeed protection (>110% rated speed)
 - SIF-002: High vibration protection (>10 mils)
-- SIF-003: High bearing temperature (>200°F)
+- SIF-003: High bearing temperature (>93°C / 200°F)
 - SIF-004: Low lube oil pressure (future)
 
 Memory Map (Modbus):
@@ -29,7 +29,7 @@ Input Registers (Read-only 16-bit):
   1: Shaft speed channel B (RPM)
   2: Vibration channel A (mils * 10)
   3: Vibration channel B (mils * 10)
-  4: Bearing temperature (degF)
+  4: Bearing temperature (degC)
   5: Diagnostic status
   6: Demand count
   7: Fault count
@@ -42,7 +42,7 @@ Coils (Read/write booleans):
 Holding Registers (Read/write 16-bit):
   0: Overspeed trip setpoint (RPM)
   1: Vibration trip setpoint (mils * 10)
-  2: Bearing temp trip setpoint (degF)
+  2: Bearing temp trip setpoint (degC)
 """
 
 from typing import Any
@@ -137,7 +137,7 @@ class TurbineSafetyPLC(BaseSafetyController):
             turbine_physics.params.rated_speed_rpm * 1.1
         )  # 110%
         self._vibration_trip_mils = turbine_physics.params.vibration_critical_mils
-        self._bearing_temp_trip_f = 200  # °F
+        self._bearing_temp_trip_c = 93  # °C (200°F = 93°C)
 
         # Simulated dual-channel inputs (for 2oo3 voting simulation)
         self._speed_channel_a = 0.0
@@ -192,7 +192,7 @@ class TurbineSafetyPLC(BaseSafetyController):
         # Holding registers (read/write setpoints)
         self.memory_map["holding_registers[0]"] = self._overspeed_trip_rpm
         self.memory_map["holding_registers[1]"] = int(self._vibration_trip_mils * 10)
-        self.memory_map["holding_registers[2]"] = self._bearing_temp_trip_f
+        self.memory_map["holding_registers[2]"] = self._bearing_temp_trip_c
 
         self.logger.debug(
             f"TurbineSafetyPLC '{self.device_name}' memory map initialised"
@@ -256,7 +256,9 @@ class TurbineSafetyPLC(BaseSafetyController):
         vibration_trip = (
             self.memory_map.get("holding_registers[1]", 100) / 10.0
         )  # Convert from *10
-        bearing_temp_trip = self.memory_map.get("holding_registers[2]", 200)
+        bearing_temp_trip = self.memory_map.get(
+            "holding_registers[2]", 93
+        )  # Default 93°C
 
         safety_demand = False
 
@@ -297,7 +299,7 @@ class TurbineSafetyPLC(BaseSafetyController):
         if bearing_temp_trip_condition:
             self.logger.warning(
                 f"TurbineSafetyPLC '{self.device_name}': "
-                f"SIF-003 HIGH BEARING TEMP - {bearing_temp}°F > {bearing_temp_trip}°F"
+                f"SIF-003 HIGH BEARING TEMP - {bearing_temp}°C > {bearing_temp_trip}°C"
             )
             safety_demand = True
 
@@ -401,7 +403,7 @@ class TurbineSafetyPLC(BaseSafetyController):
             **base_status,
             "overspeed_trip_rpm": self._overspeed_trip_rpm,
             "vibration_trip_mils": self._vibration_trip_mils,
-            "bearing_temp_trip_f": self._bearing_temp_trip_f,
+            "bearing_temp_trip_c": self._bearing_temp_trip_c,
             "speed_channel_a": self._speed_channel_a,
             "speed_channel_b": self._speed_channel_b,
             "vibration_channel_a": self._vibration_channel_a,

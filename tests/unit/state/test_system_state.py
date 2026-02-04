@@ -184,20 +184,21 @@ class TestSystemStateDeviceRegistration:
             )
 
     @pytest.mark.asyncio
-    async def test_register_device_rejects_empty_protocols(self):
-        """Test that empty protocols list is rejected.
+    async def test_register_device_accepts_empty_protocols_for_clients(self):
+        """Test that empty protocols list is accepted for client devices.
 
-        WHY: Every device must support at least one protocol.
+        WHY: Client devices (like workstations) may not expose protocols.
         """
         state = SystemState()
 
-        with pytest.raises(ValueError, match="protocols must be a non-empty list"):
-            await state.register_device(
-                device_name="test_plc",
-                device_type="turbine_plc",
-                device_id=1,
-                protocols=[],
-            )
+        # Should not raise - empty protocols allowed for client devices
+        result = await state.register_device(
+            device_name="test_workstation",
+            device_type="workstation",
+            device_id=1,
+            protocols=[],
+        )
+        assert result is True
 
     @pytest.mark.asyncio
     async def test_register_device_rejects_non_list_protocols(self):
@@ -207,7 +208,7 @@ class TestSystemStateDeviceRegistration:
         """
         state = SystemState()
 
-        with pytest.raises(ValueError, match="protocols must be a non-empty list"):
+        with pytest.raises(ValueError, match="protocols must be a list"):
             await state.register_device(
                 device_name="test_plc",
                 device_type="turbine_plc",
