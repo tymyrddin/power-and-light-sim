@@ -530,7 +530,7 @@ services:
 - ❌ Build mobile app
 - ❌ Add fancy features nobody asked for
 
-Focus on: Zero-friction access to working simulator. Everything else is distraction.
+Focus on: Zero-friction access to working simulator.
 
 ## Launch checklist
 
