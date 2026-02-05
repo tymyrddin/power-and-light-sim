@@ -46,7 +46,7 @@
 - IEDs with protection functions
 - Grid physics (frequency, voltage, load-generation balance)
 - Power flow calculations
-- Some recon scripts exist
+- Scripts: **ZERO functional scripts** (2 basic recon scripts that don't use protocols)
 
 **What needs to be built:**
 
@@ -57,13 +57,19 @@
 - Test grid physics responds to substation changes
 - Document protocol configurations
 
-**Attack scripts**
-- DNP3 reconnaissance script
-- DNP3 breaker control script
-- IEC 104 command injection script
-- IEC 61850 GOOSE injection script
-- Grid frequency manipulation script
-- Cascading failure demonstration script
+**Attack scripts (all need to be written from scratch)**
+- DNP3 reconnaissance script (enumerate outstations, points)
+- DNP3 breaker control script (open/close breakers remotely)
+- DNP3 point manipulation script (analog/binary inputs)
+- IEC 104 reconnaissance script (enumerate devices, IOAs)
+- IEC 104 command injection script (control commands)
+- IEC 61850 reconnaissance script (enumerate IEDs, GOOSE messages)
+- IEC 61850 GOOSE injection script (inject false GOOSE messages)
+- IEC 61850 MMS manipulation script (modify settings via MMS)
+- Grid frequency manipulation script (via coordinated attacks)
+- Cascading failure demonstration script (multi-substation attack)
+
+**Estimated: 10-15 scripts, ~3-4 days of development**
 
 **Workshop materials**
 - Create power grid challenges document
@@ -72,10 +78,16 @@
 - Test with volunteer users
 
 **Deliverables:**
-- doc grid-challenges.md
-- doc grid-student-guide.md
-- 8-10 new scripts in scripts/grid/
+- docs/grid-challenges.md (new)
+- docs/grid-student-guide.md (new)
+- 10-15 new scripts in scripts/grid/ (all from scratch)
 - Updated overview.md mentioning grid scenario
+
+**Realistic effort: 3-4 weeks, not 3 weeks**
+- Week 1: Verify protocols work, write reconnaissance scripts
+- Week 2: Write exploitation scripts
+- Week 3: Write workshop materials
+- Week 4: Test and refine
 
 #### 2. HVAC and building automation scenario (1 week)
 
@@ -83,6 +95,7 @@
 - HVAC PLC (library_hvac_plc) configured
 - HVAC physics engine implemented
 - L-space monitor (unique Discworld element)
+- Scripts: **ZERO** (none exist)
 
 **What needs to be built:**
 
@@ -91,10 +104,14 @@
 - Verify HVAC physics responds to setpoint changes
 - Test L-space stability responds to temperature/humidity
 
-**Attack scripts**
-- HVAC reconnaissance script
-- Temperature manipulation script
-- L-space destabilisation script
+**Attack scripts (all need to be written from scratch)**
+- HVAC reconnaissance script (enumerate zones, setpoints)
+- Temperature manipulation script (change setpoints via Modbus)
+- Humidity manipulation script
+- L-space destabilisation script (cause instability via environmental changes)
+- Library environmental attack script (coordinated temp/humidity/pressure)
+
+**Estimated: 5 scripts, ~1-2 days of development**
 
 **Workshop materials**
 - Create building automation challenges
@@ -102,9 +119,14 @@
 - L-space angle (uniquely Discworld)
 
 **Deliverables:**
-- doc building-automation-challenges.md
-- 3-5 new scripts in scripts/building/
+- docs/building-automation-challenges.md (new)
+- 5 new scripts in scripts/building/ (all from scratch)
 - Integration with existing workshops
+
+**Realistic effort: 1-2 weeks**
+- Days 1-2: Verify HVAC PLC and physics work
+- Days 3-4: Write scripts
+- Days 5-7: Workshop materials and testing
 
 #### 3. Historian and enterprise zone scenarios (1 week)
 
@@ -112,16 +134,28 @@
 - Historian device implemented
 - SIEM system implemented
 - IDS system implemented
-- One historian exfiltration script exists
-- SIEM and IDS test scripts exist
+- Scripts: 3 exist (historian_exfiltration.py, siem_correlation_test.py, ids_detection_test.py)
+
+**What these scripts actually do:**
+- historian_exfiltration.py: Actually works, extracts historical data
+- siem_correlation_test.py: Tests SIEM correlation rules
+- ids_detection_test.py: Tests if IDS detects attacks
+
+**Status: Partially implemented, needs expansion**
 
 **What needs to be built:**
 
-**Scripts**
-- Historian data mining scripts
-- SIEM evasion techniques
-- IDS bypass methods
-- Log tampering scripts
+**Scripts (expand existing 3 scripts)**
+- Historian data mining scripts (more sophisticated queries)
+- Historian timeline reconstruction script
+- SIEM evasion techniques (avoid correlation)
+- SIEM alert flooding script
+- IDS bypass methods (protocol camouflage, timing attacks)
+- IDS signature analysis script
+- Log tampering scripts (modify audit trails)
+- Anti-forensics scripts
+
+**Estimated: 5-8 new scripts, ~2-3 days of development**
 
 **Workshop materials**
 - Enterprise zone challenges
@@ -129,9 +163,14 @@
 - Blue team perspective scenarios
 
 **Deliverables:**
-- doc enterprise-challenges.md
-- 5-8 new scripts in scripts/enterprise/
+- docs/enterprise-challenges.md (new)
+- 5-8 new scripts in scripts/enterprise/ (expanding from 3 existing)
 - Detection-focused workshop materials
+
+**Realistic effort: 1-2 weeks**
+- Days 1-3: Enhance existing scripts, write new ones
+- Days 4-5: Workshop materials
+- Days 6-7: Testing and refinement
 
 ### Medium priority: Technical improvements
 
@@ -409,27 +448,42 @@ FROM python:3.12
 ## Recommended sequence
 
 ### Activate existing code
-**Goal:** Use what's already built
+**Goal:** Use what's already built (but scripts need writing)
 
-1. Grid and substation scenario
+**Reality check:**
+- Protocols: Implemented ✓
+- Devices: Configured ✓
+- Physics: Implemented ✓
+- Scripts: **Nearly all need to be written from scratch**
+- Workshop materials: **All need to be written from scratch**
+
+1. **Grid and substation scenario (4 weeks)**
    - Most impactful (completely new attack surface)
    - Shows different risk profile
-   - Code mostly exists
+   - Protocols exist, zero functional scripts
+   - 10-15 scripts to write
+   - Full workshop materials to create
 
-2. HVAC/building automation scenario
-   - Quick win
+2. **HVAC/building automation scenario (1-2 weeks)**
    - Different risk profile
    - Unique L-space angle
+   - 5 scripts to write
+   - Workshop materials to create
 
-3. Historian and enterprise zone
+3. **Historian and enterprise zone (1-2 weeks)**
    - Rounds out attack scenarios
    - Detection focus
+   - 3 scripts exist, need 5-8 more
+   - Workshop materials to create
 
-4. State persistence
+4. **State persistence (1 week)**
    - Enables better workshop flow
    - Testing benefits
+   - Implementation needed
 
-**Result:** Three major new scenarios, better workshop experience
+**Realistic total: 7-9 weeks, not 6 weeks**
+
+**Result:** Three major new scenarios, 20-30 new scripts, significant workshop expansion
 
 ### Technical quality
 **Goal:** Solidify codebase
@@ -515,9 +569,12 @@ FROM python:3.12
 
 ## Resource requirements
 
-**Development time:**
-- 720 hours?
-- Quarter 4: Ongoing maintenance = 10-20 hours/month
+**Development time (realistic estimates):**
+- Activate existing code: 7-9 weeks = 280-360 hours
+- Technical quality improvements: 6-8 weeks = 240-320 hours
+- Polish and expand: 6-8 weeks = 240-320 hours
+- **Total: 760-1000 hours**
+- Ongoing maintenance = 10-20 hours/month
 
 **Skills needed:**
 - Python (async, type hints)
@@ -528,6 +585,18 @@ FROM python:3.12
 - Technical writing
 
 **Can be done by:**
-- Solo developer (1 year timeline)
-- Small team (6 months timeline)
-- Community contributions (organic growth)
+- Solo developer (6-9 months full-time)
+- Small team (3-4 months)
+- Community contributions (1-2 years, organic growth)
+
+Most features can be built incrementally. Don't need to do everything before launching. Ship grid scenario, then HVAC, then enterprise, etc.
+
+## Getting started
+
+**Immediate next steps:**
+1. Verify DNP3 protocol works end-to-end (can master communicate with outstation?)
+2. Write first DNP3 reconnaissance script (enumerate outstations and points)
+3. Write first DNP3 exploitation script (control breaker remotely)
+4. Create first grid challenge document
+5. Test with 2-3 volunteer users
+6. Iterate based on feedback
