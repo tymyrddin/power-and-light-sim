@@ -27,13 +27,25 @@ async def opcua_anonymous_browse():
         async with client:
             print("[*] Connected successfully")
 
-            # Get server info
-            server_node = client.get_server_node()
-            server_status = await server_node.read_server_status()
-            print("\n[*] Server Status:")
-            print(f"    State: {server_status.State}")
-            print(f"    Current Time: {server_status.CurrentTime}")
-            print(f"    Build Info: {server_status.BuildInfo.ProductName}")
+            # Read server status using standard node IDs
+            try:
+                # ServerStatus node (ns=0;i=2256)
+                from asyncua import ua
+                server_status_node = client.get_node(ua.NodeId(2256, 0))
+
+                # Read individual status attributes
+                state_node = client.get_node(ua.NodeId(2259, 0))  # ServerState
+                current_time_node = client.get_node(ua.NodeId(2258, 0))  # CurrentTime
+
+                state = await state_node.read_value()
+                current_time = await current_time_node.read_value()
+
+                print("\n[*] Server Status:")
+                print(f"    State: {state}")
+                print(f"    Current Time: {current_time}")
+
+            except Exception as e:
+                print(f"\n[!] Could not read server status: {e}")
 
             # Browse root objects
             print("\n[*] Browsing Root Objects:")
@@ -43,7 +55,7 @@ async def opcua_anonymous_browse():
             results = {
                 "timestamp": datetime.now().isoformat(),
                 "server_url": target_url,
-                "server_status": str(server_status.State),
+                "server_state": str(state) if 'state' in locals() else "Unknown",
                 "objects": [],
             }
 
