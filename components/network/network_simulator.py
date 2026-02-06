@@ -59,6 +59,10 @@ class NetworkSimulator:
         self.device_networks: dict[str, set[str]] = {}
         self.services: dict[tuple[str, int], str] = {}
 
+        # Zone-based security policies
+        self.inter_zone_policies: list[dict[str, Any]] = []
+        self.network_to_zone: dict[str, str] = {}  # network_name -> zone_name
+
         self._lock = asyncio.Lock()
         self._loaded = False
         self.logger: ICSLogger = get_logger(__name__, device="network_simulator")
@@ -171,6 +175,26 @@ class NetworkSimulator:
                 device_count = len(self.device_networks)
                 self.logger.info(f"Mapped {device_count} device(s) to networks")
 
+                # Build network-to-zone mapping
+                self.network_to_zone.clear()
+                for network_name, network_info in self.networks.items():
+                    zone = network_info.get("zone")
+                    if zone:
+                        self.network_to_zone[network_name] = zone
+
+                # Load inter-zone security policies
+                self.inter_zone_policies.clear()
+                inter_zone_routing = config.get("inter_zone_routing", [])
+                for policy in inter_zone_routing:
+                    self.inter_zone_policies.append(policy)
+
+                if self.inter_zone_policies:
+                    self.logger.info(
+                        f"Loaded {len(self.inter_zone_policies)} inter-zone security policy(ies)"
+                    )
+                else:
+                    self.logger.warning("No inter-zone security policies defined")
+
                 self._loaded = True
 
             except FileNotFoundError as e:
@@ -247,6 +271,127 @@ class NetworkSimulator:
             return False
 
     # ----------------------------------------------------------------
+    # Zone policy helpers
+    # ----------------------------------------------------------------
+
+    def _get_zone_for_network(self, network_name: str) -> str | None:
+        """Get zone name for a network.
+
+        Args:
+            network_name: Network name
+
+        Returns:
+            Zone name, or None if network not found or not in a zone
+        """
+        return self.network_to_zone.get(network_name)
+
+    def _check_zone_policy(
+        self,
+        src_zone: str,
+        dst_zone: str,
+        protocol: str,
+        port: int,
+    ) -> tuple[bool, str]:
+        """Check if zone-to-zone connection is allowed by policy.
+
+        Args:
+            src_zone: Source zone name
+            dst_zone: Destination zone name
+            protocol: Protocol being used
+            port: Port being accessed
+
+        Returns:
+            Tuple of (allowed: bool, reason: str)
+        """
+        # Same zone always allowed
+        if src_zone == dst_zone:
+            return True, "same_zone"
+
+        # Check inter-zone policies
+        for policy in self.inter_zone_policies:
+            from_zone = policy.get("from_zone")
+            to_zone = policy.get("to_zone")
+
+            # Check if policy matches this zone pair
+            if from_zone == src_zone and to_zone == dst_zone:
+                # Found matching policy - check protocol
+                allowed_protocols = policy.get("allowed_protocols", [])
+
+                # Normalize protocol names for comparison (modbus_tcp -> modbus, opcua stays opcua)
+                def normalize_protocol(p: str) -> str:
+                    return p.replace("_tcp", "").replace("_rtu", "")
+
+                normalized_protocol = normalize_protocol(protocol)
+                normalized_allowed = [normalize_protocol(p) for p in allowed_protocols]
+
+                if normalized_protocol not in normalized_allowed:
+                    return False, f"protocol_{protocol}_not_allowed"
+
+                # Check firewall rules for port
+                firewall_rules = policy.get("firewall_rules", [])
+                if firewall_rules:
+                    port_allowed = False
+                    for rule in firewall_rules:
+                        rule_protocol = rule.get("allow", "")
+                        rule_ports = rule.get("ports", [])
+
+                        # Normalize rule protocol for comparison
+                        if normalize_protocol(rule_protocol) == normalized_protocol and port in rule_ports:
+                            port_allowed = True
+                            break
+
+                    if not port_allowed:
+                        return False, f"port_{port}_not_in_firewall_rules"
+
+                # Check direction
+                direction = policy.get("direction", "bidirectional")
+                if direction == "outbound_only":
+                    # Only allowed from source to destination, not reverse
+                    return True, "outbound_policy_allows"
+                else:
+                    # Bidirectional allowed
+                    return True, "bidirectional_policy_allows"
+
+            # Check reverse direction if bidirectional
+            elif from_zone == dst_zone and to_zone == src_zone:
+                direction = policy.get("direction", "bidirectional")
+                if direction == "bidirectional":
+                    # Same checks as above
+                    allowed_protocols = policy.get("allowed_protocols", [])
+
+                    # Normalize protocol names for comparison
+                    def normalize_protocol(p: str) -> str:
+                        return p.replace("_tcp", "").replace("_rtu", "")
+
+                    normalized_protocol = normalize_protocol(protocol)
+                    normalized_allowed = [normalize_protocol(p) for p in allowed_protocols]
+
+                    if normalized_protocol not in normalized_allowed:
+                        return False, f"protocol_{protocol}_not_allowed"
+
+                    firewall_rules = policy.get("firewall_rules", [])
+                    if firewall_rules:
+                        port_allowed = False
+                        for rule in firewall_rules:
+                            rule_protocol = rule.get("allow", "")
+                            rule_ports = rule.get("ports", [])
+
+                            if (
+                                normalize_protocol(rule_protocol) == normalized_protocol
+                                and port in rule_ports
+                            ):
+                                port_allowed = True
+                                break
+
+                        if not port_allowed:
+                            return False, f"port_{port}_not_in_firewall_rules"
+
+                    return True, "bidirectional_policy_allows_reverse"
+
+        # No policy found - default deny
+        return False, "no_inter_zone_policy"
+
+    # ----------------------------------------------------------------
     # Reachability checks
     # ----------------------------------------------------------------
 
@@ -259,10 +404,19 @@ class NetworkSimulator:
     ) -> bool:
         """Check if a source network can reach a destination service.
 
-        Enforces network segmentation rules. A connection is allowed if:
+        Enforces network segmentation and zone-based security policies.
+        A connection is allowed if:
         1. The destination service exists
         2. The protocol matches
-        3. The source network overlaps with destination device's networks
+        3. Either:
+           a) Source and destination are on the same network, OR
+           b) Inter-zone security policy allows the connection
+
+        Zone policy checks:
+        - Protocol must be in allowed_protocols list
+        - Port must be in firewall_rules (if specified)
+        - Direction must permit the connection (bidirectional vs outbound_only)
+        - Default deny if no policy exists
 
         Args:
             src_network: Source network name
@@ -292,7 +446,7 @@ class NetworkSimulator:
                 )
                 return False
 
-            # Source network must overlap destination networks
+            # Get destination networks
             dst_networks = self.device_networks.get(dst_node, set())
 
             if not dst_networks:
@@ -301,22 +455,64 @@ class NetworkSimulator:
                 )
                 return False
 
-            allowed = src_network in dst_networks
+            # Check 1: Same network = always allowed (no zone check needed)
+            if src_network in dst_networks:
+                self.logger.debug(
+                    f"Reachability allowed: {src_network} -> {dst_node}:{port} "
+                    f"({protocol}) [same network]"
+                )
+                return True
+
+            # Check 2: Different networks - check zone-based policies
+            src_zone = self._get_zone_for_network(src_network)
+            dst_zone = None
+
+            # Find which destination network to use for zone checking
+            # (device might be on multiple networks)
+            for dst_net in dst_networks:
+                zone = self._get_zone_for_network(dst_net)
+                if zone:
+                    dst_zone = zone
+                    break
+
+            # If either zone is unknown, deny (can't evaluate policy)
+            if not src_zone or not dst_zone:
+                await self.logger.log_security(
+                    f"Zone policy check failed: {src_network} -> {dst_node}:{port}",
+                    severity=EventSeverity.WARNING,
+                    data={
+                        "source_network": src_network,
+                        "source_zone": src_zone or "unknown",
+                        "destination_node": dst_node,
+                        "destination_zone": dst_zone or "unknown",
+                        "port": port,
+                        "protocol": protocol,
+                        "reason": "zone_not_defined",
+                    },
+                )
+                return False
+
+            # Check zone-based policy
+            allowed, reason = self._check_zone_policy(src_zone, dst_zone, protocol, port)
 
             if allowed:
                 self.logger.debug(
-                    f"Reachability allowed: {src_network} -> {dst_node}:{port} ({protocol})"
+                    f"Reachability allowed: {src_network} ({src_zone}) -> "
+                    f"{dst_node}:{port} ({dst_zone}) [{protocol}] - {reason}"
                 )
             else:
                 await self.logger.log_security(
-                    f"Network segmentation denied: {src_network} -> {dst_node}:{port}",
-                    severity=EventSeverity.NOTICE,
+                    f"Zone policy denied: {src_network} ({src_zone}) -> "
+                    f"{dst_node}:{port} ({dst_zone})",
+                    severity=EventSeverity.WARNING,
                     data={
                         "source_network": src_network,
+                        "source_zone": src_zone,
                         "destination_node": dst_node,
-                        "destination_networks": list(dst_networks),
+                        "destination_zone": dst_zone,
                         "port": port,
                         "protocol": protocol,
+                        "reason": reason,
                     },
                 )
 
