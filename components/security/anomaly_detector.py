@@ -302,10 +302,9 @@ class AnomalyDetector:
             anomaly.severity, EventSeverity.WARNING
         )
 
-        await self.logger.log_event(
-            severity=event_severity,
-            category=EventCategory.SECURITY,
+        await self.logger.log_security(
             message=anomaly.description,
+            severity=event_severity,
             device=anomaly.device,
             component="anomaly_detector",
             data={
@@ -316,7 +315,6 @@ class AnomalyDetector:
                 "deviation_magnitude": anomaly.deviation_magnitude,
                 **anomaly.data,
             },
-            store_in_datastore=True,
         )
 
     # ----------------------------------------------------------------

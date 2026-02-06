@@ -21,15 +21,12 @@ Integrates with:
 - DataStore for reading control inputs and writing telemetry
 """
 
-import logging
 import math
 from dataclasses import dataclass
 from typing import Any
 
+from components.physics.base_physics_engine import BaseDevicePhysicsEngine
 from components.state.data_store import DataStore
-from components.time.simulation_time import SimulationTime
-
-logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -100,7 +97,7 @@ class HVACParameters:
     lspace_threshold_humidity: float = 60.0  # Or above this humidity
 
 
-class HVACPhysics:
+class HVACPhysics(BaseDevicePhysicsEngine):
     """
     Simulates HVAC system physical behaviour.
 
@@ -155,15 +152,8 @@ class HVACPhysics:
         if not device_name:
             raise ValueError("device_name cannot be empty")
 
-        self.device_name = device_name
-        self.data_store = data_store
-        self.params = params or HVACParameters()
+        super().__init__(device_name, data_store, params or HVACParameters())
         self.state = HVACState()
-        self.sim_time = SimulationTime()
-
-        self._last_update_time: float = 0.0
-        self._initialised = False
-        self._control_cache: dict[str, Any] = {}
 
         # PID controller state for temperature
         self._temp_integral: float = 0.0
@@ -173,7 +163,7 @@ class HVACPhysics:
         self._humidity_integral: float = 0.0
         self._humidity_last_error: float = 0.0
 
-        logger.info(
+        self.logger.info(
             f"HVAC physics created: {device_name} "
             f"(zone {self.params.zone_volume_m3}m³, "
             f"{self.params.rated_heating_kw}kW heat, "
@@ -190,18 +180,8 @@ class HVACPhysics:
         Raises:
             RuntimeError: If device not found in DataStore
         """
-        device = await self.data_store.get_device_state(self.device_name)
-        if not device:
-            raise RuntimeError(
-                f"Cannot initialise HVAC physics: device {self.device_name} not found"
-            )
-
+        await super().initialise()
         await self._write_telemetry()
-
-        self._last_update_time = self.sim_time.now()
-        self._initialised = True
-
-        logger.info(f"HVAC physics initialised: {self.device_name}")
 
     # ----------------------------------------------------------------
     # Physics simulation
@@ -209,58 +189,40 @@ class HVACPhysics:
 
     async def read_control_inputs(self) -> None:
         """Read control inputs from DataStore and cache them."""
-        try:
-            temp_setpoint = await self.data_store.read_memory(
-                self.device_name, "holding_registers[10]"
-            )
-            humidity_setpoint = await self.data_store.read_memory(
-                self.device_name, "holding_registers[11]"
-            )
-            fan_speed = await self.data_store.read_memory(
-                self.device_name, "holding_registers[12]"
-            )
-            mode_select = await self.data_store.read_memory(
-                self.device_name, "holding_registers[13]"
-            )
-            damper_command = await self.data_store.read_memory(
-                self.device_name, "holding_registers[14]"
-            )
-            system_enable = await self.data_store.read_memory(
-                self.device_name, "coils[10]"
-            )
-            lspace_dampener = await self.data_store.read_memory(
-                self.device_name, "coils[11]"
-            )
+        await self._cache_control_input("holding_registers[10]", 20.0)
+        self._control_cache["temperature_setpoint_c"] = self._control_cache.get(
+            "holding_registers[10]", 20.0
+        )
 
-            self._control_cache = {
-                "temperature_setpoint_c": (
-                    float(temp_setpoint) if temp_setpoint else 20.0
-                ),
-                "humidity_setpoint_percent": (
-                    float(humidity_setpoint) if humidity_setpoint else 45.0
-                ),
-                "fan_speed_command": float(fan_speed) if fan_speed else 0.0,
-                "mode_select": int(mode_select) if mode_select else self.MODE_OFF,
-                "damper_command": float(damper_command) if damper_command else 0.0,
-                "system_enable": bool(system_enable) if system_enable else False,
-                "lspace_dampener_enable": (
-                    bool(lspace_dampener) if lspace_dampener else True
-                ),
-            }
-        except Exception as e:
-            logger.warning(
-                f"Failed to read control inputs for {self.device_name}: {e}. "
-                "Using defaults."
-            )
-            self._control_cache = {
-                "temperature_setpoint_c": 20.0,
-                "humidity_setpoint_percent": 45.0,
-                "fan_speed_command": 0.0,
-                "mode_select": self.MODE_OFF,
-                "damper_command": 0.0,
-                "system_enable": False,
-                "lspace_dampener_enable": True,
-            }
+        await self._cache_control_input("holding_registers[11]", 45.0)
+        self._control_cache["humidity_setpoint_percent"] = self._control_cache.get(
+            "holding_registers[11]", 45.0
+        )
+
+        await self._cache_control_input("holding_registers[12]", 0.0)
+        self._control_cache["fan_speed_command"] = self._control_cache.get(
+            "holding_registers[12]", 0.0
+        )
+
+        await self._cache_control_input("holding_registers[13]", self.MODE_OFF)
+        self._control_cache["mode_select"] = self._control_cache.get(
+            "holding_registers[13]", self.MODE_OFF
+        )
+
+        await self._cache_control_input("holding_registers[14]", 0.0)
+        self._control_cache["damper_command"] = self._control_cache.get(
+            "holding_registers[14]", 0.0
+        )
+
+        await self._cache_control_input("coils[10]", False)
+        self._control_cache["system_enable"] = self._control_cache.get(
+            "coils[10]", False
+        )
+
+        await self._cache_control_input("coils[11]", True)
+        self._control_cache["lspace_dampener_enable"] = self._control_cache.get(
+            "coils[11]", True
+        )
 
     def update(self, dt: float) -> None:
         """Update HVAC physics for one simulation step.
@@ -271,14 +233,7 @@ class HVACPhysics:
         Raises:
             RuntimeError: If not initialised
         """
-        if not self._initialised:
-            raise RuntimeError(
-                f"HVAC physics not initialised: {self.device_name}. "
-                "Call initialise() first."
-            )
-
-        if dt <= 0:
-            logger.warning(f"Invalid time delta {dt}, skipping update")
+        if not self._validate_update(dt):
             return
 
         # Read control inputs
@@ -315,7 +270,7 @@ class HVACPhysics:
         # Calculate energy consumption
         self._update_energy_consumption()
 
-        logger.debug(
+        self.logger.debug(
             f"{self.device_name}: T={self.state.zone_temperature_c:.1f}°C, "
             f"RH={self.state.zone_humidity_percent:.1f}%, "
             f"L-space={self.state.lspace_stability:.2f}"
@@ -324,10 +279,6 @@ class HVACPhysics:
     async def write_telemetry(self) -> None:
         """Write current HVAC state to device memory map."""
         await self._write_telemetry()
-
-    def _read_control_input(self, name: str, default: Any) -> Any:
-        """Read control input from cache."""
-        return self._control_cache.get(name, default)
 
     def _system_off(self, dt: float) -> None:
         """Handle system off state - natural drift towards ambient.
@@ -640,7 +591,7 @@ class HVACPhysics:
 
         # Warn if unstable
         if self.state.lspace_stability < 0.5:
-            logger.warning(
+            self.logger.warning(
                 f"{self.device_name}: L-space instability warning! "
                 f"Stability={self.state.lspace_stability:.2f}, "
                 f"T={self.state.zone_temperature_c:.1f}°C, "
@@ -760,7 +711,7 @@ class HVACPhysics:
         """
         self.params.outside_temp_c = temperature_c
         self.params.outside_humidity_percent = max(0.0, min(100.0, humidity_percent))
-        logger.debug(
+        self.logger.debug(
             f"{self.device_name}: Outside conditions updated - "
             f"T={temperature_c}°C, RH={humidity_percent}%"
         )
@@ -776,7 +727,7 @@ class HVACPhysics:
             temp_c: Target temperature in Celsius
         """
         self._control_cache["temperature_setpoint_c"] = temp_c
-        logger.debug(f"{self.device_name}: Temperature setpoint set to {temp_c}°C")
+        self.logger.debug(f"{self.device_name}: Temperature setpoint set to {temp_c}°C")
 
     def set_humidity_setpoint(self, percent: float) -> None:
         """Set zone humidity setpoint.
@@ -785,7 +736,7 @@ class HVACPhysics:
             percent: Target relative humidity (%)
         """
         self._control_cache["humidity_setpoint_percent"] = max(0.0, min(100.0, percent))
-        logger.debug(f"{self.device_name}: Humidity setpoint set to {percent}%")
+        self.logger.debug(f"{self.device_name}: Humidity setpoint set to {percent}%")
 
     def set_fan_speed(self, percent: float) -> None:
         """Set supply fan speed.
@@ -794,7 +745,7 @@ class HVACPhysics:
             percent: Fan speed (0-100%)
         """
         self._control_cache["fan_speed_command"] = max(0.0, min(100.0, percent))
-        logger.debug(f"{self.device_name}: Fan speed set to {percent}%")
+        self.logger.debug(f"{self.device_name}: Fan speed set to {percent}%")
 
     def set_damper_position(self, percent: float) -> None:
         """Set outside air damper position.
@@ -803,7 +754,7 @@ class HVACPhysics:
             percent: Damper position (0=closed, 100=open)
         """
         self._control_cache["damper_command"] = max(0.0, min(100.0, percent))
-        logger.debug(f"{self.device_name}: Damper set to {percent}%")
+        self.logger.debug(f"{self.device_name}: Damper set to {percent}%")
 
     def set_operating_mode(self, mode: int) -> None:
         """Set HVAC operating mode.
@@ -812,11 +763,11 @@ class HVACPhysics:
             mode: 0=off, 1=heat, 2=cool, 3=auto
         """
         if mode not in (self.MODE_OFF, self.MODE_HEAT, self.MODE_COOL, self.MODE_AUTO):
-            logger.warning(f"{self.device_name}: Invalid mode {mode}, using OFF")
+            self.logger.warning(f"{self.device_name}: Invalid mode {mode}, using OFF")
             mode = self.MODE_OFF
         self._control_cache["mode_select"] = mode
         mode_names = {0: "OFF", 1: "HEAT", 2: "COOL", 3: "AUTO"}
-        logger.debug(
+        self.logger.debug(
             f"{self.device_name}: Mode set to {mode_names.get(mode, 'UNKNOWN')}"
         )
 
@@ -827,7 +778,7 @@ class HVACPhysics:
             enabled: True to enable system
         """
         self._control_cache["system_enable"] = bool(enabled)
-        logger.debug(
+        self.logger.debug(
             f"{self.device_name}: System {'enabled' if enabled else 'disabled'}"
         )
 
@@ -838,7 +789,7 @@ class HVACPhysics:
             enabled: True to enable dampener
         """
         self._control_cache["lspace_dampener_enable"] = bool(enabled)
-        logger.debug(
+        self.logger.debug(
             f"{self.device_name}: L-space dampener "
             f"{'enabled' if enabled else 'disabled'}"
         )

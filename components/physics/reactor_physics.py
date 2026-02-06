@@ -17,15 +17,12 @@ Integrates with:
 - DataStore for reading control inputs and writing telemetry
 """
 
-import logging
 import math
 from dataclasses import dataclass
 from typing import Any
 
+from components.physics.base_physics_engine import BaseDevicePhysicsEngine
 from components.state.data_store import DataStore
-from components.time.simulation_time import SimulationTime
-
-logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -86,7 +83,7 @@ class ReactorParameters:
     thaumic_recovery_rate: float = 0.05  # per second when stable
 
 
-class ReactorPhysics:
+class ReactorPhysics(BaseDevicePhysicsEngine):
     """
     Simulates alchemical reactor physical behaviour.
 
@@ -131,18 +128,11 @@ class ReactorPhysics:
         if not device_name:
             raise ValueError("device_name cannot be empty")
 
-        self.device_name = device_name
-        self.data_store = data_store
-        self.params = params or ReactorParameters()
+        super().__init__(device_name, data_store, params or ReactorParameters())
         self.state = ReactorState()
-        self.sim_time = SimulationTime()
-
-        self._last_update_time: float = 0.0
-        self._initialised = False
-        self._control_cache: dict[str, Any] = {}
         self._scram_active = False  # Emergency shutdown state
 
-        logger.info(
+        self.logger.info(
             f"Reactor physics created: {device_name} "
             f"(rated {self.params.rated_power_mw}MW @ {self.params.rated_temperature_c}°C)"
         )
@@ -157,18 +147,8 @@ class ReactorPhysics:
         Raises:
             RuntimeError: If device not found in DataStore
         """
-        device = await self.data_store.get_device_state(self.device_name)
-        if not device:
-            raise RuntimeError(
-                f"Cannot initialise reactor physics: device {self.device_name} not found"
-            )
-
+        await super().initialise()
         await self._write_telemetry()
-
-        self._last_update_time = self.sim_time.now()
-        self._initialised = True
-
-        logger.info(f"Reactor physics initialised: {self.device_name}")
 
     # ----------------------------------------------------------------
     # Physics simulation
@@ -176,47 +156,30 @@ class ReactorPhysics:
 
     async def read_control_inputs(self) -> None:
         """Read control inputs from DataStore and cache them."""
-        try:
-            power_setpoint = await self.data_store.read_memory(
-                self.device_name, "holding_registers[10]"
-            )
-            coolant_pump = await self.data_store.read_memory(
-                self.device_name, "holding_registers[11]"
-            )
-            control_rods = await self.data_store.read_memory(
-                self.device_name, "holding_registers[12]"
-            )
-            emergency_shutdown = await self.data_store.read_memory(
-                self.device_name, "coils[10]"
-            )
-            thaumic_dampener = await self.data_store.read_memory(
-                self.device_name, "coils[11]"
-            )
+        await self._cache_control_input("holding_registers[10]", 0.0)
+        self._control_cache["power_setpoint_percent"] = self._control_cache.get(
+            "holding_registers[10]", 0.0
+        )
 
-            self._control_cache = {
-                "power_setpoint_percent": (
-                    float(power_setpoint) if power_setpoint else 0.0
-                ),
-                "coolant_pump_speed": float(coolant_pump) if coolant_pump else 0.0,
-                "control_rods_position": float(control_rods) if control_rods else 100.0,
-                "emergency_shutdown": (
-                    bool(emergency_shutdown) if emergency_shutdown else False
-                ),
-                "thaumic_dampener_enabled": (
-                    bool(thaumic_dampener) if thaumic_dampener else True
-                ),
-            }
-        except Exception as e:
-            logger.warning(
-                f"Failed to read control inputs for {self.device_name}: {e}. Using defaults."
-            )
-            self._control_cache = {
-                "power_setpoint_percent": 0.0,
-                "coolant_pump_speed": 0.0,
-                "control_rods_position": 100.0,
-                "emergency_shutdown": False,
-                "thaumic_dampener_enabled": True,
-            }
+        await self._cache_control_input("holding_registers[11]", 0.0)
+        self._control_cache["coolant_pump_speed"] = self._control_cache.get(
+            "holding_registers[11]", 0.0
+        )
+
+        await self._cache_control_input("holding_registers[12]", 100.0)
+        self._control_cache["control_rods_position"] = self._control_cache.get(
+            "holding_registers[12]", 100.0
+        )
+
+        await self._cache_control_input("coils[10]", False)
+        self._control_cache["emergency_shutdown"] = self._control_cache.get(
+            "coils[10]", False
+        )
+
+        await self._cache_control_input("coils[11]", True)
+        self._control_cache["thaumic_dampener_enabled"] = self._control_cache.get(
+            "coils[11]", True
+        )
 
     def update(self, dt: float) -> None:
         """Update reactor physics for one simulation step.
@@ -227,14 +190,7 @@ class ReactorPhysics:
         Raises:
             RuntimeError: If not initialised
         """
-        if not self._initialised:
-            raise RuntimeError(
-                f"Reactor physics not initialised: {self.device_name}. "
-                "Call initialise() first."
-            )
-
-        if dt <= 0:
-            logger.warning(f"Invalid time delta {dt}, skipping update")
+        if not self._validate_update(dt):
             return
 
         # Read control inputs
@@ -254,7 +210,7 @@ class ReactorPhysics:
             self.state.core_temperature_c > self.params.critical_temperature_c
             or self.state.containment_integrity < 0.5
         ):
-            logger.warning(f"{self.device_name}: Auto-SCRAM triggered!")
+            self.logger.warning(f"{self.device_name}: Auto-SCRAM triggered!")
             self._scram_active = True
             self._emergency_shutdown(dt)
             return
@@ -267,7 +223,7 @@ class ReactorPhysics:
         self._update_power_output()
         self._update_damage(dt)
 
-        logger.debug(
+        self.logger.debug(
             f"{self.device_name}: T={self.state.core_temperature_c:.1f}°C, "
             f"P={self.state.power_output_mw:.1f}MW, "
             f"Thaumic={self.state.thaumic_field_strength:.2f}"
@@ -276,10 +232,6 @@ class ReactorPhysics:
     async def write_telemetry(self) -> None:
         """Write current reactor state to device memory map."""
         await self._write_telemetry()
-
-    def _read_control_input(self, name: str, default: Any) -> Any:
-        """Read control input from cache."""
-        return self._control_cache.get(name, default)
 
     def _update_reaction_rate(
         self, dt: float, power_setpoint: float, control_rods: float
@@ -446,7 +398,7 @@ class ReactorPhysics:
                 0.0, self.state.containment_integrity
             )
 
-            logger.warning(
+            self.logger.warning(
                 f"{self.device_name}: Thaumic instability! "
                 f"Field={self.state.thaumic_field_strength:.2f}, "
                 f"Containment={self.state.containment_integrity:.2f}"
@@ -482,7 +434,7 @@ class ReactorPhysics:
             self.state.damage_level = min(1.0, self.state.damage_level)
 
             if self.state.damage_level > 0.1:
-                logger.warning(
+                self.logger.warning(
                     f"{self.device_name}: Thermal damage {self.state.damage_level * 100:.1f}% "
                     f"at {self.state.core_temperature_c:.1f}°C"
                 )
@@ -521,7 +473,7 @@ class ReactorPhysics:
         self._update_pressure()
         self._update_power_output()
 
-        logger.debug(
+        self.logger.debug(
             f"{self.device_name}: SCRAM active - T={self.state.core_temperature_c:.1f}°C, "
             f"reaction={self.state.reaction_rate:.3f}"
         )
@@ -597,10 +549,10 @@ class ReactorPhysics:
             and self.state.containment_integrity > 0.9
         ):
             self._scram_active = False
-            logger.info(f"{self.device_name}: SCRAM reset successful")
+            self.logger.info(f"{self.device_name}: SCRAM reset successful")
             return True
         else:
-            logger.warning(
+            self.logger.warning(
                 f"{self.device_name}: SCRAM reset failed - conditions not safe"
             )
             return False
@@ -616,7 +568,7 @@ class ReactorPhysics:
             percent: Target power as percentage of rated (0-150)
         """
         self._control_cache["power_setpoint_percent"] = max(0.0, min(150.0, percent))
-        logger.debug(f"{self.device_name}: Power setpoint set to {percent}%")
+        self.logger.debug(f"{self.device_name}: Power setpoint set to {percent}%")
 
     def set_control_rods_position(self, percent: float) -> None:
         """Set control rod position.
@@ -625,7 +577,7 @@ class ReactorPhysics:
             percent: Rod position (0=fully inserted, 100=fully withdrawn)
         """
         self._control_cache["control_rods_position"] = max(0.0, min(100.0, percent))
-        logger.debug(f"{self.device_name}: Control rods set to {percent}%")
+        self.logger.debug(f"{self.device_name}: Control rods set to {percent}%")
 
     def set_coolant_pump_speed(self, percent: float) -> None:
         """Set coolant pump speed.
@@ -634,7 +586,7 @@ class ReactorPhysics:
             percent: Pump speed as percentage (0-100)
         """
         self._control_cache["coolant_pump_speed"] = max(0.0, min(100.0, percent))
-        logger.debug(f"{self.device_name}: Coolant pump set to {percent}%")
+        self.logger.debug(f"{self.device_name}: Coolant pump set to {percent}%")
 
     def set_thaumic_dampener(self, enabled: bool) -> None:
         """Enable or disable thaumic dampener.
@@ -643,7 +595,7 @@ class ReactorPhysics:
             enabled: True to enable dampener
         """
         self._control_cache["thaumic_dampener_enabled"] = bool(enabled)
-        logger.debug(
+        self.logger.debug(
             f"{self.device_name}: Thaumic dampener "
             f"{'enabled' if enabled else 'disabled'}"
         )
@@ -651,7 +603,7 @@ class ReactorPhysics:
     def trigger_scram(self) -> None:
         """Trigger emergency shutdown (SCRAM)."""
         self._control_cache["emergency_shutdown"] = True
-        logger.warning(f"{self.device_name}: SCRAM triggered")
+        self.logger.warning(f"{self.device_name}: SCRAM triggered")
 
     def get_power_setpoint(self) -> float:
         """Get current power setpoint."""

@@ -15,7 +15,7 @@ from abc import ABC, abstractmethod
 from pathlib import Path
 from typing import Any
 
-from components.security.logging_system import get_logger
+from components.security.logging_system import EventSeverity, get_logger
 from components.state.data_store import DataStore
 from components.time.simulation_time import SimulationTime
 
@@ -334,7 +334,7 @@ class BaseDevice(ABC):
         """
         return self.memory_map.get(address)
 
-    def write_memory(self, address: str, value: Any) -> bool:
+    async def write_memory(self, address: str, value: Any) -> bool:
         """
         Write a value to the memory map.
 
@@ -350,17 +350,42 @@ class BaseDevice(ABC):
                 f"Attempted write to invalid address '{address}' "
                 f"on device '{self.device_name}'"
             )
+            # Log security event for invalid write
+            await self.logger.log_security(
+                message=f"Invalid memory write to {address}",
+                severity=EventSeverity.WARNING,
+                data={
+                    "address": address,
+                    "value": value,
+                    "reason": "address_not_found",
+                },
+            )
             return False
 
+        # Capture old value for audit
+        old_value = self.memory_map[address]
+
+        # Update memory
         self.memory_map[address] = value
-        self.logger.debug(f"Device '{self.device_name}': {address} <- {value}")
+
+        # Audit log the write
+        await self.logger.log_security(
+            message=f"Memory write: {address} = {value}",
+            severity=EventSeverity.INFO,
+            data={
+                "address": address,
+                "old_value": old_value,
+                "new_value": value,
+            },
+        )
+
         return True
 
     def bulk_read_memory(self) -> dict[str, Any]:
         """Return complete memory map snapshot."""
         return self.memory_map.copy()
 
-    def bulk_write_memory(self, values: dict[str, Any]) -> bool:
+    async def bulk_write_memory(self, values: dict[str, Any]) -> bool:
         """
         Write multiple values to memory map.
 
@@ -372,7 +397,7 @@ class BaseDevice(ABC):
         """
         success = True
         for address, value in values.items():
-            if not self.write_memory(address, value):
+            if not await self.write_memory(address, value):
                 success = False
         return success
 

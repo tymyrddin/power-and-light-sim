@@ -144,7 +144,7 @@ class TestTurbinePhysicsInitialization:
 
         turbine = TurbinePhysics("nonexistent", data_store)
 
-        with pytest.raises(RuntimeError, match="device nonexistent not found"):
+        with pytest.raises(RuntimeError, match="device 'nonexistent' not found"):
             await turbine.initialise()
 
     @pytest.mark.asyncio

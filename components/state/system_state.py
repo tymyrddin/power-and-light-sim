@@ -87,6 +87,7 @@ class SystemState:
         self.simulation = SimulationState()
         self._lock = asyncio.Lock()
         self._sim_time = SimulationTime()
+        self.audit_log: list[dict[str, Any]] = []  # Centralised audit trail
 
     # ----------------------------------------------------------------
     # Device registration
@@ -382,4 +383,61 @@ class SystemState:
             device_count = len(self.devices)
             self.devices.clear()
             self.simulation = SimulationState()
+            self.audit_log.clear()  # Clear audit log on reset
             logger.info(f"System state reset: cleared {device_count} devices")
+
+    # ----------------------------------------------------------------
+    # Audit trail management
+    # ----------------------------------------------------------------
+
+    async def append_audit_event(self, event: dict[str, Any]) -> None:
+        """
+        Append event to centralised audit log.
+
+        Args:
+            event: Audit event dictionary
+
+        Note:
+            Automatically trims log to last 10000 events to prevent unbounded growth.
+        """
+        async with self._lock:
+            self.audit_log.append(event)
+
+            # Trim if too long (keep last 10000 events)
+            if len(self.audit_log) > 10000:
+                self.audit_log = self.audit_log[-10000:]
+
+    async def get_audit_log(
+        self,
+        limit: int | None = None,
+        device: str | None = None,
+        event_type: str | None = None,
+    ) -> list[dict[str, Any]]:
+        """
+        Query audit log with optional filters.
+
+        Args:
+            limit: Maximum number of events to return
+            device: Filter by device name
+            event_type: Filter by event type (e.g., "MEMORY_WRITE")
+
+        Returns:
+            List of audit events (most recent first)
+        """
+        async with self._lock:
+            events = self.audit_log.copy()
+
+            # Apply filters
+            if device:
+                events = [e for e in events if e.get("device") == device]
+            if event_type:
+                events = [e for e in events if e.get("message", "").startswith(event_type)]
+
+            # Most recent first
+            events.reverse()
+
+            # Apply limit
+            if limit:
+                events = events[:limit]
+
+            return events

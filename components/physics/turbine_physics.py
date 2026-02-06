@@ -15,15 +15,11 @@ Integrates with:
 - ConfigLoader for turbine parameters
 """
 
-import logging
 from dataclasses import dataclass
 from typing import Any
 
+from components.physics.base_physics_engine import BaseDevicePhysicsEngine
 from components.state.data_store import DataStore
-from components.time.simulation_time import SimulationTime
-
-# Configure logging
-logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -80,7 +76,7 @@ class TurbineParameters:
     vibration_critical_mils: float = 10.0
 
 
-class TurbinePhysics:
+class TurbinePhysics(BaseDevicePhysicsEngine):
     """
     Simulates steam turbine physical behaviour.
 
@@ -120,17 +116,13 @@ class TurbinePhysics:
         if not device_name:
             raise ValueError("device_name cannot be empty")
 
-        self.device_name = device_name
-        self.data_store = data_store
-        self.params = params or TurbineParameters()
+        # Initialize base class
+        super().__init__(device_name, data_store, params or TurbineParameters())
+
+        # Turbine-specific state
         self.state = TurbineState()
-        self.sim_time = SimulationTime()
 
-        self._last_update_time: float = 0.0
-        self._initialised = False
-        self._control_cache: dict[str, Any] = {}  # Cache for control inputs
-
-        logger.info(
+        self.logger.info(
             f"Turbine physics created: {device_name} "
             f"(rated {self.params.rated_power_mw}MW @ {self.params.rated_speed_rpm}RPM)"
         )
@@ -147,20 +139,11 @@ class TurbinePhysics:
         Raises:
             RuntimeError: If device not found in DataStore
         """
-        # Verify device exists
-        device = await self.data_store.get_device_state(self.device_name)
-        if not device:
-            raise RuntimeError(
-                f"Cannot initialise turbine physics: device {self.device_name} not found"
-            )
+        # Base class handles device validation and initialization
+        await super().initialise()
 
         # Write initial state to memory map
-        await self._write_telemetry()
-
-        self._last_update_time = self.sim_time.now()
-        self._initialised = True
-
-        logger.info(f"Turbine physics initialised: {self.device_name}")
+        await self.write_telemetry()
 
     # ----------------------------------------------------------------
     # Physics simulation
@@ -173,35 +156,21 @@ class TurbinePhysics:
         This allows update() to be synchronous while still accessing
         async DataStore data.
         """
-        # Read control inputs from device memory map
-        # These map to specific addresses that protocol handlers write to
-        try:
-            speed_setpoint = await self.data_store.read_memory(
-                self.device_name, "holding_registers[10]"
-            )
-            governor_enabled = await self.data_store.read_memory(
-                self.device_name, "coils[10]"
-            )
-            emergency_trip = await self.data_store.read_memory(
-                self.device_name, "coils[11]"
-            )
+        # Read control inputs and cache with both memory address and friendly name
+        await self._cache_control_input("holding_registers[10]", 0.0)
+        self._control_cache["speed_setpoint_rpm"] = self._control_cache.get(
+            "holding_registers[10]", 0.0
+        )
 
-            self._control_cache = {
-                "speed_setpoint_rpm": float(speed_setpoint) if speed_setpoint else 0.0,
-                "governor_enabled": (
-                    bool(governor_enabled) if governor_enabled else False
-                ),
-                "emergency_trip": bool(emergency_trip) if emergency_trip else False,
-            }
-        except Exception as e:
-            logger.warning(
-                f"Failed to read control inputs for {self.device_name}: {e}. Using defaults."
-            )
-            self._control_cache = {
-                "speed_setpoint_rpm": 0.0,
-                "governor_enabled": False,
-                "emergency_trip": False,
-            }
+        await self._cache_control_input("coils[10]", False)
+        self._control_cache["governor_enabled"] = self._control_cache.get(
+            "coils[10]", False
+        )
+
+        await self._cache_control_input("coils[11]", False)
+        self._control_cache["emergency_trip"] = self._control_cache.get(
+            "coils[11]", False
+        )
 
     def update(self, dt: float) -> None:
         """Update turbine physics for one simulation step.
@@ -219,20 +188,15 @@ class TurbinePhysics:
         Raises:
             RuntimeError: If not initialised
         """
-        if not self._initialised:
-            raise RuntimeError(
-                f"Turbine physics not initialised: {self.device_name}. Call initialise() first."
-            )
-
-        if dt <= 0:
-            logger.warning(f"Invalid time delta {dt}, skipping update")
+        # Validate before proceeding
+        if not self._validate_update(dt):
             return
 
         # Read control inputs from PLC (via memory map)
         # These are set by protocol handlers or test scripts
-        speed_setpoint = self._read_control_input("speed_setpoint_rpm", 0.0)
-        governor_enabled = self._read_control_input("governor_enabled", False)
-        emergency_trip = self._read_control_input("emergency_trip", False)
+        speed_setpoint = self._read_control_input("holding_registers[10]", 0.0)
+        governor_enabled = self._read_control_input("coils[10]", False)
+        emergency_trip = self._read_control_input("coils[11]", False)
 
         # Update physics based on controls
         if emergency_trip:
@@ -248,7 +212,7 @@ class TurbinePhysics:
         self._update_power_output()
         self._update_damage(dt)
 
-        logger.debug(
+        self.logger.debug(
             f"{self.device_name}: RPM={self.state.shaft_speed_rpm:.0f}, "
             f"Power={self.state.power_output_mw:.1f}MW"
         )
@@ -259,22 +223,6 @@ class TurbinePhysics:
         Should be called after update() to persist state.
         """
         await self._write_telemetry()
-
-    def _read_control_input(self, name: str, default: Any) -> Any:
-        """Read control input from device memory map.
-
-        This is a synchronous helper that reads from the cached control inputs
-        that should be populated at the start of each update cycle.
-
-        Args:
-            name: Control input name (e.g., 'speed_setpoint_rpm', 'governor_enabled')
-            default: Default value if control input not found
-
-        Returns:
-            Control input value from cache or default
-        """
-        # Read from control cache (populated by async read before update())
-        return self._control_cache.get(name, default)
 
     def _update_with_governor(self, dt: float, setpoint_rpm: float) -> None:
         """Update shaft speed with governor control active.
@@ -333,7 +281,7 @@ class TurbinePhysics:
             self.state.shaft_speed_rpm -= emergency_decel_rate * dt
             self.state.shaft_speed_rpm = max(0.0, self.state.shaft_speed_rpm)
 
-            logger.debug(
+            self.logger.debug(
                 f"{self.device_name}: Emergency shutdown - "
                 f"RPM={self.state.shaft_speed_rpm:.0f}"
             )
@@ -415,7 +363,7 @@ class TurbinePhysics:
 
         # Log high vibration
         if self.state.vibration_mils > self.params.vibration_critical_mils:
-            logger.warning(
+            self.logger.warning(
                 f"{self.device_name}: High vibration {self.state.vibration_mils:.1f} mils"
             )
 
@@ -462,7 +410,7 @@ class TurbinePhysics:
                 self.state.damage_level = min(1.0, self.state.damage_level)
 
                 if self.state.damage_level > 0.1:
-                    logger.warning(
+                    self.logger.warning(
                         f"{self.device_name}: Overspeed damage {self.state.damage_level * 100:.1f}% "
                         f"at {self.state.shaft_speed_rpm:.0f} RPM"
                     )
@@ -544,7 +492,7 @@ class TurbinePhysics:
             rpm: Target speed in RPM
         """
         self._control_cache["speed_setpoint_rpm"] = max(0.0, float(rpm))
-        logger.debug(f"{self.device_name}: Speed setpoint set to {rpm} RPM")
+        self.logger.debug(f"{self.device_name}: Speed setpoint set to {rpm} RPM")
 
     def set_governor_enabled(self, enabled: bool) -> None:
         """Enable or disable governor control.
@@ -553,7 +501,7 @@ class TurbinePhysics:
             enabled: True to enable automatic speed control
         """
         self._control_cache["governor_enabled"] = bool(enabled)
-        logger.debug(
+        self.logger.debug(
             f"{self.device_name}: Governor {'enabled' if enabled else 'disabled'}"
         )
 
@@ -563,7 +511,7 @@ class TurbinePhysics:
         Closes steam valves and applies emergency braking.
         """
         self._control_cache["emergency_trip"] = True
-        logger.warning(f"{self.device_name}: Emergency trip triggered")
+        self.logger.warning(f"{self.device_name}: Emergency trip triggered")
 
     def reset_trip(self) -> bool:
         """Reset emergency trip condition.
@@ -574,10 +522,10 @@ class TurbinePhysics:
         # Only allow reset if turbine is below safe speed
         if self.state.shaft_speed_rpm < self.params.rated_speed_rpm * 0.1:
             self._control_cache["emergency_trip"] = False
-            logger.info(f"{self.device_name}: Trip reset successful")
+            self.logger.info(f"{self.device_name}: Trip reset successful")
             return True
         else:
-            logger.warning(
+            self.logger.warning(
                 f"{self.device_name}: Trip reset failed - speed too high "
                 f"({self.state.shaft_speed_rpm} RPM)"
             )

@@ -426,14 +426,12 @@ class ICSLogger:
     async def _store_in_datastore(self, entry: LogEntry) -> None:
         """Store log entry in DataStore for centralised access."""
         try:
-            # Store as device metadata with unique suffix to prevent collisions
-            log_key = f"log_{int(entry.simulation_time * 1000)}_{uuid.uuid4().hex[:8]}"
-            await self.data_store.update_metadata(
-                self.device,
-                {log_key: entry.to_json()},
+            # Store in central audit log
+            await self.data_store.system_state.append_audit_event(
+                entry.to_dict()
             )
         except Exception:
-            self.logger.exception("Failed to store log in DataStore")
+            self.logger.exception("Failed to store log in central audit log")
 
     async def log_audit(
         self, message: str, user: str = "", action: str = "", result: str = "", **kwargs

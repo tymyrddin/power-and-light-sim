@@ -337,8 +337,14 @@ class AuthenticationManager:
             user = self.users.get(username)
 
             if not user or not user.active:
-                self.logger.warning(
-                    f"Authentication failed for '{username}' from {source_ip}"
+                await self.logger.log_security(
+                    message=f"Failed login attempt for '{username}'",
+                    severity=EventSeverity.WARNING,
+                    user=username,
+                    data={
+                        "source_ip": source_ip,
+                        "reason": "user_not_found_or_inactive",
+                    },
                 )
                 self._audit_log(
                     "AUTHENTICATION", username, "DENIED", "User not found or inactive"
@@ -369,8 +375,14 @@ class AuthenticationManager:
             self.sessions[session_id] = session
             user.last_login = current_time
 
-            self.logger.info(
-                f"User '{username}' authenticated from {source_ip} (session: {session_id[:8]}...)"
+            await self.logger.log_security(
+                message=f"User '{username}' authenticated from {source_ip}",
+                severity=EventSeverity.INFO,
+                user=username,
+                data={
+                    "session_id": session_id,
+                    "source_ip": source_ip,
+                },
             )
             self._audit_log("AUTHENTICATION", username, "ALLOWED", f"From {source_ip}")
 
@@ -381,7 +393,12 @@ class AuthenticationManager:
         async with self._lock:
             session = self.sessions.pop(session_id, None)
             if session:
-                self.logger.info(f"User '{session.user.username}' logged out")
+                await self.logger.log_security(
+                    message=f"User '{session.user.username}' logged out",
+                    severity=EventSeverity.INFO,
+                    user=session.user.username,
+                    data={"session_id": session_id},
+                )
                 return True
             return False
 

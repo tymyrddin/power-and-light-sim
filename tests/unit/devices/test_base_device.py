@@ -420,7 +420,7 @@ class TestBaseDeviceMemoryMap:
 
         WHY: Protocols must be able to write to device.
         """
-        success = started_device.write_memory("holding_registers[0]", 42)
+        success = await started_device.write_memory("holding_registers[0]", 42)
 
         assert success
         assert started_device.memory_map["holding_registers[0]"] == 42
@@ -431,7 +431,7 @@ class TestBaseDeviceMemoryMap:
 
         WHY: Must reject invalid addresses.
         """
-        success = started_device.write_memory("invalid_address", 42)
+        success = await started_device.write_memory("invalid_address", 42)
 
         assert not success
         assert "invalid_address" not in started_device.memory_map
@@ -464,7 +464,7 @@ class TestBaseDeviceMemoryMap:
             "coils[0]": True,
         }
 
-        success = started_device.bulk_write_memory(updates)
+        success = await started_device.bulk_write_memory(updates)
 
         assert success
         assert started_device.memory_map["holding_registers[0]"] == 100
@@ -482,7 +482,7 @@ class TestBaseDeviceMemoryMap:
             "invalid_address": 999,
         }
 
-        success = started_device.bulk_write_memory(updates)
+        success = await started_device.bulk_write_memory(updates)
 
         assert not success  # Partial failure
         assert started_device.memory_map["holding_registers[0]"] == 100
@@ -774,7 +774,7 @@ class TestBaseDeviceConcurrency:
 
         async def write_loop(address: str, start_value: int):
             for i in range(10):
-                started_device.write_memory(address, start_value + i)
+                await started_device.write_memory(address, start_value + i)
                 await asyncio.sleep(0.001)
 
         # Concurrent writes to different addresses
@@ -881,7 +881,7 @@ class TestBaseDeviceIntegration:
         assert test_device.metadata["scan_count"] > 0
 
         # 3. Modify memory via protocol
-        test_device.write_memory("coils[0]", True)
+        await test_device.write_memory("coils[0]", True)
         assert test_device.memory_map["coils[0]"] is True
 
         # 4. Reset device

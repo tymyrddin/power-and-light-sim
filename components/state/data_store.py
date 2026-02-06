@@ -439,3 +439,33 @@ class DataStore:
         Should be called once per simulation loop iteration.
         """
         await self.system_state.increment_update_cycles()
+
+    # ----------------------------------------------------------------
+    # Audit trail access
+    # ----------------------------------------------------------------
+
+    async def get_audit_log(
+        self,
+        limit: int | None = None,
+        device: str | None = None,
+        event_type: str | None = None,
+    ) -> list[dict[str, Any]]:
+        """
+        Query central audit log.
+
+        Args:
+            limit: Maximum events to return
+            device: Filter by device name
+            event_type: Filter by event type (e.g., "Memory write")
+
+        Returns:
+            List of audit events (most recent first)
+
+        Example:
+            >>> events = await data_store.get_audit_log(limit=10, device="turbine_plc_1")
+            >>> for event in events:
+            ...     print(f"{event['message']}: {event['data']}")
+        """
+        return await self.system_state.get_audit_log(
+            limit=limit, device=device, event_type=event_type
+        )

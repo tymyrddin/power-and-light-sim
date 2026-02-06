@@ -14,15 +14,11 @@ Integrates with:
 - ConfigLoader for grid parameters
 """
 
-import logging
 from dataclasses import dataclass
 from typing import Any
 
+from components.physics.base_physics_engine import BasePhysicsEngine
 from components.state.data_store import DataStore
-from components.time.simulation_time import SimulationTime
-
-# Configure logging
-logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -77,7 +73,7 @@ class GridParameters:
     damping: float = 1.0  # MW/Hz
 
 
-class GridPhysics:
+class GridPhysics(BasePhysicsEngine):
     """
     Simulates overall grid dynamics.
 
@@ -103,14 +99,10 @@ class GridPhysics:
             data_store: DataStore instance for device access
             params: Grid parameters (uses defaults if None)
         """
-        self.data_store = data_store
-        self.params = params or GridParameters()
+        super().__init__(data_store, params or GridParameters())
         self.state = GridState(frequency_hz=self.params.nominal_frequency_hz)
-        self.sim_time = SimulationTime()
 
-        self._initialised = False
-
-        logger.info(
+        self.logger.info(
             f"Grid physics created: {self.params.nominal_frequency_hz}Hz nominal, "
             f"inertia={self.params.inertia_constant}MW·s"
         )
@@ -130,9 +122,10 @@ class GridPhysics:
         # Initial load/gen aggregation
         await self.update_from_devices()
 
+        self._last_update_time = self.sim_time.now()
         self._initialised = True
 
-        logger.info(
+        self.logger.info(
             f"Grid physics initialised: {self.state.total_gen_mw:.1f}MW gen, "
             f"{self.state.total_load_mw:.1f}MW load"
         )
@@ -163,7 +156,7 @@ class GridPhysics:
         # would read from load controllers or calculate from substations
         self.state.total_load_mw = 80.0  # Fixed 80MW load for now
 
-        logger.debug(
+        self.logger.debug(
             f"Grid: Gen={self.state.total_gen_mw:.1f}MW, "
             f"Load={self.state.total_load_mw:.1f}MW, "
             f"Imbalance={self.state.total_gen_mw - self.state.total_load_mw:.1f}MW"
@@ -194,11 +187,7 @@ class GridPhysics:
         Raises:
             RuntimeError: If not initialised
         """
-        if not self._initialised:
-            raise RuntimeError("Grid physics not initialised. Call initialise() first.")
-
-        if dt <= 0:
-            logger.warning(f"Invalid time delta {dt}, skipping update")
+        if not self._validate_update(dt):
             return
 
         # Power imbalance (MW)
@@ -228,7 +217,7 @@ class GridPhysics:
 
         # Log significant deviations
         if abs(frequency_deviation) > self.params.frequency_deadband_hz:
-            logger.warning(
+            self.logger.warning(
                 f"Grid frequency deviation: {self.state.frequency_hz:.3f}Hz "
                 f"(imbalance: {imbalance_mw:.1f}MW)"
             )
@@ -251,13 +240,13 @@ class GridPhysics:
 
         # Log trip events
         if self.state.under_frequency_trip and not old_uf_trip:
-            logger.error(
+            self.logger.error(
                 f"UNDER-FREQUENCY TRIP: {self.state.frequency_hz:.3f}Hz "
                 f"(limit: {self.params.min_frequency_hz}Hz)"
             )
 
         if self.state.over_frequency_trip and not old_of_trip:
-            logger.error(
+            self.logger.error(
                 f"OVER-FREQUENCY TRIP: {self.state.frequency_hz:.3f}Hz "
                 f"(limit: {self.params.max_frequency_hz}Hz)"
             )
@@ -273,13 +262,13 @@ class GridPhysics:
 
         # Log trip events
         if self.state.undervoltage_trip and not old_uv_trip:
-            logger.error(
+            self.logger.error(
                 f"UNDERVOLTAGE TRIP: {self.state.voltage_pu:.3f}pu "
                 f"(limit: {self.params.min_voltage_pu}pu)"
             )
 
         if self.state.overvoltage_trip and not old_ov_trip:
-            logger.error(
+            self.logger.error(
                 f"OVERVOLTAGE TRIP: {self.state.voltage_pu:.3f}pu "
                 f"(limit: {self.params.max_voltage_pu}pu)"
             )
