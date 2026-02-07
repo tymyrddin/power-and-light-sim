@@ -365,8 +365,12 @@ class BaseDevice(ABC):
         # Capture old value for audit
         old_value = self.memory_map[address]
 
-        # Update memory
+        # Update local memory
         self.memory_map[address] = value
+
+        # Write to DataStore to persist the change
+        # This prevents the scan loop from overwriting with stale values
+        await self.data_store.write_memory(self.device_name, address, value)
 
         # Audit log the write
         await self.logger.log_security(

@@ -2,14 +2,14 @@
 """
 Security Information and Event Management (SIEM) System.
 
-Consumes and analyzes the audit trail from ICSLogger to detect security
+Consumes and analyses the audit trail from ICSLogger to detect security
 incidents, correlate events, and generate alerts.
 
 Features:
 - Real-time audit trail monitoring
 - Security event correlation
 - Anomaly detection (failed auth, unusual access patterns)
-- Alert generation and prioritization
+- Alert generation and prioritisation
 - Incident tracking
 - Compliance reporting
 """
