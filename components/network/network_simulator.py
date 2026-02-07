@@ -336,7 +336,10 @@ class NetworkSimulator:
                         rule_ports = rule.get("ports", [])
 
                         # Normalize rule protocol for comparison
-                        if normalize_protocol(rule_protocol) == normalized_protocol and port in rule_ports:
+                        if (
+                            normalize_protocol(rule_protocol) == normalized_protocol
+                            and port in rule_ports
+                        ):
                             port_allowed = True
                             break
 
@@ -364,7 +367,9 @@ class NetworkSimulator:
                         return p.replace("_tcp", "").replace("_rtu", "")
 
                     normalized_protocol = normalize_protocol(protocol)
-                    normalized_allowed = [normalize_protocol(p) for p in allowed_protocols]
+                    normalized_allowed = [
+                        normalize_protocol(p) for p in allowed_protocols
+                    ]
 
                     if normalized_protocol not in normalized_allowed:
                         return False, f"protocol_{protocol}_not_allowed"
@@ -502,7 +507,9 @@ class NetworkSimulator:
                 return False
 
             # Check zone-based policy
-            allowed, reason = self._check_zone_policy(src_zone, dst_zone, protocol, port)
+            allowed, reason = self._check_zone_policy(
+                src_zone, dst_zone, protocol, port
+            )
 
             if allowed:
                 self.logger.debug(

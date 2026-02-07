@@ -31,6 +31,7 @@ async def opcua_anonymous_browse():
             try:
                 # ServerStatus node (ns=0;i=2256)
                 from asyncua import ua
+
                 server_status_node = client.get_node(ua.NodeId(2256, 0))
 
                 # Read individual status attributes
@@ -55,7 +56,7 @@ async def opcua_anonymous_browse():
             results = {
                 "timestamp": datetime.now().isoformat(),
                 "server_url": target_url,
-                "server_state": str(state) if 'state' in locals() else "Unknown",
+                "server_state": str(state) if "state" in locals() else "Unknown",
                 "objects": [],
             }
 

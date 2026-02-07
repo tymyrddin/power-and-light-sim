@@ -25,10 +25,11 @@ Based on cpppo library server functionality.
 """
 
 import asyncio
-# import logging
-from components.security.logging_system import get_logger
 import struct
 from typing import Any
+
+# import logging
+from components.security.logging_system import get_logger
 
 try:
     import cpppo

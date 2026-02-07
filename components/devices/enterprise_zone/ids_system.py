@@ -145,7 +145,9 @@ class IDSSystem(BaseDevice):
         self.total_alerts_generated = 0
 
         # Detection rule state tracking
-        self.scan_tracker: dict[str, list[tuple[str, float]]] = {}  # source_ip -> [(dest_ip, timestamp), ...]
+        self.scan_tracker: dict[str, list[tuple[str, float]]] = (
+            {}
+        )  # source_ip -> [(dest_ip, timestamp), ...]
         self.protocol_violations: dict[str, int] = {}  # device -> count
         self.unauthorized_access_attempts: dict[str, int] = {}  # source_ip -> count
         self.traffic_baseline: dict[str, int] = {}  # device -> normal packet count
@@ -193,20 +195,22 @@ class IDSSystem(BaseDevice):
 
     async def _initialise_memory_map(self) -> None:
         """Initialize IDS memory map with statistics."""
-        self.memory_map.update({
-            "total_packets_analyzed": 0,
-            "total_alerts_generated": 0,
-            "active_alerts": 0,
-            "critical_alerts": 0,
-            "high_alerts": 0,
-            "medium_alerts": 0,
-            "low_alerts": 0,
-            "analysis_interval": self.analysis_interval,
-            "scan_detections": 0,
-            "protocol_violations": 0,
-            "unauthorized_access": 0,
-            "malware_detections": 0,
-        })
+        self.memory_map.update(
+            {
+                "total_packets_analyzed": 0,
+                "total_alerts_generated": 0,
+                "active_alerts": 0,
+                "critical_alerts": 0,
+                "high_alerts": 0,
+                "medium_alerts": 0,
+                "low_alerts": 0,
+                "analysis_interval": self.analysis_interval,
+                "scan_detections": 0,
+                "protocol_violations": 0,
+                "unauthorized_access": 0,
+                "malware_detections": 0,
+            }
+        )
 
         self.logger.debug("IDS memory map initialized")
 
@@ -294,8 +298,7 @@ class IDSSystem(BaseDevice):
         try:
             # Simulate scanning detection by checking network simulator events
             network_events = await self.data_store.get_audit_log(
-                limit=100,
-                event_type="network_access"
+                limit=100, event_type="network_access"
             )
 
             current_time = self.sim_time.now()
@@ -314,7 +317,8 @@ class IDSSystem(BaseDevice):
 
                     # Clean old entries
                     self.scan_tracker[source] = [
-                        (t, ts) for t, ts in self.scan_tracker[source]
+                        (t, ts)
+                        for t, ts in self.scan_tracker[source]
                         if current_time - ts < self.scan_time_window
                     ]
 
@@ -330,7 +334,9 @@ class IDSSystem(BaseDevice):
                             source_ip=source,
                             destination_ip="multiple",
                             protocol="multiple",
-                            affected_devices=list(set(t for t, _ in self.scan_tracker[source])),
+                            affected_devices=list(
+                                set(t for t, _ in self.scan_tracker[source])
+                            ),
                             indicators={
                                 "targets_scanned": unique_targets,
                                 "time_window": self.scan_time_window,
@@ -360,12 +366,19 @@ class IDSSystem(BaseDevice):
                     continue
 
                 # Check for diagnostic faults (simulated protocol violations)
-                diagnostic_fault = device_state.memory_map.get("_diagnostic_fault", False)
+                diagnostic_fault = device_state.memory_map.get(
+                    "_diagnostic_fault", False
+                )
 
                 if diagnostic_fault:
-                    self.protocol_violations[device_name] = self.protocol_violations.get(device_name, 0) + 1
+                    self.protocol_violations[device_name] = (
+                        self.protocol_violations.get(device_name, 0) + 1
+                    )
 
-                    if self.protocol_violations[device_name] >= self.violation_threshold:
+                    if (
+                        self.protocol_violations[device_name]
+                        >= self.violation_threshold
+                    ):
                         protocols = ", ".join(device_state.protocols)
 
                         await self._generate_alert(
@@ -379,7 +392,9 @@ class IDSSystem(BaseDevice):
                             protocol=protocols,
                             affected_devices=[device_name],
                             indicators={
-                                "violation_count": self.protocol_violations[device_name],
+                                "violation_count": self.protocol_violations[
+                                    device_name
+                                ],
                                 "protocols": device_state.protocols,
                                 "threshold": self.violation_threshold,
                             },
@@ -403,14 +418,23 @@ class IDSSystem(BaseDevice):
 
             for event in auth_events:
                 message = event.get("message", "").lower()
-                if "denied" in message or "unauthorized" in message or "failed" in message:
-                    source = event.get("data", {}).get("source_ip", event.get("user", "unknown"))
+                if (
+                    "denied" in message
+                    or "unauthorized" in message
+                    or "failed" in message
+                ):
+                    source = event.get("data", {}).get(
+                        "source_ip", event.get("user", "unknown")
+                    )
 
                     self.unauthorized_access_attempts[source] = (
                         self.unauthorized_access_attempts.get(source, 0) + 1
                     )
 
-                    if self.unauthorized_access_attempts[source] >= self.unauthorized_threshold:
+                    if (
+                        self.unauthorized_access_attempts[source]
+                        >= self.unauthorized_threshold
+                    ):
                         device = event.get("device", "unknown")
 
                         await self._generate_alert(
@@ -424,7 +448,9 @@ class IDSSystem(BaseDevice):
                             protocol="authentication",
                             affected_devices=[device],
                             indicators={
-                                "attempt_count": self.unauthorized_access_attempts[source],
+                                "attempt_count": self.unauthorized_access_attempts[
+                                    source
+                                ],
                                 "threshold": self.unauthorized_threshold,
                             },
                         )
@@ -433,7 +459,9 @@ class IDSSystem(BaseDevice):
                         self.unauthorized_access_attempts[source] = 0
 
         except Exception as e:
-            self.logger.error(f"Unauthorized access detection error: {e}", exc_info=True)
+            self.logger.error(
+                f"Unauthorized access detection error: {e}", exc_info=True
+            )
 
     async def _detect_malware_signatures(self) -> None:
         """
@@ -675,7 +703,8 @@ class IDSSystem(BaseDevice):
             List of matching alerts
         """
         alerts = [
-            a for a in self.alerts
+            a
+            for a in self.alerts
             if a.status not in [AlertStatus.CLOSED, AlertStatus.FALSE_POSITIVE]
         ]
 
@@ -714,8 +743,16 @@ class IDSSystem(BaseDevice):
         """Trim alert history to configured limit."""
         if len(self.alerts) > self.alert_history_limit:
             # Keep most recent alerts, prioritizing unresolved
-            active = [a for a in self.alerts if a.status not in [AlertStatus.CLOSED, AlertStatus.FALSE_POSITIVE]]
-            closed = [a for a in self.alerts if a.status in [AlertStatus.CLOSED, AlertStatus.FALSE_POSITIVE]]
+            active = [
+                a
+                for a in self.alerts
+                if a.status not in [AlertStatus.CLOSED, AlertStatus.FALSE_POSITIVE]
+            ]
+            closed = [
+                a
+                for a in self.alerts
+                if a.status in [AlertStatus.CLOSED, AlertStatus.FALSE_POSITIVE]
+            ]
 
             # Keep all active + recent closed
             closed.sort(key=lambda a: a.timestamp, reverse=True)
@@ -729,7 +766,13 @@ class IDSSystem(BaseDevice):
     async def _check_alarm_conditions(self) -> None:
         """Check for conditions requiring alarm escalation."""
         # Critical alerts alarm
-        critical_count = len([a for a in self.alerts if a.severity == AlertSeverity.CRITICAL and a.status == AlertStatus.NEW])
+        critical_count = len(
+            [
+                a
+                for a in self.alerts
+                if a.severity == AlertSeverity.CRITICAL and a.status == AlertStatus.NEW
+            ]
+        )
 
         if critical_count > 0 and not self.critical_alerts_alarm_raised:
             await self.logger.log_alarm(
@@ -739,7 +782,12 @@ class IDSSystem(BaseDevice):
                 device=self.device_name,
                 data={
                     "critical_alert_count": critical_count,
-                    "alert_ids": [a.alert_id for a in self.alerts if a.severity == AlertSeverity.CRITICAL and a.status == AlertStatus.NEW],
+                    "alert_ids": [
+                        a.alert_id
+                        for a in self.alerts
+                        if a.severity == AlertSeverity.CRITICAL
+                        and a.status == AlertStatus.NEW
+                    ],
                 },
             )
             self.critical_alerts_alarm_raised = True
@@ -756,7 +804,13 @@ class IDSSystem(BaseDevice):
             self.critical_alerts_alarm_raised = False
 
         # Network scanning alarm
-        scan_detections = len([a for a in self.alerts if a.rule_name == "network_scanning" and a.status == AlertStatus.NEW])
+        scan_detections = len(
+            [
+                a
+                for a in self.alerts
+                if a.rule_name == "network_scanning" and a.status == AlertStatus.NEW
+            ]
+        )
 
         if scan_detections >= 3 and not self.scan_detection_alarm_raised:
             await self.logger.log_alarm(
@@ -786,19 +840,33 @@ class IDSSystem(BaseDevice):
         """Update memory map statistics."""
         active_alerts = self.get_active_alerts()
 
-        self.memory_map.update({
-            "total_packets_analyzed": self.total_packets_analyzed,
-            "total_alerts_generated": self.total_alerts_generated,
-            "active_alerts": len(active_alerts),
-            "critical_alerts": len([a for a in active_alerts if a.severity == AlertSeverity.CRITICAL]),
-            "high_alerts": len([a for a in active_alerts if a.severity == AlertSeverity.HIGH]),
-            "medium_alerts": len([a for a in active_alerts if a.severity == AlertSeverity.MEDIUM]),
-            "low_alerts": len([a for a in active_alerts if a.severity == AlertSeverity.LOW]),
-            "scan_detections": len([a for a in self.alerts if a.rule_name == "network_scanning"]),
-            "protocol_violations": sum(self.protocol_violations.values()),
-            "unauthorized_access": sum(self.unauthorized_access_attempts.values()),
-            "malware_detections": len([a for a in self.alerts if a.rule_name == "malware_detection"]),
-        })
+        self.memory_map.update(
+            {
+                "total_packets_analyzed": self.total_packets_analyzed,
+                "total_alerts_generated": self.total_alerts_generated,
+                "active_alerts": len(active_alerts),
+                "critical_alerts": len(
+                    [a for a in active_alerts if a.severity == AlertSeverity.CRITICAL]
+                ),
+                "high_alerts": len(
+                    [a for a in active_alerts if a.severity == AlertSeverity.HIGH]
+                ),
+                "medium_alerts": len(
+                    [a for a in active_alerts if a.severity == AlertSeverity.MEDIUM]
+                ),
+                "low_alerts": len(
+                    [a for a in active_alerts if a.severity == AlertSeverity.LOW]
+                ),
+                "scan_detections": len(
+                    [a for a in self.alerts if a.rule_name == "network_scanning"]
+                ),
+                "protocol_violations": sum(self.protocol_violations.values()),
+                "unauthorized_access": sum(self.unauthorized_access_attempts.values()),
+                "malware_detections": len(
+                    [a for a in self.alerts if a.rule_name == "malware_detection"]
+                ),
+            }
+        )
 
     def get_statistics(self) -> dict[str, Any]:
         """
@@ -818,18 +886,40 @@ class IDSSystem(BaseDevice):
                 "total_generated": self.total_alerts_generated,
                 "active": len(active_alerts),
                 "by_severity": {
-                    "critical": len([a for a in active_alerts if a.severity == AlertSeverity.CRITICAL]),
-                    "high": len([a for a in active_alerts if a.severity == AlertSeverity.HIGH]),
-                    "medium": len([a for a in active_alerts if a.severity == AlertSeverity.MEDIUM]),
-                    "low": len([a for a in active_alerts if a.severity == AlertSeverity.LOW]),
+                    "critical": len(
+                        [
+                            a
+                            for a in active_alerts
+                            if a.severity == AlertSeverity.CRITICAL
+                        ]
+                    ),
+                    "high": len(
+                        [a for a in active_alerts if a.severity == AlertSeverity.HIGH]
+                    ),
+                    "medium": len(
+                        [a for a in active_alerts if a.severity == AlertSeverity.MEDIUM]
+                    ),
+                    "low": len(
+                        [a for a in active_alerts if a.severity == AlertSeverity.LOW]
+                    ),
                 },
             },
             "detections": {
-                "scan_detections": len([a for a in self.alerts if a.rule_name == "network_scanning"]),
-                "protocol_violations": len([a for a in self.alerts if a.rule_name == "protocol_violation"]),
-                "unauthorized_access": len([a for a in self.alerts if a.rule_name == "unauthorized_access"]),
-                "malware_detections": len([a for a in self.alerts if a.rule_name == "malware_detection"]),
-                "traffic_anomalies": len([a for a in self.alerts if a.rule_name == "traffic_anomaly"]),
+                "scan_detections": len(
+                    [a for a in self.alerts if a.rule_name == "network_scanning"]
+                ),
+                "protocol_violations": len(
+                    [a for a in self.alerts if a.rule_name == "protocol_violation"]
+                ),
+                "unauthorized_access": len(
+                    [a for a in self.alerts if a.rule_name == "unauthorized_access"]
+                ),
+                "malware_detections": len(
+                    [a for a in self.alerts if a.rule_name == "malware_detection"]
+                ),
+                "traffic_anomalies": len(
+                    [a for a in self.alerts if a.rule_name == "traffic_anomaly"]
+                ),
             },
             "system": {
                 "alert_history_size": len(self.alerts),

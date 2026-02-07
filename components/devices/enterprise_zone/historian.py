@@ -277,7 +277,9 @@ class Historian(BaseDevice):
                 return 0
 
             if "tag_values" not in scada_memory:
-                self.logger.debug(f"No tag_values in SCADA memory for {self.scada_server}")
+                self.logger.debug(
+                    f"No tag_values in SCADA memory for {self.scada_server}"
+                )
                 return 0
 
             current_time = self.sim_time.now()
@@ -424,9 +426,7 @@ class Historian(BaseDevice):
             if dp.tag_name == tag_name and start_time <= dp.timestamp <= end_time
         ]
 
-        self.logger.debug(
-            f"Query for '{tag_name}' returned {len(results)} data points"
-        )
+        self.logger.debug(f"Query for '{tag_name}' returned {len(results)} data points")
 
         return results
 

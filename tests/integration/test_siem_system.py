@@ -88,18 +88,20 @@ class TestFailedAuthDetection:
 
         # Inject 5 failed auth events
         for i in range(5):
-            await system_state.append_audit_event({
-                "simulation_time": sim_time.now(),
-                "wall_time": time.time(),
-                "message": f"Failed authentication attempt {i+1}",
-                "device": "auth_system",
-                "user": "attacker",
-                "data": {
-                    "action": "authenticate",
-                    "result": "FAILED",
-                    "source_ip": "192.168.1.100",
-                },
-            })
+            await system_state.append_audit_event(
+                {
+                    "simulation_time": sim_time.now(),
+                    "wall_time": time.time(),
+                    "message": f"Failed authentication attempt {i+1}",
+                    "device": "auth_system",
+                    "user": "attacker",
+                    "data": {
+                        "action": "authenticate",
+                        "result": "FAILED",
+                        "source_ip": "192.168.1.100",
+                    },
+                }
+            )
             await asyncio.sleep(0.05)
 
         # Wait for SIEM to analyze
@@ -126,17 +128,19 @@ class TestFailedAuthDetection:
 
         # Inject only 2 failed auth events (below threshold)
         for i in range(2):
-            await system_state.append_audit_event({
-                "simulation_time": sim_time.now(),
-                "wall_time": time.time(),
-                "message": f"Failed authentication attempt {i+1}",
-                "device": "auth_system",
-                "user": "legitimate_user",
-                "data": {
-                    "action": "authenticate",
-                    "result": "FAILED",
-                },
-            })
+            await system_state.append_audit_event(
+                {
+                    "simulation_time": sim_time.now(),
+                    "wall_time": time.time(),
+                    "message": f"Failed authentication attempt {i+1}",
+                    "device": "auth_system",
+                    "user": "legitimate_user",
+                    "data": {
+                        "action": "authenticate",
+                        "result": "FAILED",
+                    },
+                }
+            )
 
         await asyncio.sleep(1.0)
 
@@ -149,7 +153,8 @@ class TestFailedAuthDetection:
         # Alert count should not increase significantly
         # (may have increased from other test data, but shouldn't have new auth alerts)
         auth_alerts = [
-            a for a in siem.alerts
+            a
+            for a in siem.alerts
             if "authentication" in a.category and "legitimate_user" in a.title
         ]
         assert len(auth_alerts) == 0
@@ -164,18 +169,20 @@ class TestSafetyBypassDetection:
         siem, system_state, sim_time = siem_system
 
         # Inject safety bypass event
-        await system_state.append_audit_event({
-            "simulation_time": sim_time.now(),
-            "wall_time": time.time(),
-            "message": "Safety bypass activated on 'reactor_safety_1'",
-            "device": "reactor_safety_1",
-            "user": "supervisor1",
-            "data": {
-                "action": "activate_safety_bypass",
-                "result": "SUCCESS",
-                "bypass_reason": "maintenance",
-            },
-        })
+        await system_state.append_audit_event(
+            {
+                "simulation_time": sim_time.now(),
+                "wall_time": time.time(),
+                "message": "Safety bypass activated on 'reactor_safety_1'",
+                "device": "reactor_safety_1",
+                "user": "supervisor1",
+                "data": {
+                    "action": "activate_safety_bypass",
+                    "result": "SUCCESS",
+                    "bypass_reason": "maintenance",
+                },
+            }
+        )
 
         await asyncio.sleep(1.0)
 
@@ -198,18 +205,20 @@ class TestSCRAMDetection:
         siem, system_state, sim_time = siem_system
 
         # Inject SCRAM event
-        await system_state.append_audit_event({
-            "simulation_time": sim_time.now(),
-            "wall_time": time.time(),
-            "message": "Reactor SCRAM initiated",
-            "device": "reactor_plc_1",
-            "user": "operator1",
-            "data": {
-                "action": "reactor_scram_initiate",
-                "result": "SUCCESS",
-                "trigger": "emergency",
-            },
-        })
+        await system_state.append_audit_event(
+            {
+                "simulation_time": sim_time.now(),
+                "wall_time": time.time(),
+                "message": "Reactor SCRAM initiated",
+                "device": "reactor_plc_1",
+                "user": "operator1",
+                "data": {
+                    "action": "reactor_scram_initiate",
+                    "result": "SUCCESS",
+                    "trigger": "emergency",
+                },
+            }
+        )
 
         await asyncio.sleep(1.0)
 
@@ -233,19 +242,21 @@ class TestNetworkViolationDetection:
 
         # Inject 6 network denial events (above threshold of 5)
         for i in range(6):
-            await system_state.append_audit_event({
-                "simulation_time": sim_time.now(),
-                "wall_time": time.time(),
-                "message": "Connection denied by network segmentation",
-                "device": "turbine_plc_1",
-                "user": "",
-                "data": {
-                    "action": "network_access",
-                    "result": "DENIED",
-                    "source_network": "corporate_network",
-                    "target_device": "turbine_plc_1",
-                },
-            })
+            await system_state.append_audit_event(
+                {
+                    "simulation_time": sim_time.now(),
+                    "wall_time": time.time(),
+                    "message": "Connection denied by network segmentation",
+                    "device": "turbine_plc_1",
+                    "user": "",
+                    "data": {
+                        "action": "network_access",
+                        "result": "DENIED",
+                        "source_network": "corporate_network",
+                        "target_device": "turbine_plc_1",
+                    },
+                }
+            )
             await asyncio.sleep(0.05)
 
         await asyncio.sleep(1.0)
@@ -269,18 +280,20 @@ class TestUnusualWriteDetection:
 
         # Inject 55 write events (above threshold of 50)
         for i in range(55):
-            await system_state.append_audit_event({
-                "simulation_time": sim_time.now(),
-                "wall_time": time.time(),
-                "message": f"Memory write operation {i+1}",
-                "device": "target_plc",
-                "user": "unknown",
-                "data": {
-                    "action": "modbus_write",
-                    "result": "SUCCESS",
-                    "address": f"40001",
-                },
-            })
+            await system_state.append_audit_event(
+                {
+                    "simulation_time": sim_time.now(),
+                    "wall_time": time.time(),
+                    "message": f"Memory write operation {i+1}",
+                    "device": "target_plc",
+                    "user": "unknown",
+                    "data": {
+                        "action": "modbus_write",
+                        "result": "SUCCESS",
+                        "address": "40001",
+                    },
+                }
+            )
 
         await asyncio.sleep(1.0)
 
@@ -303,17 +316,19 @@ class TestAlertManagement:
         siem, system_state, sim_time = siem_system
 
         # Generate an alert
-        await system_state.append_audit_event({
-            "simulation_time": sim_time.now(),
-            "wall_time": time.time(),
-            "message": "Safety bypass activated",
-            "device": "test_device",
-            "user": "test_user",
-            "data": {
-                "action": "activate_safety_bypass",
-                "result": "SUCCESS",
-            },
-        })
+        await system_state.append_audit_event(
+            {
+                "simulation_time": sim_time.now(),
+                "wall_time": time.time(),
+                "message": "Safety bypass activated",
+                "device": "test_device",
+                "user": "test_user",
+                "data": {
+                    "action": "activate_safety_bypass",
+                    "result": "SUCCESS",
+                },
+            }
+        )
 
         await asyncio.sleep(1.0)
 
@@ -343,24 +358,28 @@ class TestAlertManagement:
         siem, system_state, sim_time = siem_system
 
         # Generate HIGH alert
-        await system_state.append_audit_event({
-            "simulation_time": sim_time.now(),
-            "wall_time": time.time(),
-            "message": "Safety bypass",
-            "device": "device1",
-            "user": "user1",
-            "data": {"action": "activate_safety_bypass", "result": "SUCCESS"},
-        })
+        await system_state.append_audit_event(
+            {
+                "simulation_time": sim_time.now(),
+                "wall_time": time.time(),
+                "message": "Safety bypass",
+                "device": "device1",
+                "user": "user1",
+                "data": {"action": "activate_safety_bypass", "result": "SUCCESS"},
+            }
+        )
 
         # Generate CRITICAL alert
-        await system_state.append_audit_event({
-            "simulation_time": sim_time.now(),
-            "wall_time": time.time(),
-            "message": "SCRAM",
-            "device": "device2",
-            "user": "user2",
-            "data": {"action": "reactor_scram", "result": "SUCCESS"},
-        })
+        await system_state.append_audit_event(
+            {
+                "simulation_time": sim_time.now(),
+                "wall_time": time.time(),
+                "message": "SCRAM",
+                "device": "device2",
+                "user": "user2",
+                "data": {"action": "reactor_scram", "result": "SUCCESS"},
+            }
+        )
 
         await asyncio.sleep(1.0)
 
@@ -386,14 +405,16 @@ class TestSIEMStatistics:
 
         # Generate events
         for i in range(10):
-            await system_state.append_audit_event({
-                "simulation_time": sim_time.now(),
-                "wall_time": time.time(),
-                "message": f"Test event {i}",
-                "device": "test_device",
-                "user": "test_user",
-                "data": {"action": "test_action", "result": "SUCCESS"},
-            })
+            await system_state.append_audit_event(
+                {
+                    "simulation_time": sim_time.now(),
+                    "wall_time": time.time(),
+                    "message": f"Test event {i}",
+                    "device": "test_device",
+                    "user": "test_user",
+                    "data": {"action": "test_action", "result": "SUCCESS"},
+                }
+            )
 
         await asyncio.sleep(1.0)
 
@@ -431,14 +452,16 @@ class TestSIEMStatistics:
 
         # Generate 10 alerts (more than limit)
         for i in range(10):
-            await system_state.append_audit_event({
-                "simulation_time": sim_time.now(),
-                "wall_time": time.time(),
-                "message": f"Safety bypass {i}",
-                "device": f"device_{i}",
-                "user": "user",
-                "data": {"action": "activate_safety_bypass", "result": "SUCCESS"},
-            })
+            await system_state.append_audit_event(
+                {
+                    "simulation_time": sim_time.now(),
+                    "wall_time": time.time(),
+                    "message": f"Safety bypass {i}",
+                    "device": f"device_{i}",
+                    "user": "user",
+                    "data": {"action": "activate_safety_bypass", "result": "SUCCESS"},
+                }
+            )
             await asyncio.sleep(0.1)
 
         await asyncio.sleep(1.5)
@@ -459,14 +482,16 @@ class TestAuditTrailIntegration:
 
         # Add events via SystemState
         for i in range(5):
-            await system_state.append_audit_event({
-                "simulation_time": sim_time.now(),
-                "wall_time": time.time(),
-                "message": f"Audit event {i}",
-                "device": "test",
-                "user": "test",
-                "data": {"action": "test", "result": "SUCCESS"},
-            })
+            await system_state.append_audit_event(
+                {
+                    "simulation_time": sim_time.now(),
+                    "wall_time": time.time(),
+                    "message": f"Audit event {i}",
+                    "device": "test",
+                    "user": "test",
+                    "data": {"action": "test", "result": "SUCCESS"},
+                }
+            )
 
         await asyncio.sleep(1.0)
 
@@ -481,14 +506,16 @@ class TestAuditTrailIntegration:
 
         # Add first batch
         for i in range(3):
-            await system_state.append_audit_event({
-                "simulation_time": sim_time.now(),
-                "wall_time": time.time(),
-                "message": f"Batch 1 event {i}",
-                "device": "test",
-                "user": "test",
-                "data": {"action": "test", "result": "SUCCESS"},
-            })
+            await system_state.append_audit_event(
+                {
+                    "simulation_time": sim_time.now(),
+                    "wall_time": time.time(),
+                    "message": f"Batch 1 event {i}",
+                    "device": "test",
+                    "user": "test",
+                    "data": {"action": "test", "result": "SUCCESS"},
+                }
+            )
 
         await asyncio.sleep(1.0)
         count_after_batch1 = siem.total_events_analyzed
@@ -496,14 +523,16 @@ class TestAuditTrailIntegration:
 
         # Add second batch
         for i in range(3):
-            await system_state.append_audit_event({
-                "simulation_time": sim_time.now(),
-                "wall_time": time.time(),
-                "message": f"Batch 2 event {i}",
-                "device": "test",
-                "user": "test",
-                "data": {"action": "test", "result": "SUCCESS"},
-            })
+            await system_state.append_audit_event(
+                {
+                    "simulation_time": sim_time.now(),
+                    "wall_time": time.time(),
+                    "message": f"Batch 2 event {i}",
+                    "device": "test",
+                    "user": "test",
+                    "data": {"action": "test", "result": "SUCCESS"},
+                }
+            )
 
         await asyncio.sleep(1.0)
 

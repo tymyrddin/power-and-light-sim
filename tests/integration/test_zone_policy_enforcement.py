@@ -15,7 +15,6 @@ import pytest
 from components.network.network_simulator import NetworkSimulator
 from config.config_loader import ConfigLoader
 
-
 # ================================================================
 # FIXTURES
 # ================================================================
@@ -43,9 +42,11 @@ async def network_with_exposed_services(network_simulator):
 
     # Expose test services on control zone device
     await net_sim.expose_service("hex_turbine_plc", "modbus", 10502)  # Allowed port
-    await net_sim.expose_service("hex_turbine_plc", "modbus", 502)    # Standard port (not in firewall)
-    await net_sim.expose_service("hex_turbine_plc", "http", 80)       # Different protocol
-    await net_sim.expose_service("hex_turbine_plc", "modbus", 9999)   # Custom port
+    await net_sim.expose_service(
+        "hex_turbine_plc", "modbus", 502
+    )  # Standard port (not in firewall)
+    await net_sim.expose_service("hex_turbine_plc", "http", 80)  # Different protocol
+    await net_sim.expose_service("hex_turbine_plc", "modbus", 9999)  # Custom port
 
     return net_sim
 
@@ -72,8 +73,9 @@ class TestZonePolicyConfiguration:
 
         WHY: Policies define allowed inter-zone communication.
         """
-        assert len(network_simulator.inter_zone_policies) > 0, \
-            "Should load at least one inter-zone policy"
+        assert (
+            len(network_simulator.inter_zone_policies) > 0
+        ), "Should load at least one inter-zone policy"
 
     @pytest.mark.asyncio
     async def test_network_to_zone_mappings_loaded(self, network_simulator):
@@ -81,8 +83,9 @@ class TestZonePolicyConfiguration:
 
         WHY: Need to map networks to security zones for policy lookup.
         """
-        assert len(network_simulator.network_to_zone) > 0, \
-            "Should have network-to-zone mappings"
+        assert (
+            len(network_simulator.network_to_zone) > 0
+        ), "Should have network-to-zone mappings"
 
 
 # ================================================================
@@ -106,8 +109,7 @@ class TestIntraZoneTraffic:
             "turbine_network", "hex_turbine_plc", "modbus", 10502
         )
 
-        assert result is True, \
-            "Traffic within same network should always be allowed"
+        assert result is True, "Traffic within same network should always be allowed"
 
 
 # ================================================================
@@ -119,7 +121,9 @@ class TestInterZoneTrafficWithPolicy:
     """Test traffic between zones with explicit policies."""
 
     @pytest.mark.asyncio
-    async def test_operations_to_control_allowed_port(self, network_with_exposed_services):
+    async def test_operations_to_control_allowed_port(
+        self, network_with_exposed_services
+    ):
         """Test operations zone can reach control zone on allowed port.
 
         WHY: Operations zone (SCADA) needs controlled access to control zone PLCs.
@@ -131,11 +135,14 @@ class TestInterZoneTrafficWithPolicy:
             "scada_network", "hex_turbine_plc", "modbus", 10502
         )
 
-        assert result is True, \
-            "Operations -> Control on allowed port should be permitted"
+        assert (
+            result is True
+        ), "Operations -> Control on allowed port should be permitted"
 
     @pytest.mark.asyncio
-    async def test_operations_to_control_blocked_port(self, network_with_exposed_services):
+    async def test_operations_to_control_blocked_port(
+        self, network_with_exposed_services
+    ):
         """Test operations zone cannot reach control zone on blocked port.
 
         WHY: Even with policy, specific firewall rules must be enforced.
@@ -147,11 +154,12 @@ class TestInterZoneTrafficWithPolicy:
             "scada_network", "hex_turbine_plc", "modbus", 502
         )
 
-        assert result is False, \
-            "Port not in firewall_rules should be denied"
+        assert result is False, "Port not in firewall_rules should be denied"
 
     @pytest.mark.asyncio
-    async def test_operations_to_control_blocked_protocol(self, network_with_exposed_services):
+    async def test_operations_to_control_blocked_protocol(
+        self, network_with_exposed_services
+    ):
         """Test operations zone cannot use disallowed protocol.
 
         WHY: Policies specify allowed protocols (e.g., Modbus but not HTTP).
@@ -159,15 +167,14 @@ class TestInterZoneTrafficWithPolicy:
         net_sim = network_with_exposed_services
 
         # HTTP not in allowed_protocols for operations -> control
-        result = await net_sim.can_reach(
-            "scada_network", "hex_turbine_plc", "http", 80
-        )
+        result = await net_sim.can_reach("scada_network", "hex_turbine_plc", "http", 80)
 
-        assert result is False, \
-            "Protocol not in allowed_protocols should be denied"
+        assert result is False, "Protocol not in allowed_protocols should be denied"
 
     @pytest.mark.asyncio
-    async def test_operations_to_control_custom_port_blocked(self, network_with_exposed_services):
+    async def test_operations_to_control_custom_port_blocked(
+        self, network_with_exposed_services
+    ):
         """Test custom ports are blocked unless explicitly allowed.
 
         WHY: Firewall rules must be explicit - no implicit port ranges.
@@ -179,8 +186,7 @@ class TestInterZoneTrafficWithPolicy:
             "scada_network", "hex_turbine_plc", "modbus", 9999
         )
 
-        assert result is False, \
-            "Custom port not in firewall_rules should be denied"
+        assert result is False, "Custom port not in firewall_rules should be denied"
 
 
 # ================================================================
@@ -204,8 +210,9 @@ class TestInterZoneTrafficWithoutPolicy:
             "historian_network", "hex_turbine_plc", "modbus", 10502
         )
 
-        assert result is False, \
-            "Enterprise -> Control should be denied (no policy, default deny)"
+        assert (
+            result is False
+        ), "Enterprise -> Control should be denied (no policy, default deny)"
 
 
 # ================================================================
@@ -242,5 +249,6 @@ class TestPolicyInspection:
             from_zone = policy.get("from_zone")
             to_zone = policy.get("to_zone")
 
-            assert from_zone != to_zone, \
-                "Policy should be between different zones (intra-zone doesn't need policy)"
+            assert (
+                from_zone != to_zone
+            ), "Policy should be between different zones (intra-zone doesn't need policy)"

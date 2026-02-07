@@ -479,7 +479,9 @@ class AuthenticationManager:
                 source_ip="",
                 data={
                     "session_id": session_id,
-                    "action": action.value if not isinstance(action, str) else str(action),
+                    "action": (
+                        action.value if not isinstance(action, str) else str(action)
+                    ),
                     "resource": resource,
                     "result": "DENIED",
                     "reason": "invalid_or_expired_session",

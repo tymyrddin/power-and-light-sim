@@ -29,9 +29,10 @@ Based on c104 library (Fraunhofer IEC 60870-5-104 implementation).
 """
 
 import asyncio
+from typing import Any
+
 # import logging
 from components.security.logging_system import get_logger
-from typing import Any
 
 try:
     from components.protocols.iec104.c104_221 import IEC104C104Adapter

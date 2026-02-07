@@ -265,7 +265,11 @@ class TestDNP3AdapterOutstationMode:
     @patch("components.protocols.dnp3.dnp3_adapter.TcpServer")
     @patch("asyncio.to_thread")
     async def test_start_outstation_idempotent(
-        self, mock_to_thread, mock_tcp_server_class, mock_outstation_class, mock_database_class
+        self,
+        mock_to_thread,
+        mock_tcp_server_class,
+        mock_outstation_class,
+        mock_database_class,
     ):
         """Test that calling start_outstation twice is safe.
 

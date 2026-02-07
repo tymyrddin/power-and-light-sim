@@ -25,9 +25,10 @@ Based on dnp3py library outstation (server) functionality.
 """
 
 import asyncio
+from typing import Any
+
 # import logging
 from components.security.logging_system import get_logger
-from typing import Any
 
 try:
     from components.protocols.dnp3.dnp3_adapter import DNP3Adapter

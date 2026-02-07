@@ -340,8 +340,12 @@ class ReactorPLC(BasePLC):
             if self.reactor_physics.reset_scram():
                 data = {"device": self.device_name}
                 if hasattr(self.reactor_physics, "state"):
-                    data["reactor_power_mw"] = self.reactor_physics.state.thermal_power_mw
-                    data["temperature_c"] = self.reactor_physics.state.core_temperature_c
+                    data["reactor_power_mw"] = (
+                        self.reactor_physics.state.thermal_power_mw
+                    )
+                    data["temperature_c"] = (
+                        self.reactor_physics.state.core_temperature_c
+                    )
                 await self.logger.log_audit(
                     message=f"ReactorPLC '{self.device_name}': SCRAM reset successful",
                     user="operator",

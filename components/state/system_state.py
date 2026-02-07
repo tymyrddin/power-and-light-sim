@@ -431,7 +431,9 @@ class SystemState:
             if device:
                 events = [e for e in events if e.get("device") == device]
             if event_type:
-                events = [e for e in events if e.get("message", "").startswith(event_type)]
+                events = [
+                    e for e in events if e.get("message", "").startswith(event_type)
+                ]
 
             # Most recent first
             events.reverse()

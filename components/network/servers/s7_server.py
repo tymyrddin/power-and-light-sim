@@ -26,10 +26,11 @@ Based on snap7 library server functionality.
 """
 
 import asyncio
-# import logging
-from components.security.logging_system import get_logger
 from ctypes import c_uint8
 from typing import Any
+
+# import logging
+from components.security.logging_system import get_logger
 
 try:
     import snap7

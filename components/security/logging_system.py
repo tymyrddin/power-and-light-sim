@@ -313,7 +313,7 @@ class ICSLogger:
     def _add_console_handler(self) -> None:
         """Add console handler with simulation time."""
         handler = logging.StreamHandler()
-        handler.setLevel(logging.DEBUG)
+        handler.setLevel(logging.INFO)  # Hide DEBUG messages to reduce clutter
         handler.setFormatter(SimTimeFormatter(self.sim_time))
         self.logger.addHandler(handler)
 
@@ -432,9 +432,7 @@ class ICSLogger:
         """Store log entry in DataStore for centralised access."""
         try:
             # Store in central audit log
-            await self.data_store.system_state.append_audit_event(
-                entry.to_dict()
-            )
+            await self.data_store.system_state.append_audit_event(entry.to_dict())
         except Exception:
             self.logger.exception("Failed to store log in central audit log")
 

@@ -209,7 +209,7 @@ class SIEMSystem(BaseDevice):
             all_events = await self.data_store.get_audit_log(limit=None)
 
             # Process new events
-            new_events = all_events[self._last_processed_event_index:]
+            new_events = all_events[self._last_processed_event_index :]
 
             if new_events:
                 self.total_events_analyzed += len(new_events)
@@ -291,7 +291,7 @@ class SIEMSystem(BaseDevice):
                 category="authentication",
                 title=f"Multiple failed authentication attempts: {user}",
                 description=f"User '{user}' has {len(self._failed_auth_attempts[user])} "
-                           f"failed authentication attempts in the last 60 seconds",
+                f"failed authentication attempts in the last 60 seconds",
                 events=[event],
                 affected_devices=[device] if device else [],
                 indicators={
@@ -326,7 +326,7 @@ class SIEMSystem(BaseDevice):
                 category="network_security",
                 title=f"Network segmentation violations: {source} -> {device}",
                 description=f"Multiple attempts ({len(self._network_denials[key])}) to "
-                           f"bypass network segmentation from {source} to {device}",
+                f"bypass network segmentation from {source} to {device}",
                 events=[event],
                 affected_devices=[device],
                 indicators={
@@ -346,12 +346,14 @@ class SIEMSystem(BaseDevice):
         user = event.get("user", "")
 
         # Track bypasses per device
-        self._safety_bypasses[device].append({
-            "time": sim_time,
-            "action": action,
-            "user": user,
-            "event": event,
-        })
+        self._safety_bypasses[device].append(
+            {
+                "time": sim_time,
+                "action": action,
+                "user": user,
+                "event": event,
+            }
+        )
 
         # Always alert on bypass activation (HIGH priority)
         if action == "activate_safety_bypass":
@@ -404,7 +406,7 @@ class SIEMSystem(BaseDevice):
                 category="anomaly",
                 title=f"Unusual write activity: {device}",
                 description=f"Device {device} has received {self._device_write_counts[device]} "
-                           f"write operations in {self.analysis_interval}s interval",
+                f"write operations in {self.analysis_interval}s interval",
                 events=[event],
                 affected_devices=[device],
                 indicators={
@@ -456,7 +458,7 @@ class SIEMSystem(BaseDevice):
         # Trim history if needed
         if len(self.alerts) > self.alert_history_limit:
             oldest = self.alerts[0]
-            self.alerts = self.alerts[-self.alert_history_limit:]
+            self.alerts = self.alerts[-self.alert_history_limit :]
             self.logger.debug(f"Trimmed alert history, removed {oldest.alert_id}")
 
         # Log alert generation
@@ -503,7 +505,8 @@ class SIEMSystem(BaseDevice):
             List of active alerts
         """
         active = [
-            a for a in self.alerts
+            a
+            for a in self.alerts
             if a.status in (IncidentStatus.NEW, IncidentStatus.INVESTIGATING)
         ]
 
@@ -636,10 +639,20 @@ class SIEMSystem(BaseDevice):
                     "low": self.alert_count_by_severity[AlertSeverity.LOW],
                 },
                 "by_status": {
-                    "new": sum(1 for a in self.alerts if a.status == IncidentStatus.NEW),
-                    "investigating": sum(1 for a in self.alerts if a.status == IncidentStatus.INVESTIGATING),
-                    "contained": sum(1 for a in self.alerts if a.status == IncidentStatus.CONTAINED),
-                    "resolved": sum(1 for a in self.alerts if a.status == IncidentStatus.RESOLVED),
+                    "new": sum(
+                        1 for a in self.alerts if a.status == IncidentStatus.NEW
+                    ),
+                    "investigating": sum(
+                        1
+                        for a in self.alerts
+                        if a.status == IncidentStatus.INVESTIGATING
+                    ),
+                    "contained": sum(
+                        1 for a in self.alerts if a.status == IncidentStatus.CONTAINED
+                    ),
+                    "resolved": sum(
+                        1 for a in self.alerts if a.status == IncidentStatus.RESOLVED
+                    ),
                 },
             },
             "detection_rules": {

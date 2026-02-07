@@ -25,12 +25,13 @@ Based on pymodbus 3.11.4 async simulator.
 import asyncio
 from typing import Any
 
-from components.security.logging_system import get_logger
 from pymodbus.client import AsyncModbusTcpClient
 from pymodbus.datastore import ModbusServerContext
 from pymodbus.datastore.simulator import ModbusSimulatorContext
 from pymodbus.pdu.device import ModbusDeviceIdentification
 from pymodbus.server import StartAsyncTcpServer
+
+from components.security.logging_system import get_logger
 
 # Configure logging
 logger = get_logger(__name__)

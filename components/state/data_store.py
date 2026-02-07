@@ -44,8 +44,12 @@ class DataStore:
     _OPCUA_PATTERN = re.compile(r"^ns=\d+;[si]=.+$")
     _IEC104_PATTERN = re.compile(r"^[A-Z_]+:\d+$")
     _S7_PATTERN = re.compile(r"^DB\d+$")  # Siemens S7 data blocks
-    _INTERNAL_PATTERN = re.compile(r"^_[a-z_]+$")  # Device-internal diagnostic addresses
-    _CONFIG_PATTERN = re.compile(r"^[a-z][a-z0-9_]*$")  # Configuration/application addresses
+    _INTERNAL_PATTERN = re.compile(
+        r"^_[a-z_]+$"
+    )  # Device-internal diagnostic addresses
+    _CONFIG_PATTERN = re.compile(
+        r"^[a-z][a-z0-9_]*$"
+    )  # Configuration/application addresses
 
     def __init__(self, system_state: SystemState):
         """Initialise data store.

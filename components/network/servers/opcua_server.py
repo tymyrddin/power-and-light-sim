@@ -29,9 +29,10 @@ Based on asyncua library (Python OPC UA implementation).
 """
 
 import asyncio
+from typing import Any
+
 # import logging
 from components.security.logging_system import get_logger
-from typing import Any
 
 try:
     from components.protocols.opcua.opcua_asyncua_118 import OPCUAAsyncua118Adapter

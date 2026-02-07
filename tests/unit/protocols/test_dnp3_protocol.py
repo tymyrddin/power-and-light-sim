@@ -20,8 +20,9 @@ Test Coverage:
 Tests use mocking for DNP3Adapter to isolate protocol logic.
 """
 
-import pytest
 from unittest.mock import AsyncMock, Mock, patch
+
+import pytest
 
 from components.protocols.dnp3.dnp3_protocol import DNP3Protocol
 
@@ -138,7 +139,9 @@ class TestDNP3ProtocolLifecycle:
     """Test protocol lifecycle management."""
 
     @pytest.mark.asyncio
-    async def test_connect_calls_adapter_connect(self, outstation_protocol, mock_adapter):
+    async def test_connect_calls_adapter_connect(
+        self, outstation_protocol, mock_adapter
+    ):
         """Test that connect() calls adapter.connect().
 
         WHY: Protocol delegates connection to adapter.
@@ -150,7 +153,9 @@ class TestDNP3ProtocolLifecycle:
         assert result is True
 
     @pytest.mark.asyncio
-    async def test_connect_updates_connected_flag(self, outstation_protocol, mock_adapter):
+    async def test_connect_updates_connected_flag(
+        self, outstation_protocol, mock_adapter
+    ):
         """Test that successful connect() updates connected flag.
 
         WHY: Protocol tracks connection state.
@@ -276,7 +281,9 @@ class TestDNP3ProtocolProbe:
         mock_adapter.event_scan.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_probe_master_handles_scan_errors(self, connected_master, mock_adapter):
+    async def test_probe_master_handles_scan_errors(
+        self, connected_master, mock_adapter
+    ):
         """Test probe() in master mode handles scan errors gracefully.
 
         WHY: Scans may fail due to communication issues.
@@ -447,7 +454,9 @@ class TestDNP3ProtocolTestWriteCapabilities:
         assert result["analog_output_successful"] is True
 
     @pytest.mark.asyncio
-    async def test_write_capabilities_handles_errors(self, connected_master, mock_adapter):
+    async def test_write_capabilities_handles_errors(
+        self, connected_master, mock_adapter
+    ):
         """Test test_write_capabilities handles write errors gracefully.
 
         WHY: Writes may fail due to permissions or communication issues.
@@ -643,7 +652,9 @@ class TestDNP3ProtocolFloodEvents:
         assert calls[3][0] == (0, False)  # i=3: i%2==1 -> False
 
     @pytest.mark.asyncio
-    async def test_flood_cycles_through_points(self, connected_outstation, mock_adapter):
+    async def test_flood_cycles_through_points(
+        self, connected_outstation, mock_adapter
+    ):
         """Test flood_events cycles through available points.
 
         WHY: Distributes events across points.
@@ -713,7 +724,9 @@ class TestDNP3ProtocolIntegration:
     """Test protocol integration scenarios."""
 
     @pytest.mark.asyncio
-    async def test_complete_outstation_workflow(self, outstation_protocol, mock_adapter):
+    async def test_complete_outstation_workflow(
+        self, outstation_protocol, mock_adapter
+    ):
         """Test complete outstation attack workflow.
 
         WHY: Verify end-to-end outstation usage.
