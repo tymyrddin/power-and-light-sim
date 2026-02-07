@@ -671,7 +671,9 @@ class LegacyWorkstation(BaseDevice):
     # Archaeology - exploring the forgotten machine
     # ----------------------------------------------------------------
 
-    async def explore_filesystem(self, user: str = "unknown") -> list[DiscoveredArtifact]:
+    async def explore_filesystem(
+        self, user: str = "unknown"
+    ) -> list[DiscoveredArtifact]:
         """
         Explore the filesystem for interesting artifacts.
 
@@ -764,7 +766,9 @@ class LegacyWorkstation(BaseDevice):
         self.logger.info(f"Filesystem exploration found {len(artifacts)} artifacts")
         return artifacts
 
-    async def read_floppy_disk(self, disk_index: int, user: str = "unknown") -> dict[str, Any]:
+    async def read_floppy_disk(
+        self, disk_index: int, user: str = "unknown"
+    ) -> dict[str, Any]:
         """
         Attempt to read a floppy disk from the drawer.
 

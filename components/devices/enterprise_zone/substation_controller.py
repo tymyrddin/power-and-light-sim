@@ -153,8 +153,12 @@ class SubstationController(BaseDevice):
 
         # Transformers
         self.transformers: dict[str, Transformer] = {
-            "XFMR_1": Transformer("Transformer 1", primary_voltage_kv=69.0, secondary_voltage_kv=13.8),
-            "XFMR_2": Transformer("Transformer 2", primary_voltage_kv=69.0, secondary_voltage_kv=13.8),
+            "XFMR_1": Transformer(
+                "Transformer 1", primary_voltage_kv=69.0, secondary_voltage_kv=13.8
+            ),
+            "XFMR_2": Transformer(
+                "Transformer 2", primary_voltage_kv=69.0, secondary_voltage_kv=13.8
+            ),
         }
 
         # IEC 61850 state
@@ -393,7 +397,10 @@ class SubstationController(BaseDevice):
         """Check and raise/clear alarms for fault conditions."""
         # Breaker trip alarms
         for breaker_name, breaker in self.breakers.items():
-            if breaker.trip_count > 3 and not self.breaker_trip_alarm_raised[breaker_name]:
+            if (
+                breaker.trip_count > 3
+                and not self.breaker_trip_alarm_raised[breaker_name]
+            ):
                 await self.logger.log_alarm(
                     message=f"Repeated breaker trips on '{self.device_name}': {breaker_name} ({breaker.trip_count} trips)",
                     priority=AlarmPriority.HIGH,

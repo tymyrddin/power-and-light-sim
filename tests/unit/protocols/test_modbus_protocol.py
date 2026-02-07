@@ -6,8 +6,9 @@ Tests the high-level Modbus protocol wrapper that provides
 attacker-relevant capabilities via an adapter pattern.
 """
 
-import pytest
 from unittest.mock import AsyncMock, Mock
+
+import pytest
 
 from components.protocols.modbus.modbus_protocol import ModbusProtocol
 
@@ -51,6 +52,7 @@ class TestModbusProtocolInitialization:
     def test_inherits_from_base_protocol(self, modbus_protocol):
         """Test that ModbusProtocol inherits from BaseProtocol."""
         from components.protocols.base_protocol import BaseProtocol
+
         assert isinstance(modbus_protocol, BaseProtocol)
 
 
@@ -127,7 +129,9 @@ class TestModbusProtocolProbe:
         assert mock_adapter.read_coils.call_count == 4  # Tests 4 offsets
 
     @pytest.mark.asyncio
-    async def test_probe_holding_registers_readable(self, modbus_protocol, mock_adapter):
+    async def test_probe_holding_registers_readable(
+        self, modbus_protocol, mock_adapter
+    ):
         """Test probe detects readable holding registers."""
         await modbus_protocol.connect()
 
@@ -150,7 +154,9 @@ class TestModbusProtocolProbe:
         """Test probe handles adapter errors without crashing."""
         await modbus_protocol.connect()
         mock_adapter.read_coils.side_effect = RuntimeError("Connection error")
-        mock_adapter.read_holding_registers.side_effect = RuntimeError("Connection error")
+        mock_adapter.read_holding_registers.side_effect = RuntimeError(
+            "Connection error"
+        )
 
         result = await modbus_protocol.probe()
 

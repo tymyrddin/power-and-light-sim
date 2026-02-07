@@ -89,6 +89,9 @@ class SimulatorManager:
         # Configure ICSLogger with DataStore integration
         configure_logging(log_dir=log_dir, data_store=self.data_store)
 
+        # Suppress noisy asyncua address space messages
+        logging.getLogger("asyncua.server.address_space").setLevel(logging.WARNING)
+
         # Network components
         self.network_sim = NetworkSimulator(self.config_loader, self.system_state)
 

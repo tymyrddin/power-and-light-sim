@@ -235,7 +235,10 @@ class HMIWorkstation(BaseSupervisoryDevice):
             target = self.poll_targets[self.scada_server]
 
             # Raise alarm on connection failure
-            if target.consecutive_failures >= 3 and not self.scada_connection_alarm_raised:
+            if (
+                target.consecutive_failures >= 3
+                and not self.scada_connection_alarm_raised
+            ):
                 await self.logger.log_alarm(
                     message=f"HMI '{self.device_name}': Lost connection to SCADA server '{self.scada_server}'",
                     priority=AlarmPriority.HIGH,
@@ -249,7 +252,9 @@ class HMIWorkstation(BaseSupervisoryDevice):
                 self.scada_connection_alarm_raised = True
 
             # Clear alarm when connection restored
-            elif target.consecutive_failures == 0 and self.scada_connection_alarm_raised:
+            elif (
+                target.consecutive_failures == 0 and self.scada_connection_alarm_raised
+            ):
                 await self.logger.log_alarm(
                     message=f"HMI '{self.device_name}': Connection to SCADA server '{self.scada_server}' restored",
                     priority=AlarmPriority.HIGH,

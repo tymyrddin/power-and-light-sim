@@ -354,13 +354,15 @@ class EnterpriseWorkstation(BaseDevice):
             "browser": self.browser_saved_passwords,
         }
 
-    async def connect_vpn(self, profile: str = "DMZ-Access", user: str = "unknown") -> bool:
+    async def connect_vpn(
+        self, profile: str = "DMZ-Access", user: str = "unknown"
+    ) -> bool:
         """
         Connect to VPN.
 
         Logs VPN connection as audit event.
         """
-        if profile in [p for p in self.installed_software["Cisco AnyConnect VPN"]["saved_profiles"]]:
+        if profile in self.installed_software["Cisco AnyConnect VPN"]["saved_profiles"]:
             self.vpn_connected = True
             self.memory_map["vpn_connected"] = True
 
@@ -411,7 +413,9 @@ class EnterpriseWorkstation(BaseDevice):
             ],
         }
 
-    async def simulate_phishing_compromise(self, user: str = "accounting") -> dict[str, Any]:
+    async def simulate_phishing_compromise(
+        self, user: str = "accounting"
+    ) -> dict[str, Any]:
         """
         Simulate successful phishing attack on this workstation.
 

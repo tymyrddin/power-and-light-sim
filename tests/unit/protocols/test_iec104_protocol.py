@@ -6,8 +6,9 @@ Tests the high-level IEC 60870-5-104 protocol wrapper that provides
 attacker-relevant capabilities via an adapter pattern.
 """
 
-import pytest
 from unittest.mock import AsyncMock, Mock
+
+import pytest
 
 from components.protocols.iec104.iec104_protocol import IEC104Protocol
 
@@ -51,6 +52,7 @@ class TestIEC104ProtocolInitialization:
     def test_inherits_from_base_protocol(self, iec104_protocol):
         """Test that IEC104Protocol inherits from BaseProtocol."""
         from components.protocols.base_protocol import BaseProtocol
+
         assert isinstance(iec104_protocol, BaseProtocol)
 
 
@@ -110,7 +112,9 @@ class TestIEC104ProtocolDataTransfer:
         assert iec104_protocol.data_transfer_started is True
 
     @pytest.mark.asyncio
-    async def test_start_data_transfer_already_started(self, iec104_protocol, mock_adapter):
+    async def test_start_data_transfer_already_started(
+        self, iec104_protocol, mock_adapter
+    ):
         """Test starting data transfer when already started."""
         mock_adapter.connect.return_value = True
         await iec104_protocol.connect()
@@ -198,7 +202,7 @@ class TestIEC104ProtocolProbe:
         mock_adapter.connect.return_value = True
         mock_adapter.get_state.return_value = {}
 
-        result = await iec104_protocol.probe()
+        await iec104_protocol.probe()
 
         # Should connect during probe, then disconnect after
         mock_adapter.connect.assert_awaited_once()
@@ -206,7 +210,9 @@ class TestIEC104ProtocolProbe:
         assert iec104_protocol.connected is False
 
     @pytest.mark.asyncio
-    async def test_probe_auto_disconnect_after_probe(self, iec104_protocol, mock_adapter):
+    async def test_probe_auto_disconnect_after_probe(
+        self, iec104_protocol, mock_adapter
+    ):
         """Test probe auto-disconnects after probing if it connected."""
         mock_adapter.connect.return_value = True
         mock_adapter.probe.return_value = {"protocol": "iec104"}
@@ -218,7 +224,9 @@ class TestIEC104ProtocolProbe:
         assert iec104_protocol.connected is False
 
     @pytest.mark.asyncio
-    async def test_probe_keeps_connection_if_already_connected(self, iec104_protocol, mock_adapter):
+    async def test_probe_keeps_connection_if_already_connected(
+        self, iec104_protocol, mock_adapter
+    ):
         """Test probe doesn't disconnect if already connected."""
         await iec104_protocol.connect()
         mock_adapter.disconnect.reset_mock()
@@ -245,7 +253,7 @@ class TestIEC104ProtocolSetPoint:
 
         await iec104_protocol.connect()
         await iec104_protocol.start_data_transfer()
-        result = await iec104_protocol.set_point(100, 42.5)
+        await iec104_protocol.set_point(100, 42.5)
 
         mock_adapter.set_point.assert_awaited_once_with(100, 42.5)
 
@@ -279,7 +287,9 @@ class TestIEC104ProtocolOverwriteState:
     """Test IEC104Protocol overwrite_state functionality."""
 
     @pytest.mark.asyncio
-    async def test_overwrite_state_with_multiple_points(self, iec104_protocol, mock_adapter):
+    async def test_overwrite_state_with_multiple_points(
+        self, iec104_protocol, mock_adapter
+    ):
         """Test overwriting multiple state points."""
         mock_adapter.connect.return_value = True
         await iec104_protocol.connect()
@@ -359,7 +369,7 @@ class TestIEC104ProtocolIntegration:
         mock_adapter.get_state.return_value = {
             100: 25.0,  # Temperature
             200: 50.0,  # Pressure
-            300: 1.0,   # Safety valve (1 = open)
+            300: 1.0,  # Safety valve (1 = open)
         }
 
         # 1. Probe (auto-connect and disconnect)
@@ -377,8 +387,8 @@ class TestIEC104ProtocolIntegration:
         # 4. Overwrite critical points
         malicious_state = {
             100: 999.0,  # Dangerous temperature
-            200: 0.0,    # Zero pressure
-            300: 0.0,    # Close safety valve
+            200: 0.0,  # Zero pressure
+            300: 0.0,  # Close safety valve
         }
         await iec104_protocol.overwrite_state(malicious_state)
 

@@ -43,7 +43,9 @@ class ConcreteABLogixPLC(ABLogixPLC):
         await self.create_tag("Counter", LogixDataType.DINT, 0)
 
         # Program-scoped tags
-        await self.create_tag("Setpoint", LogixDataType.REAL, 100.0, program="MainProgram")
+        await self.create_tag(
+            "Setpoint", LogixDataType.REAL, 100.0, program="MainProgram"
+        )
         await self.create_tag("Mode", LogixDataType.DINT, 0, program="MainProgram")
 
         self.memory_map = {"tags": self.get_all_tags()}

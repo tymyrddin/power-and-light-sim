@@ -5,8 +5,9 @@ Unit tests for PyModbus3114Adapter.
 Tests the Modbus TCP adapter using pymodbus 3.11.4.
 """
 
-import pytest
 from unittest.mock import AsyncMock, Mock, patch
+
+import pytest
 
 from components.protocols.modbus.pymodbus_3114 import PyModbus3114Adapter
 
@@ -79,7 +80,7 @@ class TestPyModbus3114Lifecycle:
     """Test PyModbus3114Adapter connection lifecycle."""
 
     @pytest.mark.asyncio
-    @patch('components.protocols.modbus.pymodbus_3114.AsyncModbusTcpClient')
+    @patch("components.protocols.modbus.pymodbus_3114.AsyncModbusTcpClient")
     async def test_connect_creates_client(self, mock_client_class, adapter):
         """Test connect creates and connects client."""
         mock_client = Mock()
@@ -96,7 +97,7 @@ class TestPyModbus3114Lifecycle:
         mock_client.connect.assert_awaited_once()
 
     @pytest.mark.asyncio
-    @patch('components.protocols.modbus.pymodbus_3114.AsyncModbusTcpClient')
+    @patch("components.protocols.modbus.pymodbus_3114.AsyncModbusTcpClient")
     async def test_connect_reuses_existing_client(self, mock_client_class, adapter):
         """Test connect reuses existing client if already created."""
         mock_client = Mock()
@@ -115,7 +116,7 @@ class TestPyModbus3114Lifecycle:
         mock_client_class.assert_not_called()  # Should not create new client
 
     @pytest.mark.asyncio
-    @patch('components.protocols.modbus.pymodbus_3114.AsyncModbusTcpClient')
+    @patch("components.protocols.modbus.pymodbus_3114.AsyncModbusTcpClient")
     async def test_connect_failure(self, mock_client_class, adapter):
         """Test connect handles connection failure."""
         mock_client = Mock()
@@ -128,7 +129,7 @@ class TestPyModbus3114Lifecycle:
         assert adapter.connected is False
 
     @pytest.mark.asyncio
-    @patch('components.protocols.modbus.pymodbus_3114.AsyncModbusTcpClient')
+    @patch("components.protocols.modbus.pymodbus_3114.AsyncModbusTcpClient")
     async def test_disconnect(self, mock_client_class, adapter):
         """Test disconnect closes client."""
         mock_client = Mock()
@@ -161,7 +162,7 @@ class TestPyModbus3114ReadOperations:
     """Test PyModbus3114Adapter read operations."""
 
     @pytest.mark.asyncio
-    @patch('components.protocols.modbus.pymodbus_3114.AsyncModbusTcpClient')
+    @patch("components.protocols.modbus.pymodbus_3114.AsyncModbusTcpClient")
     async def test_read_coils(self, mock_client_class, adapter):
         """Test reading coils."""
         mock_client = Mock()
@@ -183,7 +184,7 @@ class TestPyModbus3114ReadOperations:
             await adapter.read_coils(0)
 
     @pytest.mark.asyncio
-    @patch('components.protocols.modbus.pymodbus_3114.AsyncModbusTcpClient')
+    @patch("components.protocols.modbus.pymodbus_3114.AsyncModbusTcpClient")
     async def test_read_discrete_inputs(self, mock_client_class, adapter):
         """Test reading discrete inputs."""
         mock_client = Mock()
@@ -199,7 +200,7 @@ class TestPyModbus3114ReadOperations:
         mock_client.read_discrete_inputs.assert_awaited_once_with(20, count=3)
 
     @pytest.mark.asyncio
-    @patch('components.protocols.modbus.pymodbus_3114.AsyncModbusTcpClient')
+    @patch("components.protocols.modbus.pymodbus_3114.AsyncModbusTcpClient")
     async def test_read_holding_registers(self, mock_client_class, adapter):
         """Test reading holding registers."""
         mock_client = Mock()
@@ -215,7 +216,7 @@ class TestPyModbus3114ReadOperations:
         mock_client.read_holding_registers.assert_awaited_once_with(100, count=10)
 
     @pytest.mark.asyncio
-    @patch('components.protocols.modbus.pymodbus_3114.AsyncModbusTcpClient')
+    @patch("components.protocols.modbus.pymodbus_3114.AsyncModbusTcpClient")
     async def test_read_input_registers(self, mock_client_class, adapter):
         """Test reading input registers."""
         mock_client = Mock()
@@ -238,7 +239,7 @@ class TestPyModbus3114WriteOperations:
     """Test PyModbus3114Adapter write operations."""
 
     @pytest.mark.asyncio
-    @patch('components.protocols.modbus.pymodbus_3114.AsyncModbusTcpClient')
+    @patch("components.protocols.modbus.pymodbus_3114.AsyncModbusTcpClient")
     async def test_write_coil(self, mock_client_class, adapter):
         """Test writing a single coil."""
         mock_client = Mock()
@@ -260,7 +261,7 @@ class TestPyModbus3114WriteOperations:
             await adapter.write_coil(0, False)
 
     @pytest.mark.asyncio
-    @patch('components.protocols.modbus.pymodbus_3114.AsyncModbusTcpClient')
+    @patch("components.protocols.modbus.pymodbus_3114.AsyncModbusTcpClient")
     async def test_write_register(self, mock_client_class, adapter):
         """Test writing a single register."""
         mock_client = Mock()
@@ -276,7 +277,7 @@ class TestPyModbus3114WriteOperations:
         mock_client.write_register.assert_awaited_once_with(200, 42)
 
     @pytest.mark.asyncio
-    @patch('components.protocols.modbus.pymodbus_3114.AsyncModbusTcpClient')
+    @patch("components.protocols.modbus.pymodbus_3114.AsyncModbusTcpClient")
     async def test_write_multiple_coils(self, mock_client_class, adapter):
         """Test writing multiple coils."""
         mock_client = Mock()
@@ -293,7 +294,7 @@ class TestPyModbus3114WriteOperations:
         mock_client.write_coils.assert_awaited_once_with(10, values)
 
     @pytest.mark.asyncio
-    @patch('components.protocols.modbus.pymodbus_3114.AsyncModbusTcpClient')
+    @patch("components.protocols.modbus.pymodbus_3114.AsyncModbusTcpClient")
     async def test_write_multiple_registers(self, mock_client_class, adapter):
         """Test writing multiple registers."""
         mock_client = Mock()
@@ -317,7 +318,7 @@ class TestPyModbus3114Probe:
     """Test PyModbus3114Adapter probe functionality."""
 
     @pytest.mark.asyncio
-    @patch('components.protocols.modbus.pymodbus_3114.AsyncModbusTcpClient')
+    @patch("components.protocols.modbus.pymodbus_3114.AsyncModbusTcpClient")
     async def test_probe_returns_connection_info(self, mock_client_class, adapter):
         """Test probe returns transport and connection details."""
         mock_client = Mock()
@@ -348,7 +349,7 @@ class TestPyModbus3114Integration:
     """Test PyModbus3114Adapter end-to-end scenarios."""
 
     @pytest.mark.asyncio
-    @patch('components.protocols.modbus.pymodbus_3114.AsyncModbusTcpClient')
+    @patch("components.protocols.modbus.pymodbus_3114.AsyncModbusTcpClient")
     async def test_full_workflow(self, mock_client_class, adapter):
         """Test complete workflow: connect, read, write, disconnect."""
         # Setup mock client

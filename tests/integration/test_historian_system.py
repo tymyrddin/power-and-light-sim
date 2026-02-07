@@ -70,7 +70,9 @@ async def historian_system():
     )
 
     # Add tags to SCADA that link to PLC addresses
-    await scada.add_tag("reactor_temperature", "mock_plc", "holding_registers", 0, "float")
+    await scada.add_tag(
+        "reactor_temperature", "mock_plc", "holding_registers", 0, "float"
+    )
     await scada.add_tag("reactor_pressure", "mock_plc", "holding_registers", 2, "float")
     await scada.add_tag("turbine_speed", "mock_plc", "holding_registers", 4, "int")
     await scada.add_tag("generator_output", "mock_plc", "holding_registers", 6, "float")

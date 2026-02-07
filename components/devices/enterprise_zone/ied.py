@@ -277,7 +277,9 @@ class IED:
                 await self._sync_to_datastore()
 
             except Exception as e:
-                self.logger.error(f"Error in protection scan for {self.device_name}: {e}")
+                self.logger.error(
+                    f"Error in protection scan for {self.device_name}: {e}"
+                )
 
             self._last_scan_time = current_time
             await asyncio.sleep(self.scan_interval)
@@ -407,7 +409,9 @@ class IED:
             self.trip_alarm_raised = False
 
         # Repeated trip alarm (>3 trips)
-        total_trips = sum(func.trip_count for func in self.protection_functions.values())
+        total_trips = sum(
+            func.trip_count for func in self.protection_functions.values()
+        )
         if total_trips > 3 and not self.repeated_trip_alarm_raised:
             await self.logger.log_alarm(
                 message=f"Repeated protection trips on IED '{self.device_name}': {total_trips} total trips",

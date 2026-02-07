@@ -274,7 +274,7 @@ class TestDNP3ProtocolProbe:
         mock_adapter.integrity_scan = AsyncMock(return_value=True)
         mock_adapter.event_scan = AsyncMock(return_value=True)
 
-        result = await connected_master.probe()
+        await connected_master.probe()
 
         # Scans should have been attempted
         mock_adapter.integrity_scan.assert_called_once()

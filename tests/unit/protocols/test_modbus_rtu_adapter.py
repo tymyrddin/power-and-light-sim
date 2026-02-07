@@ -5,8 +5,9 @@ Unit tests for ModbusRTUAdapter.
 Tests the Modbus RTU serial adapter using pymodbus 3.11.4.
 """
 
-import pytest
 from unittest.mock import AsyncMock, Mock, patch
+
+import pytest
 
 from components.protocols.modbus.modbus_rtu_adapter import ModbusRTUAdapter
 
@@ -74,7 +75,7 @@ class TestModbusRTUAdapterLifecycle:
     """Test ModbusRTUAdapter connection lifecycle."""
 
     @pytest.mark.asyncio
-    @patch('components.protocols.modbus.modbus_rtu_adapter.AsyncModbusSerialClient')
+    @patch("components.protocols.modbus.modbus_rtu_adapter.AsyncModbusSerialClient")
     async def test_connect_creates_serial_client(self, mock_client_class, adapter):
         """Test connect creates serial client with correct parameters."""
         mock_client = Mock()
@@ -96,7 +97,7 @@ class TestModbusRTUAdapterLifecycle:
         mock_client.connect.assert_awaited_once()
 
     @pytest.mark.asyncio
-    @patch('components.protocols.modbus.modbus_rtu_adapter.AsyncModbusSerialClient')
+    @patch("components.protocols.modbus.modbus_rtu_adapter.AsyncModbusSerialClient")
     async def test_connect_reuses_existing_client(self, mock_client_class, adapter):
         """Test connect reuses existing client."""
         mock_client = Mock()
@@ -115,7 +116,7 @@ class TestModbusRTUAdapterLifecycle:
         mock_client_class.assert_not_called()
 
     @pytest.mark.asyncio
-    @patch('components.protocols.modbus.modbus_rtu_adapter.AsyncModbusSerialClient')
+    @patch("components.protocols.modbus.modbus_rtu_adapter.AsyncModbusSerialClient")
     async def test_connect_failure(self, mock_client_class, adapter):
         """Test connect handles connection failure."""
         mock_client = Mock()
@@ -128,7 +129,7 @@ class TestModbusRTUAdapterLifecycle:
         assert adapter.connected is False
 
     @pytest.mark.asyncio
-    @patch('components.protocols.modbus.modbus_rtu_adapter.AsyncModbusSerialClient')
+    @patch("components.protocols.modbus.modbus_rtu_adapter.AsyncModbusSerialClient")
     async def test_disconnect(self, mock_client_class, adapter):
         """Test disconnect closes serial client."""
         mock_client = Mock()
@@ -159,7 +160,7 @@ class TestModbusRTUAdapterReadOperations:
     """Test ModbusRTUAdapter read operations."""
 
     @pytest.mark.asyncio
-    @patch('components.protocols.modbus.modbus_rtu_adapter.AsyncModbusSerialClient')
+    @patch("components.protocols.modbus.modbus_rtu_adapter.AsyncModbusSerialClient")
     async def test_read_coils(self, mock_client_class, adapter):
         """Test reading coils."""
         mock_client = Mock()
@@ -181,7 +182,7 @@ class TestModbusRTUAdapterReadOperations:
             await adapter.read_coils(0)
 
     @pytest.mark.asyncio
-    @patch('components.protocols.modbus.modbus_rtu_adapter.AsyncModbusSerialClient')
+    @patch("components.protocols.modbus.modbus_rtu_adapter.AsyncModbusSerialClient")
     async def test_read_discrete_inputs(self, mock_client_class, adapter):
         """Test reading discrete inputs."""
         mock_client = Mock()
@@ -197,7 +198,7 @@ class TestModbusRTUAdapterReadOperations:
         mock_client.read_discrete_inputs.assert_awaited_once_with(20, count=8)
 
     @pytest.mark.asyncio
-    @patch('components.protocols.modbus.modbus_rtu_adapter.AsyncModbusSerialClient')
+    @patch("components.protocols.modbus.modbus_rtu_adapter.AsyncModbusSerialClient")
     async def test_read_holding_registers(self, mock_client_class, adapter):
         """Test reading holding registers."""
         mock_client = Mock()
@@ -213,7 +214,7 @@ class TestModbusRTUAdapterReadOperations:
         mock_client.read_holding_registers.assert_awaited_once_with(100, count=4)
 
     @pytest.mark.asyncio
-    @patch('components.protocols.modbus.modbus_rtu_adapter.AsyncModbusSerialClient')
+    @patch("components.protocols.modbus.modbus_rtu_adapter.AsyncModbusSerialClient")
     async def test_read_input_registers(self, mock_client_class, adapter):
         """Test reading input registers."""
         mock_client = Mock()
@@ -236,7 +237,7 @@ class TestModbusRTUAdapterWriteOperations:
     """Test ModbusRTUAdapter write operations."""
 
     @pytest.mark.asyncio
-    @patch('components.protocols.modbus.modbus_rtu_adapter.AsyncModbusSerialClient')
+    @patch("components.protocols.modbus.modbus_rtu_adapter.AsyncModbusSerialClient")
     async def test_write_coil(self, mock_client_class, adapter):
         """Test writing a single coil."""
         mock_client = Mock()
@@ -258,7 +259,7 @@ class TestModbusRTUAdapterWriteOperations:
             await adapter.write_coil(0, True)
 
     @pytest.mark.asyncio
-    @patch('components.protocols.modbus.modbus_rtu_adapter.AsyncModbusSerialClient')
+    @patch("components.protocols.modbus.modbus_rtu_adapter.AsyncModbusSerialClient")
     async def test_write_register(self, mock_client_class, adapter):
         """Test writing a single register."""
         mock_client = Mock()
@@ -274,7 +275,7 @@ class TestModbusRTUAdapterWriteOperations:
         mock_client.write_register.assert_awaited_once_with(200, 999)
 
     @pytest.mark.asyncio
-    @patch('components.protocols.modbus.modbus_rtu_adapter.AsyncModbusSerialClient')
+    @patch("components.protocols.modbus.modbus_rtu_adapter.AsyncModbusSerialClient")
     async def test_write_multiple_coils(self, mock_client_class, adapter):
         """Test writing multiple coils."""
         mock_client = Mock()
@@ -291,7 +292,7 @@ class TestModbusRTUAdapterWriteOperations:
         mock_client.write_coils.assert_awaited_once_with(10, values)
 
     @pytest.mark.asyncio
-    @patch('components.protocols.modbus.modbus_rtu_adapter.AsyncModbusSerialClient')
+    @patch("components.protocols.modbus.modbus_rtu_adapter.AsyncModbusSerialClient")
     async def test_write_multiple_registers(self, mock_client_class, adapter):
         """Test writing multiple registers."""
         mock_client = Mock()
@@ -315,7 +316,7 @@ class TestModbusRTUAdapterProbe:
     """Test ModbusRTUAdapter probe functionality."""
 
     @pytest.mark.asyncio
-    @patch('components.protocols.modbus.modbus_rtu_adapter.AsyncModbusSerialClient')
+    @patch("components.protocols.modbus.modbus_rtu_adapter.AsyncModbusSerialClient")
     async def test_probe_returns_transport_info(self, mock_client_class, adapter):
         """Test probe returns serial port and connection info."""
         mock_client = Mock()
@@ -346,7 +347,7 @@ class TestModbusRTUAdapterIntegration:
     """Test ModbusRTUAdapter end-to-end scenarios."""
 
     @pytest.mark.asyncio
-    @patch('components.protocols.modbus.modbus_rtu_adapter.AsyncModbusSerialClient')
+    @patch("components.protocols.modbus.modbus_rtu_adapter.AsyncModbusSerialClient")
     async def test_typical_rtu_workflow(self, mock_client_class, adapter):
         """Test typical RTU workflow: connect, read, write, disconnect."""
         # Setup mock

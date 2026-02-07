@@ -6,8 +6,9 @@ Tests the high-level Modbus RTU protocol wrapper that exposes
 attacker-relevant capabilities like memory scanning and write access testing.
 """
 
-import pytest
 from unittest.mock import AsyncMock, Mock
+
+import pytest
 
 from components.protocols.modbus.modbus_rtu_protocol import ModbusRTUProtocol
 
@@ -53,6 +54,7 @@ class TestModbusRTUProtocolInitialization:
     def test_inherits_from_base_protocol(self, rtu_protocol):
         """Test that ModbusRTUProtocol inherits from BaseProtocol."""
         from components.protocols.base_protocol import BaseProtocol
+
         assert isinstance(rtu_protocol, BaseProtocol)
 
 
@@ -309,7 +311,9 @@ class TestModbusRTUProtocolWriteAccessTesting:
         assert result["register_writable"] is False
 
     @pytest.mark.asyncio
-    async def test_write_access_restores_original_values(self, rtu_protocol, mock_adapter):
+    async def test_write_access_restores_original_values(
+        self, rtu_protocol, mock_adapter
+    ):
         """Test write access test restores original values."""
         # Mock original values
         coil_response = Mock()
@@ -332,11 +336,11 @@ class TestModbusRTUProtocolWriteAccessTesting:
         # First call writes test value, second call restores
         coil_calls = mock_adapter.write_coil.await_args_list
         assert coil_calls[0][0] == (5, False)  # Test with opposite value
-        assert coil_calls[1][0] == (5, True)   # Restore original
+        assert coil_calls[1][0] == (5, True)  # Restore original
 
         reg_calls = mock_adapter.write_register.await_args_list
-        assert reg_calls[0][0] == (5, 43)   # Test with +1
-        assert reg_calls[1][0] == (5, 42)   # Restore original
+        assert reg_calls[0][0] == (5, 43)  # Test with +1
+        assert reg_calls[1][0] == (5, 42)  # Restore original
 
     @pytest.mark.asyncio
     async def test_write_access_handles_exceptions(self, rtu_protocol, mock_adapter):

@@ -5,9 +5,10 @@ Unit tests for IEC104C104Adapter.
 Tests the IEC 60870-5-104 adapter using c104 library v2.2.1.
 """
 
-import pytest
-from unittest.mock import AsyncMock, Mock, patch, MagicMock
 import threading
+from unittest.mock import AsyncMock, MagicMock, Mock, patch
+
+import pytest
 
 from components.protocols.iec104.c104_221 import IEC104C104Adapter
 
@@ -82,7 +83,7 @@ class TestIEC104C104AdapterLifecycle:
     """Test IEC104C104Adapter connection lifecycle."""
 
     @pytest.mark.asyncio
-    @patch('components.protocols.iec104.c104_221.c104')
+    @patch("components.protocols.iec104.c104_221.c104")
     async def test_connect_creates_server(self, mock_c104, adapter):
         """Test connect creates c104 server and starts thread."""
         mock_server = Mock()
@@ -101,7 +102,7 @@ class TestIEC104C104AdapterLifecycle:
         assert adapter._thread.daemon is True
 
     @pytest.mark.asyncio
-    @patch('components.protocols.iec104.c104_221.c104')
+    @patch("components.protocols.iec104.c104_221.c104")
     async def test_connect_starts_background_thread(self, mock_c104, adapter):
         """Test connect starts server in background thread."""
         mock_server = Mock()
@@ -116,7 +117,7 @@ class TestIEC104C104AdapterLifecycle:
         assert adapter._thread.is_alive()
 
     @pytest.mark.asyncio
-    @patch('components.protocols.iec104.c104_221.c104')
+    @patch("components.protocols.iec104.c104_221.c104")
     async def test_connect_already_connected(self, mock_c104, adapter):
         """Test connect when already connected returns True."""
         mock_server = Mock()
@@ -135,7 +136,7 @@ class TestIEC104C104AdapterLifecycle:
         assert adapter._server == first_server
 
     @pytest.mark.asyncio
-    @patch('components.protocols.iec104.c104_221.c104')
+    @patch("components.protocols.iec104.c104_221.c104")
     async def test_connect_handles_exception(self, mock_c104, adapter):
         """Test connect handles c104 exceptions."""
         mock_c104.Server.side_effect = RuntimeError("Port in use")
@@ -146,7 +147,7 @@ class TestIEC104C104AdapterLifecycle:
         assert adapter._running is False
 
     @pytest.mark.asyncio
-    @patch('components.protocols.iec104.c104_221.c104')
+    @patch("components.protocols.iec104.c104_221.c104")
     async def test_disconnect_stops_server(self, mock_c104, adapter):
         """Test disconnect stops server and joins thread."""
         mock_server = Mock()
@@ -182,7 +183,7 @@ class TestIEC104C104AdapterProbe:
     """Test IEC104C104Adapter probe functionality."""
 
     @pytest.mark.asyncio
-    @patch('components.protocols.iec104.c104_221.c104')
+    @patch("components.protocols.iec104.c104_221.c104")
     async def test_probe_returns_connection_info(self, mock_c104, adapter):
         """Test probe returns transport and connection details."""
         mock_server = Mock()
@@ -279,7 +280,7 @@ class TestIEC104C104AdapterThreadSafety:
     """Test IEC104C104Adapter thread safety."""
 
     @pytest.mark.asyncio
-    @patch('components.protocols.iec104.c104_221.c104')
+    @patch("components.protocols.iec104.c104_221.c104")
     async def test_state_access_is_thread_safe(self, mock_c104, adapter):
         """Test simulated_state access uses lock."""
         mock_server = Mock()
@@ -304,7 +305,7 @@ class TestIEC104C104AdapterIntegration:
     """Test IEC104C104Adapter end-to-end scenarios."""
 
     @pytest.mark.asyncio
-    @patch('components.protocols.iec104.c104_221.c104')
+    @patch("components.protocols.iec104.c104_221.c104")
     async def test_full_workflow(self, mock_c104, adapter):
         """Test complete workflow: connect, set point, get state, disconnect."""
         mock_server = Mock()
@@ -330,7 +331,7 @@ class TestIEC104C104AdapterIntegration:
         assert adapter._running is False
 
     @pytest.mark.asyncio
-    @patch('components.protocols.iec104.c104_221.c104')
+    @patch("components.protocols.iec104.c104_221.c104")
     async def test_attacker_workflow(self, mock_c104, adapter):
         """Test typical attacker workflow: probe, connect, overwrite values."""
         mock_server = Mock()
@@ -350,10 +351,7 @@ class TestIEC104C104AdapterIntegration:
         probe_result = await adapter.probe()
         assert probe_result["listening"] is True
 
-        # 4. Read current state
-        initial_state = await adapter.get_state()
-
-        # 5. Overwrite critical point
+        # 4. Overwrite critical point
         await adapter.set_point(100, 9999.0)
 
         # 6. Verify change

@@ -232,7 +232,9 @@ class TestEngineeringWorkstationProjects:
         assert project.contains_credentials is True  # Default
 
     @pytest.mark.asyncio
-    async def test_add_project_uses_simulation_time(self, test_eng_ws, clean_simulation_time):
+    async def test_add_project_uses_simulation_time(
+        self, test_eng_ws, clean_simulation_time
+    ):
         """Test that project last_modified uses simulation time.
 
         WHY: Timestamps must use sim_time, not wall clock.

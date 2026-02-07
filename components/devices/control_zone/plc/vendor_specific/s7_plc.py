@@ -165,7 +165,9 @@ class S7PLC(BasePLC):
 
         return self.data_blocks[db_number].get(variable)
 
-    async def write_db(self, db_number: int, variable: str, value: Any, user: str = "system") -> bool:
+    async def write_db(
+        self, db_number: int, variable: str, value: Any, user: str = "system"
+    ) -> bool:
         """
         Write to a Data Block variable.
 
