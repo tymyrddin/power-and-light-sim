@@ -45,13 +45,7 @@ from typing import Any
 from components.devices.control_zone.plc.generic.base_plc import BasePLC
 from components.physics.grid_physics import GridPhysics
 from components.physics.turbine_physics import TurbinePhysics
-from components.security.logging_system import (
-    AlarmPriority,
-    AlarmState,
-    get_logger,
-)
-
-logger = get_logger(__name__)
+from components.security.logging_system import AlarmPriority, AlarmState
 
 
 class TurbinePLC(BasePLC):
@@ -142,7 +136,7 @@ class TurbinePLC(BasePLC):
         self._last_governor_enable = False
         self._trip_reset_edge = False
 
-        logger.info(
+        self.logger.info(
             f"TurbinePLC '{device_name}' initialised "
             f"(turbine: {turbine_physics is not None}, "
             f"grid: {grid_physics is not None})"
@@ -193,7 +187,7 @@ class TurbinePLC(BasePLC):
         self.memory_map["holding_registers[0]"] = 0  # Speed setpoint (lower 16 bits)
         self.memory_map["holding_registers[1]"] = 0  # Speed setpoint (upper word)
 
-        logger.debug(f"TurbinePLC '{self.device_name}' memory map initialised")
+        self.logger.debug(f"TurbinePLC '{self.device_name}' memory map initialised")
 
     # ----------------------------------------------------------------
     # PLC Scan Cycle
@@ -308,7 +302,7 @@ class TurbinePLC(BasePLC):
 
         # Detect trip reset edge (rising edge)
         if trip_reset and not self._trip_reset_edge:
-            await logger.log_audit(
+            await self.logger.log_audit(
                 message=f"TurbinePLC '{self.device_name}': Trip reset commanded via coil",
                 user="operator",
                 action="turbine_trip_reset_detected",
@@ -345,7 +339,7 @@ class TurbinePLC(BasePLC):
         # Handle emergency trip
         if self.memory_map.get("coils[1]", False):  # Emergency trip commanded
             self.turbine_physics.trigger_emergency_trip()
-            await logger.log_alarm(
+            await self.logger.log_alarm(
                 message=f"TurbinePLC '{self.device_name}': Emergency trip activated",
                 priority=AlarmPriority.CRITICAL,
                 state=AlarmState.ACTIVE,
@@ -361,7 +355,7 @@ class TurbinePLC(BasePLC):
         # Handle trip reset
         if self.memory_map.get("coils[2]", False) and self._trip_reset_edge:
             self.turbine_physics.reset_trip()
-            await logger.log_audit(
+            await self.logger.log_audit(
                 message=f"TurbinePLC '{self.device_name}': Trip reset executed",
                 user="system",
                 action="turbine_trip_reset_executed",
@@ -394,7 +388,7 @@ class TurbinePLC(BasePLC):
             rpm_int >> 16
         ) & 0xFFFF  # Upper 16 bits
 
-        await logger.log_audit(
+        await self.logger.log_audit(
             message=f"TurbinePLC '{self.device_name}': Speed setpoint changed to {rpm_int} RPM",
             user="operator",
             action="turbine_speed_setpoint_change",
@@ -406,7 +400,7 @@ class TurbinePLC(BasePLC):
             },
         )
 
-        logger.info(
+        self.logger.info(
             f"TurbinePLC '{self.device_name}': Speed setpoint set to {rpm_int} RPM"
         )
 
@@ -418,7 +412,7 @@ class TurbinePLC(BasePLC):
             enable: True to enable governor, False to disable
         """
         self.memory_map["coils[0]"] = enable
-        logger.info(
+        self.logger.info(
             f"TurbinePLC '{self.device_name}': "
             f"Governor {'enabled' if enable else 'disabled'}"
         )
@@ -426,7 +420,7 @@ class TurbinePLC(BasePLC):
     async def trigger_trip(self) -> None:
         """Trigger emergency trip."""
         self.memory_map["coils[1]"] = True
-        await logger.log_alarm(
+        await self.logger.log_alarm(
             message=f"TurbinePLC '{self.device_name}': Emergency trip triggered",
             priority=AlarmPriority.CRITICAL,
             state=AlarmState.ACTIVE,
@@ -442,7 +436,7 @@ class TurbinePLC(BasePLC):
     async def reset_trip_command(self) -> None:
         """Reset trip condition."""
         self.memory_map["coils[2]"] = True
-        await logger.log_audit(
+        await self.logger.log_audit(
             message=f"TurbinePLC '{self.device_name}': Trip reset commanded",
             user="operator",
             action="turbine_trip_reset",

@@ -144,12 +144,10 @@ class TestFailedAuthDetection:
 
         await asyncio.sleep(1.0)
 
-        # Should not generate alert (below threshold)
-        initial_alert_count = siem.total_alerts_generated
-
         # Process events
         await asyncio.sleep(0.6)  # Wait for scan cycle
 
+        # Should not generate alert (below threshold)
         # Alert count should not increase significantly
         # (may have increased from other test data, but shouldn't have new auth alerts)
         auth_alerts = [
@@ -241,7 +239,7 @@ class TestNetworkViolationDetection:
         siem, system_state, sim_time = siem_system
 
         # Inject 6 network denial events (above threshold of 5)
-        for i in range(6):
+        for _ in range(6):
             await system_state.append_audit_event(
                 {
                     "simulation_time": sim_time.now(),
@@ -336,7 +334,6 @@ class TestAlertManagement:
         assert len(alerts) > 0
 
         alert = alerts[0]
-        original_status = alert.status
 
         # Update alert status
         success = await siem.update_alert_status(
@@ -401,7 +398,6 @@ class TestSIEMStatistics:
         siem, system_state, sim_time = siem_system
 
         initial_events = siem.total_events_analyzed
-        initial_alerts = siem.total_alerts_generated
 
         # Generate events
         for i in range(10):

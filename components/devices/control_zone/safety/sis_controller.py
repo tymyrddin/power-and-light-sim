@@ -64,6 +64,7 @@ from components.devices.control_zone.safety.base_safety_controller import (
     SafetyIntegrityLevel,
     VotingArchitecture,
 )
+from components.security.logging_system import AlarmPriority, AlarmState
 from components.state.data_store import DataStore
 
 
@@ -195,6 +196,9 @@ class SISController(BaseSafetyController):
 
         # Cached values for diagnostics
         self._last_diagnostic_status = 0
+
+        # Alarm state tracking
+        self.trip_alarm_raised = False
 
         self.logger.info(
             f"SISController '{device_name}' created "
@@ -511,6 +515,20 @@ class SISController(BaseSafetyController):
     async def _force_safe_state(self) -> None:
         """Force all systems to safe state."""
         self.safe_state_active = True
+
+        # Log SIS trip as CRITICAL alarm
+        if not self.trip_alarm_raised:
+            await self.logger.log_alarm(
+                message=f"SIS TRIP ACTIVATED on '{self.device_name}': All SIFs tripped, safe state forced",
+                priority=AlarmPriority.CRITICAL,
+                state=AlarmState.ACTIVE,
+                device=self.device_name,
+                data={
+                    "sif_count": len(self._sifs),
+                    "demand_count": self.demand_count,
+                },
+            )
+            self.trip_alarm_raised = True
 
         # Mark all SIFs as tripped
         for sif in self._sifs.values():

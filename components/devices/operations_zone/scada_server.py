@@ -14,7 +14,11 @@ from components.devices.operations_zone.base_supervisory import (
     BaseSupervisoryDevice,
     PollTarget,
 )
-from components.security.logging_system import AlarmPriority, AlarmState
+from components.security.logging_system import (
+    AlarmPriority,
+    AlarmState,
+    EventSeverity,
+)
 from components.state.data_store import DataStore
 
 
@@ -238,11 +242,34 @@ class SCADAServer(BaseSupervisoryDevice):
 
         # Process control coils
         if self.memory_map.get("coils[0]"):  # Acknowledge all alarms
+            # Log bulk alarm acknowledgment as audit event
+            await self.logger.log_audit(
+                message=f"SCADA: All alarms acknowledged on '{self.device_name}' ({len(self.active_alarms)} alarms)",
+                user="modbus_client",
+                action="alarm_ack_all",
+                data={
+                    "scada_server": self.device_name,
+                    "alarm_count": len(self.active_alarms),
+                },
+            )
+
             for alarm in self.active_alarms:
                 alarm.acknowledged = True
             self.memory_map["coils[0]"] = False  # Reset coil
 
         if self.memory_map.get("coils[1]"):  # Reset statistics
+            # Log statistics reset as audit event
+            await self.logger.log_audit(
+                message=f"SCADA statistics reset on '{self.device_name}'",
+                user="modbus_client",
+                action="stats_reset",
+                data={
+                    "scada_server": self.device_name,
+                    "previous_total_polls": self.total_polls,
+                    "previous_failed_polls": self.failed_polls,
+                },
+            )
+
             self.total_polls = 0
             self.failed_polls = 0
             self.memory_map["coils[1]"] = False  # Reset coil
@@ -283,7 +310,7 @@ class SCADAServer(BaseSupervisoryDevice):
     # Tag management
     # ----------------------------------------------------------------
 
-    def add_tag(
+    async def add_tag(
         self,
         tag_name: str,
         device_name: str,
@@ -294,6 +321,7 @@ class SCADAServer(BaseSupervisoryDevice):
         unit: str = "",
         alarm_high: float | None = None,
         alarm_low: float | None = None,
+        user: str = "system",
     ) -> None:
         """
         Add a tag to the database.
@@ -308,6 +336,7 @@ class SCADAServer(BaseSupervisoryDevice):
             unit: Engineering units
             alarm_high: High alarm limit
             alarm_low: Low alarm limit
+            user: User adding the tag
         """
         self.tags[tag_name] = TagDefinition(
             tag_name=tag_name,
@@ -325,6 +354,21 @@ class SCADAServer(BaseSupervisoryDevice):
         self.tag_values[tag_name] = None
         self.tag_timestamps[tag_name] = 0.0
         self.tag_quality[tag_name] = "uncertain"
+
+        # Log tag configuration as audit event
+        await self.logger.log_audit(
+            message=f"SCADA tag configured on '{self.device_name}': {tag_name}",
+            user=user,
+            action="tag_config",
+            data={
+                "scada_server": self.device_name,
+                "tag_name": tag_name,
+                "device_name": device_name,
+                "address_type": address_type,
+                "address": address,
+                "has_alarms": alarm_high is not None or alarm_low is not None,
+            },
+        )
 
         self.logger.debug(
             f"Tag added: {tag_name} -> {device_name}:{address_type}[{address}]"
@@ -463,13 +507,33 @@ class SCADAServer(BaseSupervisoryDevice):
         """Get list of active alarms."""
         return self.active_alarms.copy()
 
-    async def acknowledge_alarm(self, alarm_index: int) -> bool:
-        """Acknowledge an active alarm."""
+    async def acknowledge_alarm(self, alarm_index: int, user: str = "operator") -> bool:
+        """
+        Acknowledge an active alarm.
+
+        Args:
+            alarm_index: Index of alarm to acknowledge
+            user: User acknowledging the alarm
+        """
         if 0 <= alarm_index < len(self.active_alarms):
-            self.active_alarms[alarm_index].acknowledged = True
-            self.logger.info(
-                f"Alarm acknowledged: {self.active_alarms[alarm_index].message}"
+            alarm = self.active_alarms[alarm_index]
+            alarm.acknowledged = True
+
+            # Log alarm acknowledgment as audit event
+            await self.logger.log_audit(
+                message=f"SCADA alarm acknowledged on '{self.device_name}': {alarm.tag_name}",
+                user=user,
+                action="alarm_ack",
+                data={
+                    "scada_server": self.device_name,
+                    "tag_name": alarm.tag_name,
+                    "alarm_type": alarm.alarm_type,
+                    "alarm_value": alarm.value,
+                    "alarm_duration_s": self.sim_time.now() - alarm.triggered_at,
+                },
             )
+
+            self.logger.info(f"Alarm acknowledged: {alarm.message}")
             return True
         return False
 

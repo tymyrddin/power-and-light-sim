@@ -218,7 +218,7 @@ class Historian(BaseDevice):
         """
         try:
             # Collect data from SCADA server
-            collected_count = await self._collect_data()
+            await self._collect_data()
 
             # Trim old data based on retention policy
             await self._trim_old_data()

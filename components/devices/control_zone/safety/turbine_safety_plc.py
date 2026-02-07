@@ -53,6 +53,7 @@ from components.devices.control_zone.safety.base_safety_controller import (
     VotingArchitecture,
 )
 from components.physics.turbine_physics import TurbinePhysics
+from components.security.logging_system import AlarmPriority, AlarmState
 from components.state.data_store import DataStore
 
 
@@ -144,6 +145,10 @@ class TurbineSafetyPLC(BaseSafetyController):
         self._speed_channel_b = 0.0
         self._vibration_channel_a = 0.0
         self._vibration_channel_b = 0.0
+
+        # Alarm state tracking
+        self.trip_alarm_raised = False
+        self.diagnostic_fault_alarm_raised = False
 
         self.logger.info(
             f"TurbineSafetyPLC '{device_name}' created "
@@ -378,6 +383,21 @@ class TurbineSafetyPLC(BaseSafetyController):
         """Force turbine to safe state (trip)."""
         self.safe_state_active = True
         self.turbine_physics.trigger_emergency_trip()
+
+        # Log emergency trip as CRITICAL alarm
+        if not self.trip_alarm_raised:
+            await self.logger.log_alarm(
+                message=f"TURBINE EMERGENCY TRIP ACTIVATED on '{self.device_name}': Safe state forced",
+                priority=AlarmPriority.CRITICAL,
+                state=AlarmState.ACTIVE,
+                device=self.device_name,
+                data={
+                    "trip_reason": "safety_demand",
+                    "demand_count": self.demand_count,
+                },
+            )
+            self.trip_alarm_raised = True
+
         self.logger.critical(
             f"TurbineSafetyPLC '{self.device_name}': FORCING SAFE STATE - "
             f"Turbine emergency trip activated"
@@ -387,10 +407,27 @@ class TurbineSafetyPLC(BaseSafetyController):
     # Convenience methods
     # ----------------------------------------------------------------
 
-    async def manual_trip(self) -> None:
-        """Trigger a manual emergency trip."""
+    async def manual_trip(self, user: str = "operator") -> None:
+        """
+        Trigger a manual emergency trip.
+
+        Args:
+            user: User triggering the trip
+        """
         self.memory_map["coils[0]"] = True
         await self.data_store.write_memory(self.device_name, "coils[0]", True)
+
+        # Log manual trip as audit event
+        await self.logger.log_audit(
+            message=f"Manual turbine trip commanded on '{self.device_name}' by {user}",
+            user=user,
+            action="manual_trip",
+            data={
+                "device": self.device_name,
+                "method": "manual_trip",
+            },
+        )
+
         self.logger.warning(
             f"TurbineSafetyPLC '{self.device_name}': Manual trip commanded"
         )

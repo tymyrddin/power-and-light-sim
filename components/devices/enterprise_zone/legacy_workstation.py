@@ -27,6 +27,11 @@ from pathlib import Path
 from typing import Any
 
 from components.devices.core.base_device import BaseDevice
+from components.security.logging_system import (
+    AlarmPriority,
+    AlarmState,
+    EventSeverity,
+)
 from components.state.data_store import DataStore
 
 
@@ -292,6 +297,11 @@ class LegacyWorkstation(BaseDevice):
         self.boot_count = 3  # Only rebooted twice since 1998 (power outages)
         self.last_reboot = "2019-08-15"  # Brief power outage
 
+        # Alarm state tracking
+        self.disk_space_alarm_raised = False
+        self.serial_failure_alarm_raised = False
+        self.serial_failure_count = 0
+
         self.logger.info(
             f"LegacyWorkstation '{device_name}' initialised "
             f"(OS={self.os_version}, installed={self.installed_date})"
@@ -360,6 +370,9 @@ class LegacyWorkstation(BaseDevice):
         self.memory_map["total_records"] = self.total_records_collected
         self.memory_map["uptime_days"] = self.get_uptime_days()
 
+        # Check alarm conditions
+        await self._check_alarm_conditions()
+
         # Simulate slow disk (occasional delays)
         # The HDD is dying after all...
 
@@ -410,7 +423,63 @@ class LegacyWorkstation(BaseDevice):
         except Exception as e:
             self.serial_connection_active = False
             self.last_serial_error = str(e)
+            self.serial_failure_count += 1
             self.logger.error(f"Serial communication error: {e}")
+
+    # ----------------------------------------------------------------
+    # Alarm conditions
+    # ----------------------------------------------------------------
+
+    async def _check_alarm_conditions(self) -> None:
+        """Check and raise/clear alarms for critical conditions."""
+        # Disk space critical alarm (>95% full)
+        disk_percent = ((self.hdd_gb - self.hdd_free_gb) / self.hdd_gb) * 100
+        if disk_percent > 95.0 and not self.disk_space_alarm_raised:
+            await self.logger.log_alarm(
+                message=f"Legacy workstation '{self.device_name}': Disk space critical ({disk_percent:.1f}% full)",
+                priority=AlarmPriority.HIGH,
+                state=AlarmState.ACTIVE,
+                device=self.device_name,
+                data={
+                    "disk_free_gb": self.hdd_free_gb,
+                    "disk_total_gb": self.hdd_gb,
+                    "disk_percent_used": disk_percent,
+                },
+            )
+            self.disk_space_alarm_raised = True
+        elif disk_percent < 90.0 and self.disk_space_alarm_raised:
+            await self.logger.log_alarm(
+                message=f"Legacy workstation '{self.device_name}': Disk space recovered",
+                priority=AlarmPriority.HIGH,
+                state=AlarmState.CLEARED,
+                device=self.device_name,
+                data={"disk_percent_used": disk_percent},
+            )
+            self.disk_space_alarm_raised = False
+
+        # Serial connection failure alarm (>5 consecutive failures)
+        if self.serial_failure_count > 5 and not self.serial_failure_alarm_raised:
+            await self.logger.log_alarm(
+                message=f"Legacy workstation '{self.device_name}': Serial connection failed ({self.serial_failure_count} failures)",
+                priority=AlarmPriority.MEDIUM,
+                state=AlarmState.ACTIVE,
+                device=self.device_name,
+                data={
+                    "failure_count": self.serial_failure_count,
+                    "last_error": self.last_serial_error,
+                },
+            )
+            self.serial_failure_alarm_raised = True
+        elif self.serial_connection_active and self.serial_failure_alarm_raised:
+            await self.logger.log_alarm(
+                message=f"Legacy workstation '{self.device_name}': Serial connection restored",
+                priority=AlarmPriority.MEDIUM,
+                state=AlarmState.CLEARED,
+                device=self.device_name,
+                data={"failure_count": self.serial_failure_count},
+            )
+            self.serial_failure_alarm_raised = False
+            self.serial_failure_count = 0
 
     # ----------------------------------------------------------------
     # Uptime and system info
@@ -487,7 +556,7 @@ class LegacyWorkstation(BaseDevice):
             "shares": self.smb_shares,
         }
 
-    def access_share(
+    async def access_share(
         self, share_name: str, username: str = "", password: str = ""
     ) -> dict[str, Any]:
         """
@@ -500,9 +569,16 @@ class LegacyWorkstation(BaseDevice):
 
         share = self.smb_shares[share_name]
 
-        # Log the access
-        self.logger.warning(
-            f"SMB ACCESS: {username or 'anonymous'} accessed \\\\{self.computer_name}\\{share_name}"
+        # Log the access as security event
+        await self.logger.log_security(
+            message=f"SMB share access: {username or 'anonymous'} accessed \\\\{self.computer_name}\\{share_name}",
+            severity=EventSeverity.WARNING,
+            data={
+                "share": share_name,
+                "username": username or "anonymous",
+                "path": share["path"],
+                "authentication_required": False,
+            },
         )
 
         return {
@@ -513,14 +589,21 @@ class LegacyWorkstation(BaseDevice):
             "note": "No password required",
         }
 
-    def get_stored_credentials(self) -> dict[str, Any]:
+    async def get_stored_credentials(self, user: str = "unknown") -> dict[str, Any]:
         """
         Extract stored credentials from the system.
 
         Simulates credential harvesting from config files and post-its.
         """
-        self.logger.warning(
-            f"CREDENTIAL EXTRACTION: Credentials harvested from {self.device_name}"
+        await self.logger.log_security(
+            message=f"Credential extraction from legacy workstation '{self.device_name}'",
+            severity=EventSeverity.CRITICAL,
+            data={
+                "device": self.device_name,
+                "user": user,
+                "credentials_exposed": len(self.stored_credentials),
+                "credential_locations": list(self.stored_credentials.keys()),
+            },
         )
         return self.stored_credentials
 
@@ -588,12 +671,20 @@ class LegacyWorkstation(BaseDevice):
     # Archaeology - exploring the forgotten machine
     # ----------------------------------------------------------------
 
-    def explore_filesystem(self) -> list[DiscoveredArtifact]:
+    async def explore_filesystem(self, user: str = "unknown") -> list[DiscoveredArtifact]:
         """
         Explore the filesystem for interesting artifacts.
 
         Like digital archaeology on a machine frozen in 1998.
         """
+        # Log filesystem exploration as audit event
+        await self.logger.log_audit(
+            message=f"Filesystem exploration on legacy workstation '{self.device_name}'",
+            user=user,
+            action="filesystem_exploration",
+            data={"device": self.device_name},
+        )
+
         artifacts = [
             DiscoveredArtifact(
                 artifact_type="file",
@@ -673,7 +764,7 @@ class LegacyWorkstation(BaseDevice):
         self.logger.info(f"Filesystem exploration found {len(artifacts)} artifacts")
         return artifacts
 
-    def read_floppy_disk(self, disk_index: int) -> dict[str, Any]:
+    async def read_floppy_disk(self, disk_index: int, user: str = "unknown") -> dict[str, Any]:
         """
         Attempt to read a floppy disk from the drawer.
 
@@ -691,6 +782,18 @@ class LegacyWorkstation(BaseDevice):
                 "label": disk["label"],
                 "error": "Disk read error - bad sectors",
             }
+
+        # Log floppy disk access as audit event
+        await self.logger.log_audit(
+            message=f"Floppy disk read from legacy workstation '{self.device_name}': {disk['label']}",
+            user=user,
+            action="floppy_disk_read",
+            data={
+                "disk_index": disk_index,
+                "label": disk["label"],
+                "contents": disk.get("contains", "unknown data"),
+            },
+        )
 
         self.logger.info(f"Floppy disk read: {disk['label']}")
         return {

@@ -79,6 +79,11 @@ from pathlib import Path
 from typing import Any
 
 from components.devices.core.base_device import BaseDevice
+from components.security.logging_system import (
+    AlarmPriority,
+    AlarmState,
+    EventSeverity,
+)
 from components.state.data_store import DataStore
 
 
@@ -186,6 +191,10 @@ class EnterpriseWorkstation(BaseDevice):
         self.last_historian_sync = 0.0
         self.collected_reports = []
 
+        # Alarm state tracking
+        self.historian_failure_alarm_raised = False
+        self.historian_failure_count = 0
+
         # Security vulnerabilities (for attack scenarios)
         self.saved_vpn_credentials = {
             "dmz_access": {
@@ -279,27 +288,106 @@ class EnterpriseWorkstation(BaseDevice):
                 self.memory_map["reports_collected"] = len(self.collected_reports)
                 self.memory_map["last_sync"] = self.last_historian_sync
 
+                # Reset failure count on success
+                if self.historian_failure_count > 0:
+                    self.historian_failure_count = 0
+
         except Exception as e:
             self.logger.error(f"Error reading historian data: {e}")
             self.memory_map["historian_connected"] = False
+            self.historian_failure_count += 1
+
+        # Check alarm conditions
+        await self._check_alarm_conditions()
+
+    # ----------------------------------------------------------------
+    # Alarm conditions
+    # ----------------------------------------------------------------
+
+    async def _check_alarm_conditions(self) -> None:
+        """Check and raise/clear alarms for critical conditions."""
+        # Historian connection failure alarm (>3 consecutive failures)
+        if self.historian_failure_count > 3 and not self.historian_failure_alarm_raised:
+            await self.logger.log_alarm(
+                message=f"Enterprise workstation '{self.device_name}': Historian connection failed ({self.historian_failure_count} failures)",
+                priority=AlarmPriority.MEDIUM,
+                state=AlarmState.ACTIVE,
+                device=self.device_name,
+                data={
+                    "historian_source": self.historian_source,
+                    "failure_count": self.historian_failure_count,
+                },
+            )
+            self.historian_failure_alarm_raised = True
+        elif self.historian_failure_count == 0 and self.historian_failure_alarm_raised:
+            await self.logger.log_alarm(
+                message=f"Enterprise workstation '{self.device_name}': Historian connection restored",
+                priority=AlarmPriority.MEDIUM,
+                state=AlarmState.CLEARED,
+                device=self.device_name,
+                data={"historian_source": self.historian_source},
+            )
+            self.historian_failure_alarm_raised = False
 
     # ----------------------------------------------------------------
     # Attack surface methods (for red team scenarios)
     # ----------------------------------------------------------------
 
-    def get_saved_credentials(self) -> dict[str, Any]:
+    async def get_saved_credentials(self, user: str = "unknown") -> dict[str, Any]:
         """
         Get saved credentials from browser and VPN client.
 
         Simulates credential harvesting from compromised workstation.
         """
-        self.logger.warning(
-            f"CREDENTIAL EXTRACTION: Harvested credentials from {self.device_name}"
+        await self.logger.log_security(
+            message=f"Credential extraction from enterprise workstation '{self.device_name}'",
+            severity=EventSeverity.CRITICAL,
+            data={
+                "device": self.device_name,
+                "user": user,
+                "vpn_credentials_exposed": len(self.saved_vpn_credentials),
+                "browser_passwords_exposed": len(self.browser_saved_passwords),
+            },
         )
         return {
             "vpn": self.saved_vpn_credentials,
             "browser": self.browser_saved_passwords,
         }
+
+    async def connect_vpn(self, profile: str = "DMZ-Access", user: str = "unknown") -> bool:
+        """
+        Connect to VPN.
+
+        Logs VPN connection as audit event.
+        """
+        if profile in [p for p in self.installed_software["Cisco AnyConnect VPN"]["saved_profiles"]]:
+            self.vpn_connected = True
+            self.memory_map["vpn_connected"] = True
+
+            await self.logger.log_audit(
+                message=f"VPN connection established from '{self.device_name}' to {profile}",
+                user=user,
+                action="vpn_connect",
+                data={
+                    "device": self.device_name,
+                    "vpn_profile": profile,
+                },
+            )
+            return True
+        return False
+
+    async def disconnect_vpn(self, user: str = "unknown") -> None:
+        """Disconnect from VPN."""
+        if self.vpn_connected:
+            self.vpn_connected = False
+            self.memory_map["vpn_connected"] = False
+
+            await self.logger.log_audit(
+                message=f"VPN connection closed from '{self.device_name}'",
+                user=user,
+                action="vpn_disconnect",
+                data={"device": self.device_name},
+            )
 
     def enumerate_network_access(self) -> dict[str, Any]:
         """
@@ -323,21 +411,28 @@ class EnterpriseWorkstation(BaseDevice):
             ],
         }
 
-    def simulate_phishing_compromise(self) -> dict[str, Any]:
+    async def simulate_phishing_compromise(self, user: str = "accounting") -> dict[str, Any]:
         """
         Simulate successful phishing attack on this workstation.
 
         Returns information available to attacker after initial compromise.
         """
-        self.logger.warning(
-            f"PHISHING ATTACK: User on {self.device_name} opened malicious attachment"
+        await self.logger.log_security(
+            message=f"Phishing attack simulation: User on '{self.device_name}' opened malicious attachment",
+            severity=EventSeverity.CRITICAL,
+            data={
+                "device": self.device_name,
+                "user": user,
+                "attack_type": "phishing",
+                "local_admin_access": True,
+            },
         )
 
         return {
             "compromised": True,
             "access_level": "user",
             "local_admin": True,  # User has admin rights
-            "credentials": self.get_saved_credentials(),
+            "credentials": await self.get_saved_credentials(user),
             "network_access": self.enumerate_network_access(),
             "installed_software": list(self.installed_software.keys()),
             "attack_paths": [

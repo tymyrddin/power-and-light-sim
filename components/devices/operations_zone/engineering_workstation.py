@@ -12,6 +12,11 @@ from pathlib import Path
 from typing import Any
 
 from components.devices.core.base_device import BaseDevice
+from components.security.logging_system import (
+    AlarmPriority,
+    AlarmState,
+    EventSeverity,
+)
 from components.state.data_store import DataStore
 
 
@@ -205,13 +210,14 @@ class EngineeringWorkstation(BaseDevice):
     # Project management
     # ----------------------------------------------------------------
 
-    def add_project(
+    async def add_project(
         self,
         project_name: str,
         device_name: str,
         file_type: str,
         has_credentials: bool = True,
         file_path: str = "",
+        user: str = "unknown",
     ) -> None:
         """
         Add a project file to the workstation.
@@ -222,6 +228,7 @@ class EngineeringWorkstation(BaseDevice):
             file_type: Type of project ('plc_program', 'scada_config', 'hmi_project')
             has_credentials: Whether project contains stored credentials
             file_path: Path to project file
+            user: User adding the project
         """
         if not file_path:
             file_path = f"C:\\Projects\\{project_name}.{file_type}"
@@ -236,6 +243,21 @@ class EngineeringWorkstation(BaseDevice):
                 file_path=file_path,
             )
         )
+
+        # Log project creation as audit event
+        await self.logger.log_audit(
+            message=f"Project created on engineering workstation '{self.device_name}': {project_name}",
+            user=user,
+            action="project_create",
+            data={
+                "project_name": project_name,
+                "device_name": device_name,
+                "file_type": file_type,
+                "contains_credentials": has_credentials,
+                "file_path": file_path,
+            },
+        )
+
         self.logger.info(f"Project added: {project_name} for {device_name}")
 
     def get_project(self, project_name: str) -> ProjectFile | None:
@@ -253,7 +275,9 @@ class EngineeringWorkstation(BaseDevice):
                 return project
         return None
 
-    def get_project_credentials(self, project_name: str) -> dict[str, str] | None:
+    async def get_project_credentials(
+        self, project_name: str, user: str = "unknown"
+    ) -> dict[str, str] | None:
         """
         Get stored credentials from a project file.
 
@@ -261,12 +285,26 @@ class EngineeringWorkstation(BaseDevice):
 
         Args:
             project_name: Name of project
+            user: User extracting credentials
 
         Returns:
             Dictionary of credentials if available, None otherwise
         """
         for project in self.projects:
             if project.project_name == project_name and project.contains_credentials:
+                # Log credential extraction as CRITICAL security event
+                await self.logger.log_security(
+                    message=f"Credential extraction from engineering workstation '{self.device_name}': {project_name}",
+                    severity=EventSeverity.CRITICAL,
+                    data={
+                        "device": self.device_name,
+                        "project_name": project_name,
+                        "target_device": project.device_name,
+                        "user": user,
+                        "file_path": project.file_path,
+                    },
+                )
+
                 return {
                     "device": project.device_name,
                     "plc_password": "plc123",
@@ -284,7 +322,7 @@ class EngineeringWorkstation(BaseDevice):
         """
         Program a PLC with new logic.
 
-        This is a critical operation - logs as warning.
+        This is a critical operation - logs as audit event.
 
         Args:
             plc_name: Target PLC device name
@@ -298,6 +336,19 @@ class EngineeringWorkstation(BaseDevice):
                 f"PLC programming rejected: No user logged in on {self.device_name}"
             )
             return False
+
+        # Log PLC programming as CRITICAL audit event
+        await self.logger.log_audit(
+            message=f"PLC PROGRAMMING: {self.current_user} programming {plc_name} from '{self.device_name}'",
+            user=self.current_user,
+            action="plc_program",
+            data={
+                "source_workstation": self.device_name,
+                "target_plc": plc_name,
+                "program_size_bytes": len(str(program_data)),
+                "timestamp": self.sim_time.now(),
+            },
+        )
 
         self.logger.warning(
             f"PLC PROGRAMMING: {self.current_user} @ "
@@ -318,7 +369,7 @@ class EngineeringWorkstation(BaseDevice):
     # User session
     # ----------------------------------------------------------------
 
-    def login(self, username: str, password: str = "") -> bool:
+    async def login(self, username: str, password: str = "") -> bool:
         """
         Simulate user login.
 
@@ -333,13 +384,37 @@ class EngineeringWorkstation(BaseDevice):
         if username == self.account_name:
             self.current_user = username
             self.login_time = self.sim_time.now()
+
+            # Log login as audit event
+            await self.logger.log_audit(
+                message=f"User login to engineering workstation '{self.device_name}': {username}",
+                user=username,
+                action="login",
+                data={
+                    "device": self.device_name,
+                    "login_time": self.login_time,
+                    "shared_account": self.shared_account,
+                },
+            )
+
             self.logger.info(f"User logged in to {self.device_name}: {username}")
             return True
         return False
 
-    def logout(self) -> None:
+    async def logout(self) -> None:
         """Logout current user."""
         if self.current_user:
+            # Log logout as audit event
+            await self.logger.log_audit(
+                message=f"User logout from engineering workstation '{self.device_name}': {self.current_user}",
+                user=self.current_user,
+                action="logout",
+                data={
+                    "device": self.device_name,
+                    "session_duration_s": self.sim_time.now() - self.login_time,
+                },
+            )
+
             self.logger.info(
                 f"User logged out from {self.device_name}: {self.current_user}"
             )

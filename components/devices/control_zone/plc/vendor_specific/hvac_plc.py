@@ -49,6 +49,7 @@ from typing import Any
 
 from components.devices.control_zone.plc.generic.base_plc import BasePLC
 from components.physics.hvac_physics import HVACPhysics
+from components.security.logging_system import AlarmPriority, AlarmState
 from components.state.data_store import DataStore
 
 
@@ -144,6 +145,12 @@ class HVACPLC(BasePLC):
         )
 
         self.hvac_physics = hvac_physics
+
+        # Alarm state tracking (hysteresis)
+        self.temp_alarm_raised = False
+        self.humidity_alarm_raised = False
+        self.lspace_warning_alarm_raised = False
+        self.lspace_critical_alarm_raised = False
 
         self.logger.info(
             f"HVACPLC '{device_name}' created " f"(hvac: {hvac_physics.device_name})"
@@ -312,6 +319,114 @@ class HVACPLC(BasePLC):
         self.hvac_physics.set_damper_position(self._damper_position)
         self.hvac_physics.set_system_enable(self._system_enable)
         self.hvac_physics.set_lspace_dampener(self._lspace_dampener)
+
+        # Check alarm conditions
+        await self._check_alarm_conditions()
+
+    async def _check_alarm_conditions(self) -> None:
+        """
+        Check alarm conditions and log with hysteresis.
+
+        Monitors:
+        - Temperature out of range
+        - Humidity out of range
+        - L-space stability warnings
+        """
+        # Temperature alarm (discrete_inputs[3])
+        temp_alarm = self.memory_map.get("discrete_inputs[3]", False)
+        if temp_alarm and not self.temp_alarm_raised:
+            zone_temp = self.memory_map.get("input_registers[0]", 0) / 10.0
+            temp_setpoint = self.memory_map.get("holding_registers[0]", 200) / 10.0
+            await self.logger.log_alarm(
+                message=f"HVAC temperature alarm on '{self.device_name}': {zone_temp}°C (setpoint: {temp_setpoint}°C)",
+                priority=AlarmPriority.HIGH,
+                state=AlarmState.ACTIVE,
+                device=self.device_name,
+                data={
+                    "zone_temperature_c": zone_temp,
+                    "temperature_setpoint_c": temp_setpoint,
+                },
+            )
+            self.temp_alarm_raised = True
+        elif not temp_alarm and self.temp_alarm_raised:
+            await self.logger.log_alarm(
+                message=f"HVAC temperature alarm cleared on '{self.device_name}'",
+                priority=AlarmPriority.HIGH,
+                state=AlarmState.CLEARED,
+                device=self.device_name,
+                data={},
+            )
+            self.temp_alarm_raised = False
+
+        # Humidity alarm (discrete_inputs[4])
+        humidity_alarm = self.memory_map.get("discrete_inputs[4]", False)
+        if humidity_alarm and not self.humidity_alarm_raised:
+            zone_humidity = self.memory_map.get("input_registers[1]", 0) / 10.0
+            humidity_setpoint = self.memory_map.get("holding_registers[1]", 450) / 10.0
+            await self.logger.log_alarm(
+                message=f"HVAC humidity alarm on '{self.device_name}': {zone_humidity}% (setpoint: {humidity_setpoint}%)",
+                priority=AlarmPriority.HIGH,
+                state=AlarmState.ACTIVE,
+                device=self.device_name,
+                data={
+                    "zone_humidity_percent": zone_humidity,
+                    "humidity_setpoint_percent": humidity_setpoint,
+                },
+            )
+            self.humidity_alarm_raised = True
+        elif not humidity_alarm and self.humidity_alarm_raised:
+            await self.logger.log_alarm(
+                message=f"HVAC humidity alarm cleared on '{self.device_name}'",
+                priority=AlarmPriority.HIGH,
+                state=AlarmState.CLEARED,
+                device=self.device_name,
+                data={},
+            )
+            self.humidity_alarm_raised = False
+
+        # L-space warning (discrete_inputs[5]) - stability < 50%
+        lspace_warning = self.memory_map.get("discrete_inputs[5]", False)
+        if lspace_warning and not self.lspace_warning_alarm_raised:
+            lspace_stability = self.memory_map.get("input_registers[4]", 100)
+            await self.logger.log_alarm(
+                message=f"L-space stability warning on '{self.device_name}': {lspace_stability}% (threshold: 50%)",
+                priority=AlarmPriority.MEDIUM,
+                state=AlarmState.ACTIVE,
+                device=self.device_name,
+                data={"lspace_stability_percent": lspace_stability},
+            )
+            self.lspace_warning_alarm_raised = True
+        elif not lspace_warning and self.lspace_warning_alarm_raised:
+            await self.logger.log_alarm(
+                message=f"L-space stability warning cleared on '{self.device_name}'",
+                priority=AlarmPriority.MEDIUM,
+                state=AlarmState.CLEARED,
+                device=self.device_name,
+                data={},
+            )
+            self.lspace_warning_alarm_raised = False
+
+        # L-space critical (discrete_inputs[6]) - stability < 30%
+        lspace_critical = self.memory_map.get("discrete_inputs[6]", False)
+        if lspace_critical and not self.lspace_critical_alarm_raised:
+            lspace_stability = self.memory_map.get("input_registers[4]", 100)
+            await self.logger.log_alarm(
+                message=f"L-space stability CRITICAL on '{self.device_name}': {lspace_stability}% (threshold: 30%)",
+                priority=AlarmPriority.HIGH,
+                state=AlarmState.ACTIVE,
+                device=self.device_name,
+                data={"lspace_stability_percent": lspace_stability},
+            )
+            self.lspace_critical_alarm_raised = True
+        elif not lspace_critical and self.lspace_critical_alarm_raised:
+            await self.logger.log_alarm(
+                message=f"L-space stability critical alarm cleared on '{self.device_name}'",
+                priority=AlarmPriority.HIGH,
+                state=AlarmState.CLEARED,
+                device=self.device_name,
+                data={},
+            )
+            self.lspace_critical_alarm_raised = False
 
     # ----------------------------------------------------------------
     # Convenience methods for programmatic control

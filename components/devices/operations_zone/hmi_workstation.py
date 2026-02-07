@@ -14,6 +14,11 @@ from components.devices.operations_zone.base_supervisory import (
     BaseSupervisoryDevice,
     PollTarget,
 )
+from components.security.logging_system import (
+    AlarmPriority,
+    AlarmState,
+    EventSeverity,
+)
 from components.state.data_store import DataStore
 
 
@@ -123,6 +128,9 @@ class HMIWorkstation(BaseSupervisoryDevice):
             poll_rate_s=scan_interval,
         )
 
+        # Alarm state tracking
+        self.scada_connection_alarm_raised = False
+
         self.logger.info(
             f"HMIWorkstation '{device_name}' initialised "
             f"(OS={os_version}, software={hmi_software})"
@@ -225,10 +233,31 @@ class HMIWorkstation(BaseSupervisoryDevice):
         # Check for SCADA connection failure
         if self.scada_server in self.poll_targets:
             target = self.poll_targets[self.scada_server]
-            if target.consecutive_failures >= 3:
-                self.logger.warning(
-                    f"HMI '{self.device_name}': Lost connection to SCADA server"
+
+            # Raise alarm on connection failure
+            if target.consecutive_failures >= 3 and not self.scada_connection_alarm_raised:
+                await self.logger.log_alarm(
+                    message=f"HMI '{self.device_name}': Lost connection to SCADA server '{self.scada_server}'",
+                    priority=AlarmPriority.HIGH,
+                    state=AlarmState.ACTIVE,
+                    device=self.device_name,
+                    data={
+                        "scada_server": self.scada_server,
+                        "consecutive_failures": target.consecutive_failures,
+                    },
                 )
+                self.scada_connection_alarm_raised = True
+
+            # Clear alarm when connection restored
+            elif target.consecutive_failures == 0 and self.scada_connection_alarm_raised:
+                await self.logger.log_alarm(
+                    message=f"HMI '{self.device_name}': Connection to SCADA server '{self.scada_server}' restored",
+                    priority=AlarmPriority.HIGH,
+                    state=AlarmState.CLEARED,
+                    device=self.device_name,
+                    data={"scada_server": self.scada_server},
+                )
+                self.scada_connection_alarm_raised = False
 
     # ----------------------------------------------------------------
     # Screen configuration
@@ -278,7 +307,7 @@ class HMIWorkstation(BaseSupervisoryDevice):
     # Operator interaction
     # ----------------------------------------------------------------
 
-    def login_operator(self, operator_name: str, password: str = "") -> bool:
+    async def login_operator(self, operator_name: str, password: str = "") -> bool:
         """
         Simulate operator login.
 
@@ -294,12 +323,35 @@ class HMIWorkstation(BaseSupervisoryDevice):
         self.operator_name = operator_name
         self.login_time = self.sim_time.now()
 
+        # Log operator login as audit event
+        await self.logger.log_audit(
+            message=f"Operator login to HMI '{self.device_name}': {operator_name}",
+            user=operator_name,
+            action="operator_login",
+            data={
+                "device": self.device_name,
+                "hmi_software": self.hmi_software,
+                "scada_server": self.scada_server,
+            },
+        )
+
         self.logger.info(f"Operator logged in to {self.device_name}: {operator_name}")
         return True
 
-    def logout_operator(self) -> None:
+    async def logout_operator(self) -> None:
         """Logout current operator."""
         if self.operator_logged_in:
+            # Log operator logout as audit event
+            await self.logger.log_audit(
+                message=f"Operator logout from HMI '{self.device_name}': {self.operator_name}",
+                user=self.operator_name,
+                action="operator_logout",
+                data={
+                    "device": self.device_name,
+                    "session_duration_s": self.sim_time.now() - self.login_time,
+                },
+            )
+
             self.logger.info(
                 f"Operator logged out from {self.device_name}: {self.operator_name}"
             )
@@ -349,6 +401,20 @@ class HMIWorkstation(BaseSupervisoryDevice):
             )
             return False
 
+        # Log operator command as audit event
+        await self.logger.log_audit(
+            message=f"HMI command from '{self.device_name}': {self.operator_name} -> {device_name}:{address_type}[{address}] = {value}",
+            user=self.operator_name,
+            action="hmi_command",
+            data={
+                "hmi_device": self.device_name,
+                "target_device": device_name,
+                "address_type": address_type,
+                "address": address,
+                "value": value,
+            },
+        )
+
         # Write directly to device memory via DataStore
         # In real system, this would go through SCADA server
         await self.data_store.write_memory(device_name, address_type, value)
@@ -372,12 +438,27 @@ class HMIWorkstation(BaseSupervisoryDevice):
     # Security vulnerabilities (for testing)
     # ----------------------------------------------------------------
 
-    def get_config_file_contents(self) -> dict[str, Any]:
+    async def get_config_file_contents(self, user: str = "unknown") -> dict[str, Any]:
         """
         Get HMI configuration file contents.
 
         Simulates common vulnerability: credentials in plaintext config files.
+
+        Args:
+            user: User accessing config file
         """
+        # Log config file access as CRITICAL security event
+        await self.logger.log_security(
+            message=f"HMI config file access on '{self.device_name}': plaintext credentials exposed",
+            severity=EventSeverity.CRITICAL,
+            data={
+                "device": self.device_name,
+                "user": user,
+                "config_file": self.config_file_path,
+                "credentials_exposed": 3,  # SCADA, database, PLC
+            },
+        )
+
         return {
             "scada_server": self.scada_server,
             "scada_username": "scada_user",

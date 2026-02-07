@@ -49,6 +49,7 @@ from typing import Any
 
 from components.devices.control_zone.plc.generic.base_plc import BasePLC
 from components.physics.reactor_physics import ReactorPhysics
+from components.security.logging_system import AlarmPriority, AlarmState
 from components.state.data_store import DataStore
 
 
@@ -139,6 +140,13 @@ class ReactorPLC(BasePLC):
 
         # Internal state for edge detection
         self._scram_reset_edge = False
+
+        # Alarm state tracking
+        self.high_temp_alarm_raised = False
+        self.high_pressure_alarm_raised = False
+        self.thaumic_warning_alarm_raised = False
+        self.containment_warning_alarm_raised = False
+        self.severe_damage_alarm_raised = False
 
         self.logger.info(
             f"ReactorPLC '{device_name}' created "
@@ -362,6 +370,77 @@ class ReactorPLC(BasePLC):
                     f"ReactorPLC '{self.device_name}': SCRAM reset failed - "
                     f"conditions not safe"
                 )
+
+        # Check alarm conditions
+        await self._check_alarm_conditions()
+
+    async def _check_alarm_conditions(self) -> None:
+        """Check and raise/clear alarms for reactor conditions."""
+        # High temperature alarm
+        high_temp = self.memory_map.get("discrete_inputs[1]", False)
+        if high_temp and not self.high_temp_alarm_raised:
+            temp = self.memory_map.get("input_registers[0]", 0)
+            await self.logger.log_alarm(
+                message=f"Reactor high temperature alarm on '{self.device_name}': {temp}°C",
+                priority=AlarmPriority.HIGH,
+                state=AlarmState.ACTIVE,
+                device=self.device_name,
+                data={"temperature_c": temp},
+            )
+            self.high_temp_alarm_raised = True
+        elif not high_temp and self.high_temp_alarm_raised:
+            await self.logger.log_alarm(
+                message=f"Reactor temperature normal on '{self.device_name}'",
+                priority=AlarmPriority.HIGH,
+                state=AlarmState.CLEARED,
+                device=self.device_name,
+                data={},
+            )
+            self.high_temp_alarm_raised = False
+
+        # High pressure alarm
+        high_pressure = self.memory_map.get("discrete_inputs[2]", False)
+        if high_pressure and not self.high_pressure_alarm_raised:
+            pressure = self.memory_map.get("input_registers[2]", 0) / 10.0
+            await self.logger.log_alarm(
+                message=f"Reactor high pressure alarm on '{self.device_name}': {pressure} bar",
+                priority=AlarmPriority.HIGH,
+                state=AlarmState.ACTIVE,
+                device=self.device_name,
+                data={"pressure_bar": pressure},
+            )
+            self.high_pressure_alarm_raised = True
+        elif not high_pressure and self.high_pressure_alarm_raised:
+            await self.logger.log_alarm(
+                message=f"Reactor pressure normal on '{self.device_name}'",
+                priority=AlarmPriority.HIGH,
+                state=AlarmState.CLEARED,
+                device=self.device_name,
+                data={},
+            )
+            self.high_pressure_alarm_raised = False
+
+        # Severe damage alarm (CRITICAL)
+        severe_damage = self.memory_map.get("discrete_inputs[6]", False)
+        if severe_damage and not self.severe_damage_alarm_raised:
+            damage = self.memory_map.get("input_registers[9]", 0)
+            await self.logger.log_alarm(
+                message=f"Reactor SEVERE DAMAGE on '{self.device_name}': {damage}% damage",
+                priority=AlarmPriority.CRITICAL,
+                state=AlarmState.ACTIVE,
+                device=self.device_name,
+                data={"damage_percent": damage},
+            )
+            self.severe_damage_alarm_raised = True
+        elif not severe_damage and self.severe_damage_alarm_raised:
+            await self.logger.log_alarm(
+                message=f"Reactor damage recovered on '{self.device_name}'",
+                priority=AlarmPriority.CRITICAL,
+                state=AlarmState.CLEARED,
+                device=self.device_name,
+                data={},
+            )
+            self.severe_damage_alarm_raised = False
 
     # ----------------------------------------------------------------
     # Convenience methods for programmatic control

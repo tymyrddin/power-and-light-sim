@@ -70,11 +70,11 @@ async def historian_system():
     )
 
     # Add tags to SCADA that link to PLC addresses
-    scada.add_tag("reactor_temperature", "mock_plc", "holding_registers", 0, "float")
-    scada.add_tag("reactor_pressure", "mock_plc", "holding_registers", 2, "float")
-    scada.add_tag("turbine_speed", "mock_plc", "holding_registers", 4, "int")
-    scada.add_tag("generator_output", "mock_plc", "holding_registers", 6, "float")
-    scada.add_tag("grid_frequency", "mock_plc", "holding_registers", 8, "float")
+    await scada.add_tag("reactor_temperature", "mock_plc", "holding_registers", 0, "float")
+    await scada.add_tag("reactor_pressure", "mock_plc", "holding_registers", 2, "float")
+    await scada.add_tag("turbine_speed", "mock_plc", "holding_registers", 4, "int")
+    await scada.add_tag("generator_output", "mock_plc", "holding_registers", 6, "float")
+    await scada.add_tag("grid_frequency", "mock_plc", "holding_registers", 8, "float")
 
     # Create Historian
     historian = Historian(
@@ -304,16 +304,9 @@ class TestConfigurationManagement:
         """Test retention policy changes generate audit log entries."""
         historian, _, _, data_store, _ = historian_system
 
-        initial_audit_count = len(
-            await data_store.get_audit_log(device="test_historian")
-        )
-
         await historian.set_retention_days(365, user="test_engineer")
 
         await asyncio.sleep(0.1)
-
-        final_audit_count = len(await data_store.get_audit_log(device="test_historian"))
-        assert final_audit_count > initial_audit_count
 
         # Check audit log content
         audit_events = await data_store.get_audit_log(device="test_historian", limit=1)
@@ -327,7 +320,6 @@ class TestConfigurationManagement:
         """Test retention policy is updated in device memory map."""
         historian, _, _, data_store, _ = historian_system
 
-        old_retention = historian.retention_days
         await historian.set_retention_days(720, user="system")
 
         # Check that retention is updated in historian's memory map
@@ -410,17 +402,12 @@ class TestCollectionFailureAlarms:
         await scada.stop()
         await data_store.unregister_device("scada_test")
 
-        initial_audit_count = len(await data_store.get_audit_log())
-
         # Wait for multiple collection failures (alarm triggers every 5 failures)
         # Since scan_interval is 0.5s, wait enough time for at least 5 failures
         await asyncio.sleep(3.0)
 
-        final_audit_count = len(await data_store.get_audit_log())
-
-        # Audit log should have increased if collection failures occurred
-        # Note: Test verifies alarm mechanism exists, actual triggering depends on timing
-        assert final_audit_count >= initial_audit_count
+        # Verify that collection failures occurred
+        assert historian.failed_collections >= 5
 
 
 class TestStorageCapacityMonitoring:
@@ -458,16 +445,11 @@ class TestStorageCapacityMonitoring:
         """Test storage capacity alarm when threshold exceeded."""
         historian, _, _, data_store, _ = historian_system
 
-        initial_audit_count = len(await data_store.get_audit_log())
-
         # Simulate high storage usage (>90%)
         await data_store.write_memory("test_historian", "storage_used_mb", 920.0)
 
         # Trigger storage check via scan cycle
         await asyncio.sleep(1.0)
-
-        # Check if alarm was raised (would be in audit log)
-        final_audit_count = len(await data_store.get_audit_log())
 
         # Note: Alarm generation depends on scan cycle timing
         # This test verifies the mechanism exists
@@ -607,8 +589,6 @@ class TestHistorianReset:
 
         # Collect some data first
         await asyncio.sleep(1.5)
-
-        initial_online = historian._online
 
         # Perform reset
         await historian.reset()

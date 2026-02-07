@@ -58,6 +58,7 @@ from components.devices.control_zone.safety.base_safety_controller import (
     VotingArchitecture,
 )
 from components.physics.reactor_physics import ReactorPhysics
+from components.security.logging_system import AlarmPriority, AlarmState
 from components.state.data_store import DataStore
 
 
@@ -156,6 +157,15 @@ class ReactorSafetyPLC(BaseSafetyController):
         self._temp_channel_b = 25.0
         self._pressure_channel_a = 1.0
         self._pressure_channel_b = 1.0
+
+        # Alarm state tracking (individual SIF alarms)
+        self.scram_alarm_raised = False
+        self.diagnostic_fault_alarm_raised = False
+        self.high_temp_alarm_raised = False
+        self.high_pressure_alarm_raised = False
+        self.thaumic_unstable_alarm_raised = False
+        self.containment_breach_alarm_raised = False
+        self.low_coolant_alarm_raised = False
 
         self.logger.info(
             f"ReactorSafetyPLC '{device_name}' created "
@@ -377,6 +387,28 @@ class ReactorSafetyPLC(BaseSafetyController):
             if await self.reset_from_safe_state():
                 # Also reset reactor physics SCRAM
                 if self.reactor_physics.reset_scram():
+                    # Log SCRAM reset as audit event
+                    await self.logger.log_audit(
+                        message=f"Reactor SCRAM reset on '{self.device_name}'",
+                        user="operator",
+                        action="scram_reset",
+                        data={
+                            "device": self.device_name,
+                            "demand_count": self.demand_count,
+                        },
+                    )
+
+                    # Clear SCRAM alarm
+                    if self.scram_alarm_raised:
+                        await self.logger.log_alarm(
+                            message=f"REACTOR SCRAM CLEARED on '{self.device_name}'",
+                            priority=AlarmPriority.CRITICAL,
+                            state=AlarmState.CLEARED,
+                            device=self.device_name,
+                            data={},
+                        )
+                        self.scram_alarm_raised = False
+
                     self.memory_map["coils[0]"] = False  # Clear manual SCRAM
                     self.memory_map["coils[1]"] = False  # Clear reset command
                 else:
@@ -392,6 +424,21 @@ class ReactorSafetyPLC(BaseSafetyController):
         max_temp_discrepancy = 5.0  # 5°C max
 
         if temp_discrepancy > max_temp_discrepancy:
+            if not self.diagnostic_fault_alarm_raised:
+                await self.logger.log_alarm(
+                    message=f"Diagnostic fault on '{self.device_name}': Temperature channel discrepancy {temp_discrepancy:.1f}°C",
+                    priority=AlarmPriority.HIGH,
+                    state=AlarmState.ACTIVE,
+                    device=self.device_name,
+                    data={
+                        "fault_type": "temp_channel_discrepancy",
+                        "temp_a": self._temp_channel_a,
+                        "temp_b": self._temp_channel_b,
+                        "discrepancy": temp_discrepancy,
+                    },
+                )
+                self.diagnostic_fault_alarm_raised = True
+
             self.logger.error(
                 f"ReactorSafetyPLC '{self.device_name}': "
                 f"Temperature channel discrepancy {temp_discrepancy:.1f}°C"
@@ -405,6 +452,21 @@ class ReactorSafetyPLC(BaseSafetyController):
         max_press_discrepancy = 3.0  # 3 bar max
 
         if press_discrepancy > max_press_discrepancy:
+            if not self.diagnostic_fault_alarm_raised:
+                await self.logger.log_alarm(
+                    message=f"Diagnostic fault on '{self.device_name}': Pressure channel discrepancy {press_discrepancy:.1f} bar",
+                    priority=AlarmPriority.HIGH,
+                    state=AlarmState.ACTIVE,
+                    device=self.device_name,
+                    data={
+                        "fault_type": "pressure_channel_discrepancy",
+                        "pressure_a": self._pressure_channel_a,
+                        "pressure_b": self._pressure_channel_b,
+                        "discrepancy": press_discrepancy,
+                    },
+                )
+                self.diagnostic_fault_alarm_raised = True
+
             self.logger.error(
                 f"ReactorSafetyPLC '{self.device_name}': "
                 f"Pressure channel discrepancy {press_discrepancy:.1f} bar"
@@ -413,7 +475,17 @@ class ReactorSafetyPLC(BaseSafetyController):
             self.memory_map["input_registers[9]"] = 2
             return
 
-        # No faults
+        # No faults - clear alarm if it was raised
+        if self.diagnostic_fault_alarm_raised:
+            await self.logger.log_alarm(
+                message=f"Diagnostic fault cleared on '{self.device_name}'",
+                priority=AlarmPriority.HIGH,
+                state=AlarmState.CLEARED,
+                device=self.device_name,
+                data={},
+            )
+            self.diagnostic_fault_alarm_raised = False
+
         self.diagnostic_fault = False
         self.memory_map["input_registers[9]"] = 0
 
@@ -421,6 +493,21 @@ class ReactorSafetyPLC(BaseSafetyController):
         """Force reactor to safe state (SCRAM)."""
         self.safe_state_active = True
         self.reactor_physics.trigger_scram()
+
+        # Log SCRAM as CRITICAL alarm
+        if not self.scram_alarm_raised:
+            await self.logger.log_alarm(
+                message=f"REACTOR SCRAM ACTIVATED on '{self.device_name}': Safe state forced",
+                priority=AlarmPriority.CRITICAL,
+                state=AlarmState.ACTIVE,
+                device=self.device_name,
+                data={
+                    "scram_reason": "safety_demand",
+                    "demand_count": self.demand_count,
+                },
+            )
+            self.scram_alarm_raised = True
+
         self.logger.critical(
             f"ReactorSafetyPLC '{self.device_name}': FORCING SAFE STATE - "
             f"Reactor SCRAM activated"
@@ -430,10 +517,27 @@ class ReactorSafetyPLC(BaseSafetyController):
     # Convenience methods
     # ----------------------------------------------------------------
 
-    async def trigger_scram(self) -> None:
-        """Trigger a manual SCRAM (emergency shutdown)."""
+    async def trigger_scram(self, user: str = "operator") -> None:
+        """
+        Trigger a manual SCRAM (emergency shutdown).
+
+        Args:
+            user: User triggering the SCRAM
+        """
         self.memory_map["coils[0]"] = True
         await self.data_store.write_memory(self.device_name, "coils[0]", True)
+
+        # Log manual SCRAM as audit event
+        await self.logger.log_audit(
+            message=f"Manual SCRAM commanded on '{self.device_name}' by {user}",
+            user=user,
+            action="manual_scram",
+            data={
+                "device": self.device_name,
+                "method": "trigger_scram",
+            },
+        )
+
         self.logger.warning(
             f"ReactorSafetyPLC '{self.device_name}': Manual SCRAM commanded"
         )

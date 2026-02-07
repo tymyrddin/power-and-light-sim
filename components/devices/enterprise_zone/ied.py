@@ -8,13 +8,17 @@ that monitor electrical conditions and provide protection functions.
 
 import asyncio
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
 
-from components.security.logging_system import get_logger
+from components.security.logging_system import (
+    AlarmPriority,
+    AlarmState,
+    EventSeverity,
+    get_logger,
+)
 from components.state.data_store import DataStore
 from components.time.simulation_time import SimulationTime
-
-logger = get_logger(__name__)
 
 
 @dataclass
@@ -78,6 +82,7 @@ class IED:
         goose_enabled: bool = True,
         mms_enabled: bool = True,
         scan_rate_hz: float = 100.0,  # Protection relays scan fast
+        log_dir: Path | None = None,
     ):
         """
         Initialise IED.
@@ -89,10 +94,19 @@ class IED:
             goose_enabled: Enable GOOSE messaging
             mms_enabled: Enable MMS reporting
             scan_rate_hz: Protection scan rate (typically fast)
+            log_dir: Directory for log files
         """
         self.device_name = device_name
         self.data_store = data_store
         self.sim_time = SimulationTime()
+
+        # Device-specific logger with ICS logging system
+        self.logger = get_logger(
+            self.__class__.__name__,
+            device=device_name,
+            log_dir=log_dir,
+            data_store=data_store,
+        )
 
         # Configuration
         self.ied_name = ied_name
@@ -123,7 +137,11 @@ class IED:
         # Timers for time-delayed trips
         self._trip_timers: dict[str, float] = {}
 
-        logger.info(
+        # Alarm state tracking
+        self.trip_alarm_raised = False
+        self.repeated_trip_alarm_raised = False
+
+        self.logger.info(
             f"IED created: {device_name} ({ied_name}), scan_rate={scan_rate_hz}Hz"
         )
 
@@ -149,19 +167,19 @@ class IED:
 
         await self._sync_to_datastore()
 
-        logger.info(f"IED initialised: {self.device_name}")
+        self.logger.info(f"IED initialised: {self.device_name}")
 
     async def start(self) -> None:
         """Start protection scanning."""
         if self._running:
-            logger.warning(f"IED already running: {self.device_name}")
+            self.logger.warning(f"IED already running: {self.device_name}")
             return
 
         self._running = True
         self._last_scan_time = self.sim_time.now()
         self._scan_task = asyncio.create_task(self._scan_cycle())
 
-        logger.info(f"IED started: {self.device_name}")
+        self.logger.info(f"IED started: {self.device_name}")
 
     async def stop(self) -> None:
         """Stop protection scanning."""
@@ -178,18 +196,19 @@ class IED:
                 pass
             self._scan_task = None
 
-        logger.info(f"IED stopped: {self.device_name}")
+        self.logger.info(f"IED stopped: {self.device_name}")
 
     # ----------------------------------------------------------------
     # Protection configuration
     # ----------------------------------------------------------------
 
-    def add_protection_function(
+    async def add_protection_function(
         self,
         function_type: str,
         pickup_value: float,
         time_delay_s: float = 0.0,
         enabled: bool = True,
+        user: str = "system",
     ) -> None:
         """
         Add a protection function.
@@ -199,6 +218,7 @@ class IED:
             pickup_value: Trip threshold
             time_delay_s: Time delay before trip
             enabled: Function enabled
+            user: User making the configuration change
         """
         self.protection_functions[function_type] = ProtectionFunction(
             function_type=function_type,
@@ -209,7 +229,20 @@ class IED:
 
         self._trip_timers[function_type] = 0.0
 
-        logger.info(
+        # Log configuration change as audit event
+        await self.logger.log_audit(
+            message=f"Protection function configured on IED '{self.device_name}': {function_type}",
+            user=user,
+            action="protection_config",
+            data={
+                "function_type": function_type,
+                "pickup_value": pickup_value,
+                "time_delay_s": time_delay_s,
+                "enabled": enabled,
+            },
+        )
+
+        self.logger.info(
             f"Protection function added: {function_type}, "
             f"pickup={pickup_value}, delay={time_delay_s}s"
         )
@@ -220,7 +253,7 @@ class IED:
 
     async def _scan_cycle(self) -> None:
         """Main protection scan cycle."""
-        logger.info(f"Protection scan started for {self.device_name}")
+        self.logger.info(f"Protection scan started for {self.device_name}")
 
         while self._running:
             current_time = self.sim_time.now()
@@ -231,17 +264,20 @@ class IED:
                 await self._update_measurements()
 
                 # Execute protection logic
-                self._execute_protection_logic(dt)
+                await self._execute_protection_logic(dt)
 
                 # Publish GOOSE if state changed
                 if self.goose_enabled and self.tripped:
-                    self._publish_goose_trip()
+                    await self._publish_goose_trip()
+
+                # Check alarm conditions
+                await self._check_alarm_conditions()
 
                 # Sync to DataStore
                 await self._sync_to_datastore()
 
             except Exception as e:
-                logger.error(f"Error in protection scan for {self.device_name}: {e}")
+                self.logger.error(f"Error in protection scan for {self.device_name}: {e}")
 
             self._last_scan_time = current_time
             await asyncio.sleep(self.scan_interval)
@@ -259,7 +295,7 @@ class IED:
         # For now, maintain current values (set externally or from physics integration)
         pass
 
-    def _execute_protection_logic(self, dt: float) -> None:
+    async def _execute_protection_logic(self, dt: float) -> None:
         """Execute all enabled protection functions."""
         if self.tripped:
             return  # Already tripped, lockout
@@ -292,25 +328,39 @@ class IED:
 
                 if self._trip_timers[func_type] >= func.time_delay_s:
                     # Trip!
-                    self._trip(func_type)
+                    await self._trip(func_type)
                     func.trip_count += 1
                     func.last_trip_time = self.sim_time.now()
             else:
                 # Reset timer
                 self._trip_timers[func_type] = 0.0
 
-    def _trip(self, reason: str) -> None:
+    async def _trip(self, reason: str) -> None:
         """Execute protection trip."""
         self.tripped = True
         self.trip_reason = reason
 
-        logger.warning(
+        # Log protection trip as CRITICAL alarm
+        await self.logger.log_alarm(
+            message=f"PROTECTION TRIP on IED '{self.device_name}': {reason}",
+            priority=AlarmPriority.CRITICAL,
+            state=AlarmState.ACTIVE,
+            device=self.device_name,
+            data={
+                "trip_reason": reason,
+                "current_a": self.measurements.current_a,
+                "voltage_v": self.measurements.voltage_v,
+                "frequency_hz": self.measurements.frequency_hz,
+            },
+        )
+
+        self.logger.warning(
             f"PROTECTION TRIP: {self.device_name} - {reason} "
             f"(I={self.measurements.current_a}A, V={self.measurements.voltage_v}V, "
             f"f={self.measurements.frequency_hz}Hz)"
         )
 
-    def _publish_goose_trip(self) -> None:
+    async def _publish_goose_trip(self) -> None:
         """Publish IEC 61850 GOOSE trip message."""
         goose_msg = {
             "ied_name": self.ied_name,
@@ -326,7 +376,53 @@ class IED:
 
         self.goose_messages.append(goose_msg)
 
-        logger.info(f"GOOSE trip message published: {self.device_name}")
+        # Log GOOSE message as security event (can be spoofed)
+        await self.logger.log_security(
+            message=f"GOOSE trip message published from IED '{self.device_name}'",
+            severity=EventSeverity.CRITICAL,
+            data={
+                "ied_name": self.ied_name,
+                "trip_reason": self.trip_reason,
+                "protocol": "iec61850_goose",
+            },
+        )
+
+        self.logger.info(f"GOOSE trip message published: {self.device_name}")
+
+    async def _check_alarm_conditions(self) -> None:
+        """Check and raise/clear alarms for protection events."""
+        # Trip alarm
+        if self.tripped and not self.trip_alarm_raised:
+            self.trip_alarm_raised = True
+            # Alarm already raised in _trip() method
+
+        elif not self.tripped and self.trip_alarm_raised:
+            await self.logger.log_alarm(
+                message=f"Protection trip cleared on IED '{self.device_name}'",
+                priority=AlarmPriority.CRITICAL,
+                state=AlarmState.CLEARED,
+                device=self.device_name,
+                data={"previous_trip_reason": self.trip_reason},
+            )
+            self.trip_alarm_raised = False
+
+        # Repeated trip alarm (>3 trips)
+        total_trips = sum(func.trip_count for func in self.protection_functions.values())
+        if total_trips > 3 and not self.repeated_trip_alarm_raised:
+            await self.logger.log_alarm(
+                message=f"Repeated protection trips on IED '{self.device_name}': {total_trips} total trips",
+                priority=AlarmPriority.HIGH,
+                state=AlarmState.ACTIVE,
+                device=self.device_name,
+                data={
+                    "total_trips": total_trips,
+                    "function_trip_counts": {
+                        func_type: func.trip_count
+                        for func_type, func in self.protection_functions.items()
+                    },
+                },
+            )
+            self.repeated_trip_alarm_raised = True
 
     # ----------------------------------------------------------------
     # Public interface
@@ -348,10 +444,21 @@ class IED:
         if frequency_hz is not None:
             self.measurements.frequency_hz = frequency_hz
 
-    def reset_trip(self) -> None:
+    async def reset_trip(self, user: str = "operator") -> None:
         """Reset protection trip (manual reset)."""
         if self.tripped:
-            logger.info(f"Trip reset: {self.device_name}")
+            # Log trip reset as audit event
+            await self.logger.log_audit(
+                message=f"Protection trip reset on IED '{self.device_name}' by {user}",
+                user=user,
+                action="trip_reset",
+                data={
+                    "device": self.device_name,
+                    "previous_trip_reason": self.trip_reason,
+                },
+            )
+
+            self.logger.info(f"Trip reset: {self.device_name}")
             self.tripped = False
             self.trip_reason = ""
 

@@ -323,7 +323,7 @@ class IDSSystem(BaseDevice):
                     ]
 
                     # Check threshold
-                    unique_targets = len(set(t for t, _ in self.scan_tracker[source]))
+                    unique_targets = len({t for t, _ in self.scan_tracker[source]})
                     if unique_targets >= self.scan_threshold:
                         await self._generate_alert(
                             severity=AlertSeverity.HIGH,
@@ -335,7 +335,7 @@ class IDSSystem(BaseDevice):
                             destination_ip="multiple",
                             protocol="multiple",
                             affected_devices=list(
-                                set(t for t, _ in self.scan_tracker[source])
+                                {t for t, _ in self.scan_tracker[source]}
                             ),
                             indicators={
                                 "targets_scanned": unique_targets,
@@ -935,7 +935,6 @@ class IDSSystem(BaseDevice):
             Formatted status string
         """
         stats = self.get_statistics()
-        active = self.get_active_alerts()
 
         summary = f"""IDS System: {self.device_name}
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

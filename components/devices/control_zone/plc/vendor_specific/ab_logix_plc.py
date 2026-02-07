@@ -138,7 +138,7 @@ class ABLogixPLC(BasePLC):
     # Tag management
     # ----------------------------------------------------------------
 
-    def create_tag(
+    async def create_tag(
         self,
         name: str,
         data_type: LogixDataType,
@@ -172,6 +172,8 @@ class ABLogixPLC(BasePLC):
             array_size=array_size,
         )
 
+        tag_path = name if program is None else f"Program:{program}.{name}"
+
         if program is None:
             # Controller-scoped tag
             if name in self.controller_tags:
@@ -181,10 +183,7 @@ class ABLogixPLC(BasePLC):
                 )
                 return False
             self.controller_tags[name] = tag
-            self.logger.debug(
-                f"ABLogixPLC '{self.device_name}': "
-                f"Created controller tag '{name}' ({data_type.name})"
-            )
+            scope = "controller"
         else:
             # Program-scoped tag
             if program not in self.programs:
@@ -197,10 +196,26 @@ class ABLogixPLC(BasePLC):
                 )
                 return False
             self.programs[program].tags[name] = tag
-            self.logger.debug(
-                f"ABLogixPLC '{self.device_name}': "
-                f"Created program tag 'Program:{program}.{name}' ({data_type.name})"
-            )
+            scope = f"program:{program}"
+
+        await self.logger.log_audit(
+            message=f"ABLogixPLC '{self.device_name}': Created {scope} tag '{tag_path}' ({data_type.name})",
+            user="engineer",
+            action="logix_create_tag",
+            result="SUCCESS",
+            data={
+                "device": self.device_name,
+                "tag_path": tag_path,
+                "data_type": data_type.name,
+                "scope": scope,
+                "initial_value": initial_value,
+                "read_only": read_only,
+            },
+        )
+
+        self.logger.debug(
+            f"ABLogixPLC '{self.device_name}': Created {scope} tag '{tag_path}' ({data_type.name})"
+        )
 
         return True
 
@@ -220,13 +235,14 @@ class ABLogixPLC(BasePLC):
             return None
         return tag.value
 
-    def write_tag(self, tag_path: str, value: Any) -> bool:
+    async def write_tag(self, tag_path: str, value: Any, user: str = "system") -> bool:
         """
         Write a tag value.
 
         Args:
             tag_path: Tag path
             value: Value to write
+            user: User/system performing the write (for audit trail)
 
         Returns:
             True if written successfully
@@ -243,6 +259,8 @@ class ABLogixPLC(BasePLC):
                 f"ABLogixPLC '{self.device_name}': Tag '{tag_path}' is read-only"
             )
             return False
+
+        old_value = tag.value
 
         # Type conversion based on data type
         try:
@@ -267,6 +285,20 @@ class ABLogixPLC(BasePLC):
                 f"Type conversion error for '{tag_path}': {e}"
             )
             return False
+
+        await self.logger.log_audit(
+            message=f"ABLogixPLC '{self.device_name}': Tag '{tag_path}' changed from {old_value} to {tag.value}",
+            user=user,
+            action="logix_write_tag",
+            result="SUCCESS",
+            data={
+                "device": self.device_name,
+                "tag_path": tag_path,
+                "data_type": tag.data_type.name,
+                "old_value": old_value,
+                "new_value": tag.value,
+            },
+        )
 
         return True
 
@@ -320,7 +352,7 @@ class ABLogixPLC(BasePLC):
     # Convenience methods for common operations
     # ----------------------------------------------------------------
 
-    def create_bool_tag(
+    async def create_bool_tag(
         self,
         name: str,
         initial_value: bool = False,
@@ -328,11 +360,11 @@ class ABLogixPLC(BasePLC):
         description: str = "",
     ) -> bool:
         """Create a BOOL tag."""
-        return self.create_tag(
+        return await self.create_tag(
             name, LogixDataType.BOOL, initial_value, description, program=program
         )
 
-    def create_dint_tag(
+    async def create_dint_tag(
         self,
         name: str,
         initial_value: int = 0,
@@ -340,11 +372,11 @@ class ABLogixPLC(BasePLC):
         description: str = "",
     ) -> bool:
         """Create a DINT (32-bit integer) tag."""
-        return self.create_tag(
+        return await self.create_tag(
             name, LogixDataType.DINT, initial_value, description, program=program
         )
 
-    def create_real_tag(
+    async def create_real_tag(
         self,
         name: str,
         initial_value: float = 0.0,
@@ -352,7 +384,7 @@ class ABLogixPLC(BasePLC):
         description: str = "",
     ) -> bool:
         """Create a REAL (32-bit float) tag."""
-        return self.create_tag(
+        return await self.create_tag(
             name, LogixDataType.REAL, initial_value, description, program=program
         )
 

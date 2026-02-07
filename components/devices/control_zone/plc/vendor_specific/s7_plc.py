@@ -108,7 +108,7 @@ class S7PLC(BasePLC):
     # S7 Data Block operations
     # ----------------------------------------------------------------
 
-    def create_db(self, db_number: int, structure: dict[str, Any]) -> bool:
+    async def create_db(self, db_number: int, structure: dict[str, Any]) -> bool:
         """
         Create a Data Block with specified structure.
 
@@ -126,6 +126,20 @@ class S7PLC(BasePLC):
             return False
 
         self.data_blocks[db_number] = structure.copy()
+
+        await self.logger.log_audit(
+            message=f"S7PLC '{self.device_name}': Created DB{db_number} with {len(structure)} variables",
+            user="engineer",
+            action="s7_create_db",
+            result="SUCCESS",
+            data={
+                "device": self.device_name,
+                "db_number": db_number,
+                "variable_count": len(structure),
+                "variables": list(structure.keys()),
+            },
+        )
+
         self.logger.debug(
             f"S7PLC '{self.device_name}': Created DB{db_number} "
             f"with {len(structure)} variables"
@@ -151,7 +165,7 @@ class S7PLC(BasePLC):
 
         return self.data_blocks[db_number].get(variable)
 
-    def write_db(self, db_number: int, variable: str, value: Any) -> bool:
+    async def write_db(self, db_number: int, variable: str, value: Any, user: str = "system") -> bool:
         """
         Write to a Data Block variable.
 
@@ -159,6 +173,7 @@ class S7PLC(BasePLC):
             db_number: DB number to write to
             variable: Variable name within the DB
             value: Value to write
+            user: User/system performing the write (for audit trail)
 
         Returns:
             True if written successfully
@@ -176,7 +191,23 @@ class S7PLC(BasePLC):
             )
             return False
 
+        old_value = self.data_blocks[db_number][variable]
         self.data_blocks[db_number][variable] = value
+
+        await self.logger.log_audit(
+            message=f"S7PLC '{self.device_name}': DB{db_number}.{variable} changed from {old_value} to {value}",
+            user=user,
+            action="s7_write_db",
+            result="SUCCESS",
+            data={
+                "device": self.device_name,
+                "db_number": db_number,
+                "variable": variable,
+                "old_value": old_value,
+                "new_value": value,
+            },
+        )
+
         return True
 
     # ----------------------------------------------------------------
