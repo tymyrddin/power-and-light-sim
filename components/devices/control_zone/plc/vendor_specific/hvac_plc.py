@@ -330,8 +330,15 @@ class HVACPLC(BasePLC):
         await self.data_store.write_memory(
             self.device_name, "holding_registers[0]", value
         )
-        self.logger.info(
-            f"HVACPLC '{self.device_name}': Temperature setpoint = {temp_c}°C"
+        await self.logger.log_audit(
+            message=f"HVACPLC '{self.device_name}': Temperature setpoint changed to {temp_c}°C",
+            user="operator",
+            action="hvac_temperature_setpoint_change",
+            result="SUCCESS",
+            data={
+                "device": self.device_name,
+                "new_setpoint_celsius": temp_c,
+            },
         )
 
     async def set_humidity_setpoint(self, percent: float) -> None:
@@ -347,8 +354,15 @@ class HVACPLC(BasePLC):
         await self.data_store.write_memory(
             self.device_name, "holding_registers[1]", value
         )
-        self.logger.info(
-            f"HVACPLC '{self.device_name}': Humidity setpoint = {percent}%"
+        await self.logger.log_audit(
+            message=f"HVACPLC '{self.device_name}': Humidity setpoint changed to {percent}%",
+            user="operator",
+            action="hvac_humidity_setpoint_change",
+            result="SUCCESS",
+            data={
+                "device": self.device_name,
+                "new_setpoint_percent": percent,
+            },
         )
 
     async def set_fan_speed(self, percent: float) -> None:

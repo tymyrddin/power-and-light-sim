@@ -26,7 +26,8 @@ Based on snap7 library server functionality.
 """
 
 import asyncio
-import logging
+# import logging
+from components.security.logging_system import get_logger
 from ctypes import c_uint8
 from typing import Any
 
@@ -43,7 +44,7 @@ except ImportError:
     SrvArea = None
     c_uint8 = None
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # snap7 server status codes (from snap7.server.server_statuses)
 SRV_STOPPED = 0

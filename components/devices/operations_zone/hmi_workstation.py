@@ -215,7 +215,7 @@ class HMIWorkstation(BaseSupervisoryDevice):
         self.memory_map["screens"] = list(self.screens.keys())
         self.memory_map["screen_data"] = self.screen_data.copy()
 
-    def _check_alarms(self) -> None:
+    async def _check_alarms(self) -> None:
         """
         Check for HMI-specific alarm conditions.
 

@@ -14,6 +14,7 @@ from components.devices.operations_zone.base_supervisory import (
     BaseSupervisoryDevice,
     PollTarget,
 )
+from components.security.logging_system import AlarmPriority, AlarmState
 from components.state.data_store import DataStore
 
 
@@ -214,7 +215,7 @@ class SCADAServer(BaseSupervisoryDevice):
                     for tag_name, tag_def in self.tags.items():
                         if tag_def.device_name == target.device_name:
                             self.tag_quality[tag_name] = "bad"
-                            self._raise_comms_alarm(tag_name)
+                            await self._raise_comms_alarm(tag_name)
 
         except Exception as e:
             self.logger.error(f"Error polling {target.device_name}: {e}")
@@ -261,7 +262,7 @@ class SCADAServer(BaseSupervisoryDevice):
             for a in self.active_alarms
         ]
 
-    def _check_alarms(self) -> None:
+    async def _check_alarms(self) -> None:
         """Check all tags for alarm conditions."""
         for tag_name, tag_def in self.tags.items():
             value = self.tag_values.get(tag_name)
@@ -272,11 +273,11 @@ class SCADAServer(BaseSupervisoryDevice):
 
             # High alarm
             if tag_def.alarm_high is not None and value > tag_def.alarm_high:
-                self._raise_alarm(tag_name, "high", value)
+                await self._raise_alarm(tag_name, "high", value)
 
             # Low alarm
             if tag_def.alarm_low is not None and value < tag_def.alarm_low:
-                self._raise_alarm(tag_name, "low", value)
+                await self._raise_alarm(tag_name, "low", value)
 
     # ----------------------------------------------------------------
     # Tag management
@@ -369,13 +370,13 @@ class SCADAServer(BaseSupervisoryDevice):
 
             # Check for change of state alarms
             if old_value != value and tag_def.data_type == "bool":
-                self._raise_cos_alarm(tag_name, value)
+                await self._raise_cos_alarm(tag_name, value)
 
     # ----------------------------------------------------------------
     # Alarm management
     # ----------------------------------------------------------------
 
-    def _raise_alarm(self, tag_name: str, alarm_type: str, value: Any) -> None:
+    async def _raise_alarm(self, tag_name: str, alarm_type: str, value: Any) -> None:
         """Raise an alarm if not already active."""
         # Check if alarm already active
         for alarm in self.active_alarms:
@@ -395,15 +396,36 @@ class SCADAServer(BaseSupervisoryDevice):
         self.alarm_history.append(alarm)
         self.total_alarms += 1
 
-        self.logger.warning(f"ALARM: {alarm.message}")
+        # Determine priority based on alarm type
+        priority_map = {
+            "high": AlarmPriority.HIGH,
+            "low": AlarmPriority.MEDIUM,
+            "comms_failure": AlarmPriority.HIGH,
+            "change_of_state": AlarmPriority.LOW,
+        }
+        priority = priority_map.get(alarm_type, AlarmPriority.MEDIUM)
 
-    def _raise_cos_alarm(self, tag_name: str, value: Any) -> None:
+        await self.logger.log_alarm(
+            message=f"ALARM: {alarm.message}",
+            priority=priority,
+            state=AlarmState.ACTIVE,
+            device=self.device_name,
+            data={
+                "device": self.device_name,
+                "tag_name": tag_name,
+                "alarm_type": alarm_type,
+                "value": value,
+                "triggered_at": alarm.triggered_at,
+            },
+        )
+
+    async def _raise_cos_alarm(self, tag_name: str, value: Any) -> None:
         """Raise change-of-state alarm."""
-        self._raise_alarm(tag_name, "change_of_state", value)
+        await self._raise_alarm(tag_name, "change_of_state", value)
 
-    def _raise_comms_alarm(self, tag_name: str) -> None:
+    async def _raise_comms_alarm(self, tag_name: str) -> None:
         """Raise communications failure alarm."""
-        self._raise_alarm(tag_name, "comms_failure", None)
+        await self._raise_alarm(tag_name, "comms_failure", None)
 
     # ----------------------------------------------------------------
     # Public interface

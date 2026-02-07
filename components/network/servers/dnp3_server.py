@@ -25,7 +25,8 @@ Based on dnp3py library outstation (server) functionality.
 """
 
 import asyncio
-import logging
+# import logging
+from components.security.logging_system import get_logger
 from typing import Any
 
 try:
@@ -36,7 +37,7 @@ except ImportError:
     DNP3_AVAILABLE = False
     DNP3Adapter = None
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class DNP3TCPServer:

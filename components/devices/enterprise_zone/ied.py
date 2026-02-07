@@ -7,14 +7,14 @@ that monitor electrical conditions and provide protection functions.
 """
 
 import asyncio
-import logging
 from dataclasses import dataclass
 from typing import Any
 
+from components.security.logging_system import get_logger
 from components.state.data_store import DataStore
 from components.time.simulation_time import SimulationTime
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 @dataclass

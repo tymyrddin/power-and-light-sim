@@ -450,8 +450,17 @@ class NetworkSimulator:
             dst_networks = self.device_networks.get(dst_node, set())
 
             if not dst_networks:
-                self.logger.warning(
-                    f"Destination device {dst_node} not on any network, denying access"
+                await self.logger.log_security(
+                    message=f"Access denied: destination device {dst_node} not on any network",
+                    severity=EventSeverity.WARNING,
+                    source_ip="",
+                    data={
+                        "source_network": src_network,
+                        "destination_node": dst_node,
+                        "port": port,
+                        "protocol": protocol,
+                        "reason": "device_not_on_network",
+                    },
                 )
                 return False
 

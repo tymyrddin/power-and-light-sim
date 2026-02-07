@@ -14,16 +14,16 @@ Integrates with:
 - ConfigLoader for network topology
 """
 
-import logging
 from dataclasses import dataclass, field
 from typing import Any
 
+from components.security.logging_system import get_logger
 from components.state.data_store import DataStore
 from components.time.simulation_time import SimulationTime
 from config.config_loader import ConfigLoader
 
 # Configure logging
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 @dataclass

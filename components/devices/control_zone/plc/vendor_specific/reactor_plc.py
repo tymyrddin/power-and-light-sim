@@ -322,11 +322,33 @@ class ReactorPLC(BasePLC):
         # Handle SCRAM command
         if self._scram_command:
             self.reactor_physics.trigger_scram()
+            data = {"device": self.device_name}
+            if hasattr(self.reactor_physics, "state"):
+                data["reactor_power_mw"] = self.reactor_physics.state.thermal_power_mw
+                data["temperature_c"] = self.reactor_physics.state.core_temperature_c
+            await self.logger.log_audit(
+                message=f"ReactorPLC '{self.device_name}': SCRAM commanded!",
+                user="operator",
+                action="reactor_scram",
+                result="COMMANDED",
+                data=data,
+            )
             self.logger.warning(f"ReactorPLC '{self.device_name}': SCRAM commanded!")
 
         # Handle SCRAM reset (on rising edge only)
         if self._scram_reset_rising:
             if self.reactor_physics.reset_scram():
+                data = {"device": self.device_name}
+                if hasattr(self.reactor_physics, "state"):
+                    data["reactor_power_mw"] = self.reactor_physics.state.thermal_power_mw
+                    data["temperature_c"] = self.reactor_physics.state.core_temperature_c
+                await self.logger.log_audit(
+                    message=f"ReactorPLC '{self.device_name}': SCRAM reset successful",
+                    user="operator",
+                    action="reactor_scram_reset",
+                    result="SUCCESS",
+                    data=data,
+                )
                 self.logger.info(f"ReactorPLC '{self.device_name}': SCRAM reset OK")
                 # Auto-clear SCRAM coils
                 self.memory_map["coils[0]"] = False
@@ -354,8 +376,15 @@ class ReactorPLC(BasePLC):
         await self.data_store.write_memory(
             self.device_name, "holding_registers[0]", value
         )
-        self.logger.info(
-            f"ReactorPLC '{self.device_name}': Power setpoint = {percent}%"
+        await self.logger.log_audit(
+            message=f"ReactorPLC '{self.device_name}': Power setpoint changed to {percent}%",
+            user="operator",
+            action="reactor_power_setpoint_change",
+            result="SUCCESS",
+            data={
+                "device": self.device_name,
+                "new_setpoint_percent": percent,
+            },
         )
 
     async def set_coolant_pump(self, percent: float) -> None:
@@ -366,7 +395,16 @@ class ReactorPLC(BasePLC):
         await self.data_store.write_memory(
             self.device_name, "holding_registers[1]", value
         )
-        self.logger.info(f"ReactorPLC '{self.device_name}': Coolant pump = {percent}%")
+        await self.logger.log_audit(
+            message=f"ReactorPLC '{self.device_name}': Coolant pump speed changed to {percent}%",
+            user="operator",
+            action="reactor_coolant_pump_change",
+            result="SUCCESS",
+            data={
+                "device": self.device_name,
+                "new_speed_percent": percent,
+            },
+        )
 
     async def set_control_rods(self, percent: float) -> None:
         """
@@ -381,7 +419,17 @@ class ReactorPLC(BasePLC):
         await self.data_store.write_memory(
             self.device_name, "holding_registers[2]", value
         )
-        self.logger.info(f"ReactorPLC '{self.device_name}': Control rods = {percent}%")
+        await self.logger.log_audit(
+            message=f"ReactorPLC '{self.device_name}': Control rods positioned at {percent}%",
+            user="operator",
+            action="reactor_control_rods_change",
+            result="SUCCESS",
+            data={
+                "device": self.device_name,
+                "position_percent": percent,
+                "description": "0=fully inserted (shutdown), 100=fully withdrawn",
+            },
+        )
 
     async def enable_thaumic_dampener(self, enable: bool = True) -> None:
         """Enable or disable thaumic dampener."""
@@ -396,12 +444,34 @@ class ReactorPLC(BasePLC):
         """Trigger emergency shutdown (SCRAM)."""
         self.memory_map["coils[0]"] = True
         await self.data_store.write_memory(self.device_name, "coils[0]", True)
+        data = {"device": self.device_name}
+        if hasattr(self.reactor_physics, "state"):
+            data["reactor_power_mw"] = self.reactor_physics.state.thermal_power_mw
+            data["temperature_c"] = self.reactor_physics.state.core_temperature_c
+        await self.logger.log_audit(
+            message=f"ReactorPLC '{self.device_name}': SCRAM commanded via API",
+            user="operator",
+            action="reactor_scram_command",
+            result="COMMANDED",
+            data=data,
+        )
         self.logger.warning(f"ReactorPLC '{self.device_name}': SCRAM commanded")
 
     async def reset_scram_command(self) -> None:
         """Command SCRAM reset."""
         self.memory_map["coils[1]"] = True
         await self.data_store.write_memory(self.device_name, "coils[1]", True)
+        data = {"device": self.device_name}
+        if hasattr(self.reactor_physics, "state"):
+            data["reactor_power_mw"] = self.reactor_physics.state.thermal_power_mw
+            data["temperature_c"] = self.reactor_physics.state.core_temperature_c
+        await self.logger.log_audit(
+            message=f"ReactorPLC '{self.device_name}': SCRAM reset commanded via API",
+            user="operator",
+            action="reactor_scram_reset_command",
+            result="COMMANDED",
+            data=data,
+        )
         self.logger.info(f"ReactorPLC '{self.device_name}': SCRAM reset commanded")
 
     async def get_reactor_status(self) -> dict[str, Any]:

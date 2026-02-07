@@ -380,7 +380,7 @@ class TestSCADAServerTags:
 class TestSCADAServerAlarms:
     """Test SCADA server alarm management."""
 
-    def test_raise_high_alarm(self, test_scada):
+    async def test_raise_high_alarm(self, test_scada):
         """Test raising high alarm.
 
         WHY: High alarms indicate values above limits.
@@ -398,7 +398,7 @@ class TestSCADAServerAlarms:
         test_scada.tag_quality["PRESSURE"] = "good"
 
         # Check alarms
-        test_scada._check_alarms()
+        await test_scada._check_alarms()
 
         assert len(test_scada.active_alarms) == 1
         alarm = test_scada.active_alarms[0]
@@ -406,7 +406,7 @@ class TestSCADAServerAlarms:
         assert alarm.alarm_type == "high"
         assert alarm.value == 110.0
 
-    def test_raise_low_alarm(self, test_scada):
+    async def test_raise_low_alarm(self, test_scada):
         """Test raising low alarm.
 
         WHY: Low alarms indicate values below limits.
@@ -422,13 +422,13 @@ class TestSCADAServerAlarms:
         test_scada.tag_values["LEVEL"] = 15.0
         test_scada.tag_quality["LEVEL"] = "good"
 
-        test_scada._check_alarms()
+        await test_scada._check_alarms()
 
         assert len(test_scada.active_alarms) == 1
         alarm = test_scada.active_alarms[0]
         assert alarm.alarm_type == "low"
 
-    def test_no_duplicate_alarms(self, test_scada):
+    async def test_no_duplicate_alarms(self, test_scada):
         """Test that duplicate alarms are not raised.
 
         WHY: Only one active alarm per tag/type.
@@ -445,14 +445,14 @@ class TestSCADAServerAlarms:
         test_scada.tag_quality["PRESSURE"] = "good"
 
         # Check alarms multiple times
-        test_scada._check_alarms()
-        test_scada._check_alarms()
-        test_scada._check_alarms()
+        await test_scada._check_alarms()
+        await test_scada._check_alarms()
+        await test_scada._check_alarms()
 
         # Should only have one alarm
         assert len(test_scada.active_alarms) == 1
 
-    def test_no_alarm_on_bad_quality(self, test_scada):
+    async def test_no_alarm_on_bad_quality(self, test_scada):
         """Test that alarms are not raised for bad quality data.
 
         WHY: Don't alarm on unreliable data.
@@ -468,7 +468,7 @@ class TestSCADAServerAlarms:
         test_scada.tag_values["PRESSURE"] = 110.0
         test_scada.tag_quality["PRESSURE"] = "bad"  # Bad quality
 
-        test_scada._check_alarms()
+        await test_scada._check_alarms()
 
         assert len(test_scada.active_alarms) == 0
 
@@ -478,7 +478,7 @@ class TestSCADAServerAlarms:
 
         WHY: Operators acknowledge alarms.
         """
-        test_scada._raise_alarm("TEST", "high", 100)
+        await test_scada._raise_alarm("TEST", "high", 100)
         assert len(test_scada.active_alarms) == 1
         assert test_scada.active_alarms[0].acknowledged is False
 
@@ -501,8 +501,8 @@ class TestSCADAServerAlarms:
 
         WHY: HMI needs alarm list.
         """
-        test_scada._raise_alarm("TAG1", "high", 100)
-        test_scada._raise_alarm("TAG2", "low", 5)
+        await test_scada._raise_alarm("TAG1", "high", 100)
+        await test_scada._raise_alarm("TAG2", "low", 5)
 
         alarms = await test_scada.get_active_alarms()
         assert len(alarms) == 2
@@ -510,24 +510,24 @@ class TestSCADAServerAlarms:
         alarms.clear()
         assert len(test_scada.active_alarms) == 2
 
-    def test_alarm_history(self, test_scada):
+    async def test_alarm_history(self, test_scada):
         """Test that alarms are added to history.
 
         WHY: Historical alarm tracking.
         """
-        test_scada._raise_alarm("TAG1", "high", 100)
-        test_scada._raise_alarm("TAG2", "low", 5)
+        await test_scada._raise_alarm("TAG1", "high", 100)
+        await test_scada._raise_alarm("TAG2", "low", 5)
 
         assert len(test_scada.alarm_history) == 2
 
-    def test_total_alarms_counter(self, test_scada):
+    async def test_total_alarms_counter(self, test_scada):
         """Test total alarms counter.
 
         WHY: Track alarm statistics.
         """
-        test_scada._raise_alarm("TAG1", "high", 100)
-        test_scada._raise_alarm("TAG2", "low", 5)
-        test_scada._raise_alarm("TAG3", "comms_failure", None)
+        await test_scada._raise_alarm("TAG1", "high", 100)
+        await test_scada._raise_alarm("TAG2", "low", 5)
+        await test_scada._raise_alarm("TAG3", "comms_failure", None)
 
         assert test_scada.total_alarms == 3
 
@@ -595,7 +595,7 @@ class TestSCADAServerMemoryMap:
         test_scada.tag_quality["TAG1"] = "good"
         test_scada.total_polls = 100
         test_scada.failed_polls = 5
-        test_scada._raise_alarm("TAG1", "high", 42)
+        await test_scada._raise_alarm("TAG1", "high", 42)
 
         await test_scada._process_polled_data()
 

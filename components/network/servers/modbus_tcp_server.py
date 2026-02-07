@@ -25,11 +25,15 @@ Based on pymodbus 3.11.4 async simulator.
 import asyncio
 from typing import Any
 
+from components.security.logging_system import get_logger
 from pymodbus.client import AsyncModbusTcpClient
 from pymodbus.datastore import ModbusServerContext
 from pymodbus.datastore.simulator import ModbusSimulatorContext
 from pymodbus.pdu.device import ModbusDeviceIdentification
 from pymodbus.server import StartAsyncTcpServer
+
+# Configure logging
+logger = get_logger(__name__)
 
 
 class ModbusTCPServer:
@@ -172,16 +176,12 @@ class ModbusTCPServer:
                     except OSError as e:
                         if "Address already in use" not in str(e):
                             # Only suppress "address already in use" - log others
-                            import logging
-
-                            logging.getLogger(__name__).warning(
+                            logger.warning(
                                 f"Modbus server error on {self.host}:{self.port}: {e}"
                             )
                     except Exception as e:
                         # Log unexpected errors
-                        import logging
-
-                        logging.getLogger(__name__).error(
+                        logger.error(
                             f"Unexpected Modbus server error on {self.host}:{self.port}: {e}"
                         )
 

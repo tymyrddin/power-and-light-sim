@@ -287,7 +287,18 @@ class AuthenticationManager:
             )
             self.users[username] = user
 
-            self.logger.info(f"Created user '{username}' with role {role.name}")
+            await self.logger.log_audit(
+                message=f"Created user '{username}' with role {role.name}",
+                user=username,
+                action="create_user",
+                result="SUCCESS",
+                data={
+                    "username": username,
+                    "role": role.name,
+                    "full_name": full_name,
+                    "email": email,
+                },
+            )
             return user
 
     async def get_user(self, username: str) -> User | None:
@@ -305,8 +316,16 @@ class AuthenticationManager:
             old_role = user.role
             user.role = new_role
 
-            self.logger.info(
-                f"Updated user '{username}' role: {old_role.name} → {new_role.name}"
+            await self.logger.log_audit(
+                message=f"Updated user '{username}' role: {old_role.name} → {new_role.name}",
+                user=username,
+                action="update_user_role",
+                result="SUCCESS",
+                data={
+                    "username": username,
+                    "old_role": old_role.name,
+                    "new_role": new_role.name,
+                },
             )
             return True
 
@@ -439,12 +458,33 @@ class AuthenticationManager:
             try:
                 action = PermissionType(action)
             except ValueError:
-                self.logger.warning(f"Unknown permission type: {action}")
+                await self.logger.log_security(
+                    message=f"Unknown permission type: {action}",
+                    severity=EventSeverity.ERROR,
+                    source_ip="",
+                    data={
+                        "action": str(action),
+                        "session_id": session_id,
+                        "resource": resource,
+                        "result": "DENIED",
+                    },
+                )
                 return False
 
         session = await self.get_session(session_id)
         if not session:
-            self.logger.warning("Authorisation failed: Invalid or expired session")
+            await self.logger.log_security(
+                message="Authorization failed: Invalid or expired session",
+                severity=EventSeverity.WARNING,
+                source_ip="",
+                data={
+                    "session_id": session_id,
+                    "action": action.value if not isinstance(action, str) else str(action),
+                    "resource": resource,
+                    "result": "DENIED",
+                    "reason": "invalid_or_expired_session",
+                },
+            )
             return False
 
         user = session.user
@@ -463,14 +503,30 @@ class AuthenticationManager:
         )
 
         if authorized:
-            self.logger.info(
-                f"AUTHORISED: User '{user.username}' ({user.role.name}) - "
-                f"{action.value} on {resource}"
+            await self.logger.log_audit(
+                message=f"AUTHORISED: User '{user.username}' ({user.role.name}) - {action.value} on {resource}",
+                user=user.username,
+                action=action.value,
+                result="ALLOWED",
+                data={
+                    "username": user.username,
+                    "role": user.role.name,
+                    "resource": resource,
+                },
             )
         else:
-            self.logger.warning(
-                f"DENIED: User '{user.username}' ({user.role.name}) - "
-                f"{action.value} on {resource} (insufficient permissions)"
+            await self.logger.log_security(
+                message=f"DENIED: User '{user.username}' ({user.role.name}) - {action.value} on {resource}",
+                severity=EventSeverity.WARNING,
+                source_ip="",
+                data={
+                    "username": user.username,
+                    "role": user.role.name,
+                    "action": action.value,
+                    "resource": resource,
+                    "result": "DENIED",
+                    "reason": "insufficient_permissions",
+                },
             )
 
         return authorized
@@ -503,7 +559,19 @@ class AuthenticationManager:
         session2 = await self.get_session(session_id_2)
 
         if not (session1 and session2):
-            self.logger.warning("Dual authorisation failed: Invalid or expired session")
+            await self.logger.log_security(
+                message="Dual authorization failed: Invalid or expired session",
+                severity=EventSeverity.WARNING,
+                source_ip="",
+                data={
+                    "session_id_1": session_id_1,
+                    "session_id_2": session_id_2,
+                    "action": action.value,
+                    "resource": resource,
+                    "result": "DENIED",
+                    "reason": "invalid_or_expired_session",
+                },
+            )
             return False
 
         # Check both users have permission
@@ -512,17 +580,34 @@ class AuthenticationManager:
 
         # Both must be authorised and be different users
         if auth1 and auth2 and session1.user.username != session2.user.username:
-            self.logger.info(
-                f"DUAL AUTHORISATION GRANTED: "
-                f"{session1.user.username} + {session2.user.username} - "
-                f"{action.value} on {resource}"
+            await self.logger.log_audit(
+                message=f"DUAL AUTHORISATION GRANTED: {session1.user.username} + {session2.user.username} - {action.value} on {resource}",
+                user=f"{session1.user.username}+{session2.user.username}",
+                action=f"dual_auth_{action.value}",
+                result="GRANTED",
+                data={
+                    "user1": session1.user.username,
+                    "user2": session2.user.username,
+                    "resource": resource,
+                },
             )
             return True
 
-        self.logger.warning(
-            f"DUAL AUTHORISATION DENIED: "
-            f"{session1.user.username} + {session2.user.username} - "
-            f"{action.value} on {resource}"
+        await self.logger.log_security(
+            message=f"DUAL AUTHORISATION DENIED: {session1.user.username} + {session2.user.username} - {action.value} on {resource}",
+            severity=EventSeverity.ERROR,
+            source_ip="",
+            data={
+                "user1": session1.user.username,
+                "user2": session2.user.username,
+                "action": action.value,
+                "resource": resource,
+                "result": "DENIED",
+                "auth1": auth1,
+                "auth2": auth2,
+                "same_user": session1.user.username == session2.user.username,
+                "reason": "two_person_rule_violation",
+            },
         )
         return False
 
@@ -643,7 +728,18 @@ async def verify_authorization(
         if session_id:
             return await auth_mgr.authorize(session_id, action, resource)
 
-    auth_mgr.logger.warning(f"Invalid authorization token: {authorization}")
+    await auth_mgr.logger.log_security(
+        message=f"Invalid authorization token: {authorization}",
+        severity=EventSeverity.WARNING,
+        source_ip="",
+        data={
+            "authorization": authorization,
+            "action": str(action),
+            "resource": resource,
+            "result": "DENIED",
+            "reason": "invalid_token",
+        },
+    )
     return False
 
 

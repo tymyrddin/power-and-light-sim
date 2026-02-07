@@ -16,14 +16,19 @@ Safety controllers differ from standard PLCs:
 - Forced logic evaluation
 """
 
-import logging
 from abc import abstractmethod
 from enum import Enum
 from typing import Any
 
 from components.devices.core.base_device import BaseDevice
+from components.security.logging_system import (
+    AlarmPriority,
+    AlarmState,
+    EventSeverity,
+    get_logger,
+)
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class SafetyIntegrityLevel(Enum):
@@ -152,9 +157,17 @@ class BaseSafetyController(BaseDevice):
             # 1. Diagnostics first - fail-safe if fault
             await self._run_diagnostics()
             if self.diagnostic_fault:
-                logger.warning(
-                    f"Safety controller '{self.device_name}': Diagnostic fault - "
-                    f"forcing safe state"
+                await logger.log_alarm(
+                    message=f"Safety controller '{self.device_name}': Diagnostic fault - forcing safe state",
+                    priority=AlarmPriority.CRITICAL,
+                    state=AlarmState.ACTIVE,
+                    device=self.device_name,
+                    data={
+                        "device": self.device_name,
+                        "fault_type": "diagnostic_fault",
+                        "action": "forcing_safe_state",
+                        "sil_level": self.sil_level.name,
+                    },
                 )
                 self.safe_state_active = True
                 await self._force_safe_state()
@@ -170,9 +183,18 @@ class BaseSafetyController(BaseDevice):
             if safety_demand and not self.safe_state_active:
                 self.demand_count += 1
                 self.safe_state_active = True
-                logger.warning(
-                    f"Safety controller '{self.device_name}': Safety demand #{self.demand_count} - "
-                    f"activating safe state"
+                await logger.log_alarm(
+                    message=f"Safety controller '{self.device_name}': Safety demand #{self.demand_count} - activating safe state",
+                    priority=AlarmPriority.HIGH,
+                    state=AlarmState.ACTIVE,
+                    device=self.device_name,
+                    data={
+                        "device": self.device_name,
+                        "demand_count": self.demand_count,
+                        "action": "activating_safe_state",
+                        "sil_level": self.sil_level.name,
+                        "voting": self.voting.value,
+                    },
                 )
 
             # 4. Write safety outputs
@@ -184,9 +206,19 @@ class BaseSafetyController(BaseDevice):
 
         except Exception as e:
             # ANY exception in safety logic forces safe state
-            logger.critical(
-                f"CRITICAL: Exception in safety controller '{self.device_name}': {e}",
-                exc_info=True,
+            await logger.log_alarm(
+                message=f"CRITICAL: Exception in safety controller '{self.device_name}': {e}",
+                priority=AlarmPriority.CRITICAL,
+                state=AlarmState.ACTIVE,
+                device=self.device_name,
+                data={
+                    "device": self.device_name,
+                    "exception": str(e),
+                    "exception_type": type(e).__name__,
+                    "fault_count": self.fault_count + 1,
+                    "action": "forcing_safe_state",
+                    "sil_level": self.sil_level.name,
+                },
             )
             self.fault_count += 1
             self.safe_state_active = True
@@ -302,24 +334,56 @@ class BaseSafetyController(BaseDevice):
             )
 
             if not authorized:
-                logger.error(
-                    f"UNAUTHORIZED safety bypass attempt on '{self.device_name}' - "
-                    f"Authorization denied"
+                await logger.log_security(
+                    message=f"UNAUTHORIZED safety bypass attempt on '{self.device_name}' - Authorization denied",
+                    severity=EventSeverity.CRITICAL,
+                    source_ip="",
+                    data={
+                        "device": self.device_name,
+                        "authorization": authorization,
+                        "action": "safety_bypass_attempt",
+                        "result": "DENIED",
+                    },
                 )
                 return False
 
             self.bypass_active = True
-            logger.warning(
-                f"SAFETY BYPASS ACTIVATED on '{self.device_name}' - "
-                f"Authorization: {authorization}"
+            await logger.log_security(
+                message=f"SAFETY BYPASS ACTIVATED on '{self.device_name}'",
+                severity=EventSeverity.ALERT,
+                source_ip="",
+                data={
+                    "device": self.device_name,
+                    "authorization": authorization,
+                    "action": "safety_bypass_activate",
+                    "result": "ALLOWED",
+                },
+            )
+            await logger.log_audit(
+                message=f"Safety bypass activated on '{self.device_name}'",
+                user=authorization,
+                action="activate_safety_bypass",
+                result="SUCCESS",
+                data={
+                    "device": self.device_name,
+                    "sil_level": self.sil_level.name,
+                    "voting": self.voting.value,
+                },
             )
             return True
 
         except ImportError:
             # Fallback if authentication module not available
-            logger.warning(
-                f"Authentication module not available - "
-                f"allowing bypass on '{self.device_name}' (INSECURE)"
+            await logger.log_security(
+                message=f"Authentication module not available - allowing bypass on '{self.device_name}' (INSECURE)",
+                severity=EventSeverity.ERROR,
+                source_ip="",
+                data={
+                    "device": self.device_name,
+                    "action": "safety_bypass_fallback",
+                    "result": "ALLOWED",
+                    "reason": "authentication_unavailable",
+                },
             )
             self.bypass_active = True
             return True
@@ -327,7 +391,16 @@ class BaseSafetyController(BaseDevice):
     async def deactivate_bypass(self) -> None:
         """Deactivate safety function bypass."""
         self.bypass_active = False
-        logger.info(f"Safety bypass deactivated on '{self.device_name}'")
+        await logger.log_audit(
+            message=f"Safety bypass deactivated on '{self.device_name}'",
+            user="system",
+            action="deactivate_safety_bypass",
+            result="SUCCESS",
+            data={
+                "device": self.device_name,
+                "sil_level": self.sil_level.name,
+            },
+        )
 
     async def record_proof_test(self) -> None:
         """Record that proof test was performed."""

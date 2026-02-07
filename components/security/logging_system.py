@@ -27,10 +27,11 @@ import uuid
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-from components.state.data_store import DataStore
-from components.time.simulation_time import SimulationTime
+if TYPE_CHECKING:
+    from components.state.data_store import DataStore
+    from components.time.simulation_time import SimulationTime
 
 __all__ = [
     "EventSeverity",
@@ -196,7 +197,7 @@ class LogEntry:
 class SimTimeFormatter(logging.Formatter):
     """Format log records with simulation time prefix."""
 
-    def __init__(self, sim_time: SimulationTime):
+    def __init__(self, sim_time: "SimulationTime"):
         super().__init__(
             fmt="[SIM:%(sim_time)8.2fs] [%(levelname)8s] %(name)s: %(message)s"
         )
@@ -212,6 +213,8 @@ class JSONFormatter(logging.Formatter):
     """Format log records as JSON with simulation time."""
 
     def __init__(self, device: str = ""):
+        from components.time.simulation_time import SimulationTime
+
         super().__init__()
         self.device = device
         self.sim_time = SimulationTime()
@@ -262,7 +265,7 @@ class ICSLogger:
         log_dir: Path | None = None,
         enable_json: bool = True,
         enable_console: bool = True,
-        data_store: DataStore | None = None,
+        data_store: "DataStore | None" = None,
         max_audit_entries: int = 10000,
     ):
         """
@@ -277,6 +280,8 @@ class ICSLogger:
             data_store: Optional DataStore for centralised logging
             max_audit_entries: Maximum audit trail entries to retain
         """
+        from components.time.simulation_time import SimulationTime
+
         self.name = name
         self.device = device
         self.log_dir = log_dir
@@ -579,12 +584,12 @@ class ICSLogger:
 _loggers: dict[str, ICSLogger] = {}
 _loggers_lock = threading.Lock()
 _default_log_dir: Path | None = None
-_default_data_store: DataStore | None = None
+_default_data_store: "DataStore | None" = None
 
 
 def configure_logging(
     log_dir: Path | str | None = None,
-    data_store: DataStore | None = None,
+    data_store: "DataStore | None" = None,
 ) -> None:
     """
     Configure global logging settings.

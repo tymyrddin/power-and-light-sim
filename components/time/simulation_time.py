@@ -8,7 +8,8 @@ from typing import Optional
 
 from config.config_loader import ConfigLoader
 
-# Configure logging
+# SimulationTime uses standard logging because ICSLogger depends on it
+# Using ICSLogger here would create a circular dependency
 logger = logging.getLogger(__name__)
 
 

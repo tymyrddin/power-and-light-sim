@@ -13,6 +13,10 @@ from pathlib import Path
 from asyncua import Server
 from asyncua.crypto import uacrypto
 from asyncua.server.user_managers import CertificateUserManager
+from components.security.logging_system import get_logger
+
+# Configure logging
+logger = get_logger(__name__)
 
 
 class OPCUAAsyncua118Adapter:
@@ -97,9 +101,7 @@ class OPCUAAsyncua118Adapter:
 
                 except Exception as e:
                     # Fall back to no security if certificate loading fails
-                    import logging
-
-                    logging.warning(
+                    logger.warning(
                         f"Failed to load OPC UA certificates: {e}, falling back to no security"
                     )
 

@@ -29,7 +29,8 @@ Based on asyncua library (Python OPC UA implementation).
 """
 
 import asyncio
-import logging
+# import logging
+from components.security.logging_system import get_logger
 from typing import Any
 
 try:
@@ -40,7 +41,7 @@ except ImportError:
     OPCUA_AVAILABLE = False
     OPCUAAsyncua118Adapter = None
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class OPCUAServer:

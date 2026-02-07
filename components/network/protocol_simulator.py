@@ -18,6 +18,8 @@ from typing import Any, Protocol
 
 from components.network.network_simulator import NetworkSimulator
 from components.security.logging_system import (
+    AlarmPriority,
+    AlarmState,
     EventSeverity,
     ICSLogger,
     get_logger,
@@ -149,7 +151,16 @@ class ProtocolSimulator:
         # Check for failures
         failed = sum(1 for r in results if isinstance(r, Exception))
         if failed:
-            self.logger.error(f"Failed to start {failed} listener(s)")
+            await self.logger.log_alarm(
+                message=f"Failed to start {failed} protocol listener(s)",
+                priority=AlarmPriority.HIGH,
+                state=AlarmState.ACTIVE,
+                device="protocol_simulator",
+                data={
+                    "failed_count": failed,
+                    "total_listeners": len(self.listeners),
+                },
+            )
             for i, result in enumerate(results):
                 if isinstance(result, Exception):
                     listener = self.listeners[i]

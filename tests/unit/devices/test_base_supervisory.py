@@ -69,7 +69,7 @@ class ConcreteSupervisoryDevice(BaseSupervisoryDevice):
         self.process_polled_data_count += 1
         self.memory_map["poll_count"] = self.poll_device_count
 
-    def _check_alarms(self) -> None:
+    async def _check_alarms(self) -> None:
         """Check for alarms."""
         self.check_alarms_count += 1
 

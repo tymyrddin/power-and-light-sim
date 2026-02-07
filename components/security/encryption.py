@@ -14,6 +14,7 @@ Integrations:
 - ConfigLoader: Load encryption settings from YAML
 - DataStore: Store encrypted credentials/keys
 - SimulationTime: Certificate validity periods
+- Certificate validation happens during setup/initialisation and does not need real-time audit trail urgency
 
 ICS-specific features:
 - DNP3 Secure Authentication v5
@@ -40,6 +41,7 @@ from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 from cryptography.x509.oid import NameOID
 
 from components.security.logging_system import (
+    EventSeverity,
     ICSLogger,
     get_logger,
 )

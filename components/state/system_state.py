@@ -7,15 +7,15 @@ Provides unified interface for monitoring and control.
 """
 
 import asyncio
-import logging
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any
 
+from components.security.logging_system import get_logger
 from components.time.simulation_time import SimulationTime
 
 # Configure logging
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 @dataclass

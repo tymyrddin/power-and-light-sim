@@ -33,6 +33,7 @@ from components.physics.hvac_physics import HVACParameters, HVACPhysics
 from components.physics.power_flow import PowerFlow
 from components.physics.reactor_physics import ReactorParameters, ReactorPhysics
 from components.physics.turbine_physics import TurbineParameters, TurbinePhysics
+from components.security.logging_system import configure_logging
 from components.state.data_store import DataStore
 from components.state.system_state import SystemState
 from components.time.simulation_time import SimulationTime, wait_simulation_time
@@ -84,6 +85,9 @@ class SimulatorManager:
         self.sim_time = SimulationTime()
         self.system_state = SystemState()
         self.data_store = DataStore(self.system_state)
+
+        # Configure ICSLogger with DataStore integration
+        configure_logging(log_dir=log_dir, data_store=self.data_store)
 
         # Network components
         self.network_sim = NetworkSimulator(self.config_loader, self.system_state)

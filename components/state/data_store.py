@@ -8,14 +8,14 @@ Integrates with SystemState for centralised state tracking.
 
 from __future__ import annotations
 
-import logging
 import re
 from typing import Any
 
+from components.security.logging_system import get_logger
 from components.state.system_state import DeviceState, SystemState
 
 # Configure logging
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class DataStore:
@@ -39,10 +39,13 @@ class DataStore:
 
     # Supported memory address patterns
     _MODBUS_PATTERN = re.compile(
-        r"^(holding_registers|input_registers|coils|discrete_inputs)\[\d+$"
+        r"^(holding_registers|input_registers|coils|discrete_inputs)\[\d+\]$"
     )
     _OPCUA_PATTERN = re.compile(r"^ns=\d+;[si]=.+$")
     _IEC104_PATTERN = re.compile(r"^[A-Z_]+:\d+$")
+    _S7_PATTERN = re.compile(r"^DB\d+$")  # Siemens S7 data blocks
+    _INTERNAL_PATTERN = re.compile(r"^_[a-z_]+$")  # Device-internal diagnostic addresses
+    _CONFIG_PATTERN = re.compile(r"^[a-z][a-z0-9_]*$")  # Configuration/application addresses
 
     def __init__(self, system_state: SystemState):
         """Initialise data store.
@@ -247,13 +250,16 @@ class DataStore:
             self._MODBUS_PATTERN.match(address)
             or self._OPCUA_PATTERN.match(address)
             or self._IEC104_PATTERN.match(address)
+            or self._S7_PATTERN.match(address)
+            or self._INTERNAL_PATTERN.match(address)
+            or self._CONFIG_PATTERN.match(address)
         ):
             return
 
         # Allow custom patterns but log warning
         logger.debug(
             f"Address '{address}' doesn't match standard patterns "
-            "(Modbus, OPC UA, IEC 104). Proceeding anyway."
+            "(Modbus, OPC UA, IEC 104, Siemens S7, Internal, Config). Proceeding anyway."
         )
 
     # ----------------------------------------------------------------

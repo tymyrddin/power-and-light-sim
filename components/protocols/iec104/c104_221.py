@@ -8,13 +8,13 @@ IEC 60870-5-104 adapter using Fraunhofer c104.
 """
 
 import asyncio
-import logging
 import threading
 import time
 
 import c104
+from components.security.logging_system import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class IEC104C104Adapter:

@@ -11,6 +11,7 @@ from enum import IntEnum
 from typing import Any
 
 from components.devices.control_zone.rtu.base_rtu import BaseRTU
+from components.security.logging_system import AlarmPriority, AlarmState
 from components.state.data_store import DataStore
 
 
@@ -536,9 +537,20 @@ class SubstationRTU(BaseRTU):
             if should_trip and not relay.tripped:
                 relay.tripped = True
                 relay.trip_count += 1
-                self.logger.warning(
-                    f"SubstationRTU '{self.device_name}': "
-                    f"Relay '{relay_id}' ({relay.relay_type.name}) TRIPPED"
+                await self.logger.log_alarm(
+                    message=f"SubstationRTU '{self.device_name}': Relay '{relay_id}' ({relay.relay_type.name}) TRIPPED",
+                    priority=AlarmPriority.CRITICAL,
+                    state=AlarmState.ACTIVE,
+                    device=self.device_name,
+                    data={
+                        "device": self.device_name,
+                        "relay_id": relay_id,
+                        "relay_type": relay.relay_type.name,
+                        "trip_count": relay.trip_count,
+                        "pickup_value": relay.pickup_value,
+                        "current": max_current,
+                        "voltage": avg_voltage,
+                    },
                 )
 
                 # Trip associated breakers (simplified - trips all)
@@ -558,12 +570,35 @@ class SubstationRTU(BaseRTU):
 
         # Log significant events
         if self.alarm_overcurrent:
-            self.logger.warning(
-                f"SubstationRTU '{self.device_name}': Overcurrent alarm active"
+            await self.logger.log_alarm(
+                message=f"SubstationRTU '{self.device_name}': Overcurrent alarm active",
+                priority=AlarmPriority.HIGH,
+                state=AlarmState.ACTIVE,
+                device=self.device_name,
+                data={
+                    "device": self.device_name,
+                    "alarm_type": "overcurrent",
+                    "current_a": self.current_a,
+                    "current_b": self.current_b,
+                    "current_c": self.current_c,
+                },
             )
         if self.alarm_low_voltage or self.alarm_high_voltage:
-            self.logger.warning(
-                f"SubstationRTU '{self.device_name}': Voltage alarm active"
+            alarm_type = "low_voltage" if self.alarm_low_voltage else "high_voltage"
+            await self.logger.log_alarm(
+                message=f"SubstationRTU '{self.device_name}': Voltage alarm active ({alarm_type})",
+                priority=AlarmPriority.HIGH,
+                state=AlarmState.ACTIVE,
+                device=self.device_name,
+                data={
+                    "device": self.device_name,
+                    "alarm_type": alarm_type,
+                    "voltage_a": self.voltage_a,
+                    "voltage_b": self.voltage_b,
+                    "voltage_c": self.voltage_c,
+                    "alarm_low_voltage": self.alarm_low_voltage,
+                    "alarm_high_voltage": self.alarm_high_voltage,
+                },
             )
 
     # ----------------------------------------------------------------

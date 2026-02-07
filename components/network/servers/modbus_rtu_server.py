@@ -20,6 +20,10 @@ from pymodbus.datastore import ModbusServerContext
 from pymodbus.datastore.simulator import ModbusSimulatorContext
 from pymodbus.server import StartAsyncSerialServer
 
+from components.security.logging_system import AlarmPriority, AlarmState, get_logger
+
+logger = get_logger(__name__)
+
 
 class ModbusRTUServer:
     """
@@ -149,6 +153,10 @@ class ModbusRTUServer:
 
                 if connected:
                     self._running = True
+                    logger.info(
+                        f"Modbus RTU server started on {self.port} "
+                        f"(unit {self.unit_id}, {self.baudrate} baud)"
+                    )
                     return True
 
                 # Connection failed, cleanup and retry
@@ -176,12 +184,37 @@ class ModbusRTUServer:
                     self._server_task = None
 
                 if attempt < max_retries - 1:
+                    logger.warning(
+                        f"Modbus RTU server failed to start on {self.port} "
+                        f"(attempt {attempt + 1}/{max_retries}): {e}"
+                    )
                     await asyncio.sleep(retry_delay * (attempt + 1))
                 else:
+                    await logger.log_alarm(
+                        message=f"Modbus RTU server failed to start on {self.port} after {max_retries} attempts: {e}",
+                        priority=AlarmPriority.HIGH,
+                        state=AlarmState.ACTIVE,
+                        device=f"modbus_rtu_{self.port}",
+                        data={
+                            "port": self.port,
+                            "attempts": max_retries,
+                            "error": str(e),
+                        },
+                    )
                     raise RuntimeError(
                         f"Failed to start Modbus RTU server on {self.port} after {max_retries} attempts: {e}"
                     ) from e
 
+        await logger.log_alarm(
+            message=f"Modbus RTU server failed on {self.port} - client connection failed",
+            priority=AlarmPriority.HIGH,
+            state=AlarmState.ACTIVE,
+            device=f"modbus_rtu_{self.port}",
+            data={
+                "port": self.port,
+                "reason": "client_connection_failed",
+            },
+        )
         raise RuntimeError(
             f"Failed to start Modbus RTU server on {self.port} - client connection failed"
         )
@@ -208,6 +241,8 @@ class ModbusRTUServer:
         self._running = False
         self._simulator = None
         self._context = None
+
+        logger.info(f"Modbus RTU server stopped on {self.port}")
 
     # ------------------------------------------------------------------
     # Direct access for external tools testing
@@ -241,13 +276,39 @@ class ModbusRTUServer:
         """Write coil (for testing)."""
         if not self._client:
             raise RuntimeError("Server not running")
-        return await self._client.write_coil(address, value)
+        result = await self._client.write_coil(address, value)
+        await logger.log_audit(
+            message=f"Modbus RTU write: coil[{address}] = {value}",
+            user="modbus_client",
+            action="modbus_rtu_write_coil",
+            result="SUCCESS" if not result.isError() else "FAILED",
+            data={
+                "port": self.port,
+                "address": address,
+                "value": value,
+                "unit_id": self.unit_id,
+            },
+        )
+        return result
 
     async def write_register(self, address: int, value: int):
         """Write holding register (for testing)."""
         if not self._client:
             raise RuntimeError("Server not running")
-        return await self._client.write_register(address, value)
+        result = await self._client.write_register(address, value)
+        await logger.log_audit(
+            message=f"Modbus RTU write: register[{address}] = {value}",
+            user="modbus_client",
+            action="modbus_rtu_write_register",
+            result="SUCCESS" if not result.isError() else "FAILED",
+            data={
+                "port": self.port,
+                "address": address,
+                "value": value,
+                "unit_id": self.unit_id,
+            },
+        )
+        return result
 
     def get_info(self) -> dict[str, Any]:
         """Get server info."""

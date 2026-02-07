@@ -29,7 +29,8 @@ Based on c104 library (Fraunhofer IEC 60870-5-104 implementation).
 """
 
 import asyncio
-import logging
+# import logging
+from components.security.logging_system import get_logger
 from typing import Any
 
 try:
@@ -40,7 +41,7 @@ except ImportError:
     IEC104_AVAILABLE = False
     IEC104C104Adapter = None
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class IEC104TCPServer:

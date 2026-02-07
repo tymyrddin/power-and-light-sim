@@ -144,7 +144,7 @@ class BaseSupervisoryDevice(BaseDevice):
         await self._process_polled_data()
 
         # Check alarm conditions
-        self._check_alarms()
+        await self._check_alarms()
 
     def _is_poll_due(self, target: PollTarget, current_time: float) -> bool:
         """
@@ -196,7 +196,7 @@ class BaseSupervisoryDevice(BaseDevice):
         pass
 
     @abstractmethod
-    def _check_alarms(self) -> None:
+    async def _check_alarms(self) -> None:
         """
         Check for alarm conditions.
 

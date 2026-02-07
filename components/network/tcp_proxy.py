@@ -9,7 +9,12 @@ Useful for testing protocol interactions and network segmentation bypass.
 import asyncio
 from typing import Any
 
-from components.security.logging_system import ICSLogger, get_logger
+from components.security.logging_system import (
+    AlarmPriority,
+    AlarmState,
+    ICSLogger,
+    get_logger,
+)
 
 __all__ = ["TCPProxy"]
 
@@ -106,8 +111,18 @@ class TCPProxy:
             )
 
         except OSError as e:
-            self.logger.error(
-                f"Failed to start TCP proxy on {self.listen_host}:{self.listen_port}: {e}"
+            await self.logger.log_alarm(
+                message=f"Failed to start TCP proxy on {self.listen_host}:{self.listen_port}: {e}",
+                priority=AlarmPriority.HIGH,
+                state=AlarmState.ACTIVE,
+                device=f"tcp_proxy_{self.listen_port}",
+                data={
+                    "listen_host": self.listen_host,
+                    "listen_port": self.listen_port,
+                    "target_host": self.target_host,
+                    "target_port": self.target_port,
+                    "error": str(e),
+                },
             )
             raise
 
@@ -237,8 +252,17 @@ class TCPProxy:
                 f"Proxy timeout: {client_addr} -> {self.target_host}:{self.target_port}"
             )
         except ConnectionRefusedError:
-            self.logger.error(
-                f"Proxy target refused: {self.target_host}:{self.target_port}"
+            await self.logger.log_alarm(
+                message=f"TCP proxy target connection refused: {self.target_host}:{self.target_port}",
+                priority=AlarmPriority.MEDIUM,
+                state=AlarmState.ACTIVE,
+                device=f"tcp_proxy_{self.listen_port}",
+                data={
+                    "client_addr": str(client_addr),
+                    "target_host": self.target_host,
+                    "target_port": self.target_port,
+                    "error": "connection_refused",
+                },
             )
         except Exception as e:
             self.logger.error(f"Proxy error for {client_addr}: {e}", exc_info=True)
