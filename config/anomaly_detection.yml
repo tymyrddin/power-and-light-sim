@@ -1,0 +1,158 @@
+# config/anomaly_detection.yml
+# Anomaly Detection Configuration (Challenge 4)
+#
+# Persistent configuration (requires restart to apply changes).
+# For runtime changes, use: python tools/blue_team.py anomaly <command>
+
+# Enable/disable anomaly detection globally
+enabled: false  # Default DISABLED for workshop (students enable as part of challenge)
+
+# Statistical detection thresholds
+sigma_threshold: 3.0  # Standard deviations from mean (higher = less sensitive)
+                     # 3.0 = 99.7% of values within bounds (good default)
+                     # 2.0 = 95% (more sensitive, more false positives)
+                     # 4.0 = 99.99% (less sensitive, may miss attacks)
+
+learning_window: 1000  # Number of samples to learn baseline behaviour
+                      # Larger = more stable baseline, but slower to establish
+                      # Smaller = faster to establish, but less stable
+
+# Alarm flood detection (detects alarm flooding attacks)
+alarm_flood_threshold: 10  # Alarms per minute to trigger detection
+alarm_flood_window: 60.0   # Time window in seconds
+
+# Baseline monitoring (learn normal behaviour for parameters)
+# These are established during startup and persist across restarts
+baselines:
+  # Turbine monitoring
+  - device: turbine_plc_1
+    parameter: speed
+    learning_window: 1000
+    enabled: true
+
+  - device: turbine_plc_1
+    parameter: temperature
+    learning_window: 1000
+    enabled: true
+
+  - device: turbine_plc_1
+    parameter: vibration
+    learning_window: 1000
+    enabled: true
+
+  # Reactor monitoring
+  - device: reactor_plc_1
+    parameter: core_temperature
+    learning_window: 1000
+    enabled: true
+
+  - device: reactor_plc_1
+    parameter: coolant_pressure
+    learning_window: 1000
+    enabled: true
+
+  - device: reactor_plc_1
+    parameter: power_output
+    learning_window: 1000
+    enabled: true
+
+# Range limits (hard min/max values - violations are always anomalies)
+range_limits:
+  # Turbine speed limits (800-1800 RPM normal operating range)
+  - device: turbine_plc_1
+    parameter: speed
+    min_value: 800.0
+    max_value: 1800.0
+    severity: high  # Overspeed is critical safety issue
+
+  # Turbine temperature limits (20-100°C normal range)
+  - device: turbine_plc_1
+    parameter: temperature
+    min_value: 20.0
+    max_value: 100.0
+    severity: medium
+
+  # Reactor core temperature limits (250-350°C normal range)
+  - device: reactor_plc_1
+    parameter: core_temperature
+    min_value: 250.0
+    max_value: 350.0
+    severity: critical  # Reactor temp violation is critical
+
+  # Reactor coolant pressure limits (100-160 bar normal range)
+  - device: reactor_plc_1
+    parameter: coolant_pressure
+    min_value: 100.0
+    max_value: 160.0
+    severity: high
+
+# Rate-of-change limits (max rate of change per second)
+# Detects sudden jumps that might indicate attacks or sensor failures
+rate_limits:
+  # Turbine speed shouldn't change faster than 10 RPM/second
+  - device: turbine_plc_1
+    parameter: speed
+    max_rate: 10.0
+    severity: high  # Sudden speed change is dangerous
+
+  # Temperature shouldn't spike rapidly (max 2°C/second)
+  - device: turbine_plc_1
+    parameter: temperature
+    max_rate: 2.0
+    severity: medium
+
+  # Reactor core temperature (max 5°C/second)
+  - device: reactor_plc_1
+    parameter: core_temperature
+    max_rate: 5.0
+    severity: high
+
+  # Reactor pressure (max 10 bar/second)
+  - device: reactor_plc_1
+    parameter: coolant_pressure
+    max_rate: 10.0
+    severity: high
+
+# Severity levels for anomaly types
+# Controls how different anomaly types are logged and alerted
+severity_mapping:
+  statistical: medium     # Statistical deviation - investigate
+  range: high            # Outside safe operating range - likely issue
+  rate_of_change: high   # Changing too fast - dangerous
+  pattern: medium        # Unusual pattern - investigate
+  alarm_flood: critical  # Alarm flooding - likely attack
+  protocol: high         # Protocol violation - likely attack
+
+# Integration with other security systems
+integration:
+  # Send critical anomalies to IDS/SIEM
+  send_to_ids: true
+
+  # Generate alerts for critical anomalies
+  generate_alerts: true
+
+  # Log all anomalies (even low severity)
+  log_all_anomalies: true
+
+# Notes for Workshop Challenge 4:
+#
+# Initial State (vulnerable):
+#   enabled: false - No anomaly detection (attacks undetected)
+#
+# Part 1 (Config - requires restart):
+#   1. Set enabled: true
+#   2. Configure baselines for devices to monitor
+#   3. Set range_limits for critical parameters
+#   4. Set rate_limits to detect sudden changes
+#   5. Restart simulation
+#
+# Part 2 (Runtime - immediate, temporary):
+#   python tools/blue_team.py anomaly enable
+#   python tools/blue_team.py anomaly add-baseline --device turbine_plc_1 --parameter speed
+#   python tools/blue_team.py anomaly set-range --device turbine_plc_1 --parameter speed --min 800 --max 1800
+#   python tools/blue_team.py anomaly stats
+#
+# Testing:
+#   python scripts/exploitation/turbine_overspeed_attack.py
+#   python tools/blue_team.py anomaly list
+#   python tools/blue_team.py audit query --category security --severity WARNING

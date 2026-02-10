@@ -68,6 +68,7 @@ omit = [
     "*/scripts/*",         # Black box attack scripts
     "*/logs/*",            # Logs
     "*/reports/*",         # Reports
+    "*/examples/*",        # Examples
 ]
 
 [tool.coverage.report]
@@ -126,6 +127,11 @@ ignore = [
     "B008",  # do not perform function calls in argument defaults
     "F401",  # ignore unused imports
 ]
+
+[tool.ruff.lint.per-file-ignores]
+# Tools and examples use sys.path.insert() before project imports
+"tools/*.py" = ["E402"]
+"examples/*.py" = ["E402"]
 
 [tool.ruff.format]
 # Any formatter-specific overrides can be added here in the future

@@ -23,7 +23,7 @@ Based on pymodbus 3.11.4 async simulator.
 """
 
 import asyncio
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from pymodbus.client import AsyncModbusTcpClient
 from pymodbus.datastore import ModbusServerContext
@@ -32,6 +32,9 @@ from pymodbus.pdu.device import ModbusDeviceIdentification
 from pymodbus.server import StartAsyncTcpServer
 
 from components.security.logging_system import get_logger
+
+if TYPE_CHECKING:
+    from components.devices.enterprise_zone import ModbusFilter
 
 # Configure logging
 logger = get_logger(__name__)
@@ -55,6 +58,8 @@ class ModbusTCPServer:
         num_holding_registers: int = 64,
         num_input_registers: int = 64,
         device_identity: dict[str, str] | None = None,
+        modbus_filter: "ModbusFilter | None" = None,
+        device_name: str = "unknown",
     ):
         self.host = host
         self.port = port
@@ -69,6 +74,10 @@ class ModbusTCPServer:
         # Device identification (for FC 43 / MEI 14)
         self.device_identity = device_identity or {}
 
+        # Protocol security (Challenge 5: Function Code Filtering)
+        self.modbus_filter = modbus_filter
+        self.device_name = device_name
+
         # Server components
         self._simulator: ModbusSimulatorContext | None = None
         self._context: ModbusServerContext | None = None
@@ -80,6 +89,61 @@ class ModbusTCPServer:
     @property
     def running(self) -> bool:
         return self._running
+
+    def _filter_function_code(self, is_request: bool, pdu):
+        """
+        Filter incoming Modbus requests by function code (trace_pdu callback).
+
+        This is called synchronously by pymodbus for every PDU.
+        Uses sync check + background async logging via create_task().
+
+        Args:
+            is_request: True for incoming request, False for response
+            pdu: ModbusPDU with .function_code attribute
+
+        Returns:
+            Original PDU if allowed, IllegalFunctionException if blocked
+        """
+        # Only filter requests (not responses)
+        if not is_request:
+            return pdu
+
+        # No filter configured - allow all
+        if not self.modbus_filter:
+            return pdu
+
+        # Perform synchronous check (immediate decision)
+        allowed, reason = self.modbus_filter.check_function_code_sync(
+            function_code=pdu.function_code,
+            device_name=self.device_name,
+        )
+
+        # Schedule async logging in background (non-blocking)
+        # Note: check_function_code will re-check, but that's cheap (set membership)
+        # The expensive part (async logging) only happens if needed
+        if (
+            self.modbus_filter.log_blocked_requests
+            or self.modbus_filter.log_allowed_requests
+        ):
+            try:
+                asyncio.create_task(
+                    self.modbus_filter.check_function_code(
+                        function_code=pdu.function_code,
+                        device_name=self.device_name,
+                        source_ip="network",  # TODO: Extract from connection context
+                    )
+                )
+            except RuntimeError:
+                # No event loop running (shouldn't happen in async server)
+                pass
+
+        # Block if not allowed
+        if not allowed:
+            from pymodbus.pdu import IllegalFunctionException
+
+            return IllegalFunctionException(pdu.function_code)
+
+        return pdu
 
     async def start(self) -> bool:
         """Start Modbus TCP server with retry logic for port binding."""
@@ -159,12 +223,15 @@ class ModbusTCPServer:
 
         for attempt in range(max_retries):
             try:
-                # Create server task with device identification
+                # Create server task with device identification and function code filtering
                 self._server_task = asyncio.create_task(
                     StartAsyncTcpServer(
                         context=self._context,
                         identity=self._identity,
                         address=(self.host, self.port),
+                        trace_pdu=(
+                            self._filter_function_code if self.modbus_filter else None
+                        ),
                     )
                 )
 

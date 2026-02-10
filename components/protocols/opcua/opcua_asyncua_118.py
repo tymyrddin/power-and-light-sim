@@ -32,6 +32,7 @@ class OPCUAAsyncua118Adapter:
         certificate_path=None,
         private_key_path=None,
         allow_anonymous=True,
+        auth_manager=None,
     ):
         """
         Initialize OPC UA adapter.
@@ -44,6 +45,7 @@ class OPCUAAsyncua118Adapter:
             certificate_path: Path to server certificate (PEM format)
             private_key_path: Path to server private key (PEM format)
             allow_anonymous: Allow anonymous connections (True for insecure devices)
+            auth_manager: AuthenticationManager for username/password authentication
         """
         self.endpoint = endpoint
         self.namespace_uri = namespace_uri
@@ -52,6 +54,7 @@ class OPCUAAsyncua118Adapter:
         self.certificate_path = Path(certificate_path) if certificate_path else None
         self.private_key_path = Path(private_key_path) if private_key_path else None
         self.allow_anonymous = allow_anonymous
+        self.auth_manager = auth_manager
 
         self._server = None
         self._namespace_idx = None
@@ -94,17 +97,29 @@ class OPCUAAsyncua118Adapter:
                         ]
                     )
 
-                    # Configure user authentication
-                    if not self.allow_anonymous:
-                        # Require certificate-based authentication
-                        user_manager = CertificateUserManager()
-                        self._server.set_user_manager(user_manager)
-
                 except Exception as e:
                     # Fall back to no security if certificate loading fails
                     logger.warning(
                         f"Failed to load OPC UA certificates: {e}, falling back to no security"
                     )
+
+        # Configure user authentication (Challenge 1)
+        # Authentication is independent of encryption - controls WHO can connect.
+        if not self.allow_anonymous:
+            if self.auth_manager:
+                # Username/password authentication via RBAC user database
+                from components.security.opcua_user_manager import OPCUAUserManager
+
+                user_manager = OPCUAUserManager(self.auth_manager)
+                self._server.iserver.set_user_manager(user_manager)
+                logger.info(
+                    f"OPC UA authentication enabled on {self.endpoint} "
+                    f"({len(self.auth_manager.users)} users)"
+                )
+            else:
+                # Certificate-based authentication only
+                user_manager = CertificateUserManager()
+                self._server.iserver.set_user_manager(user_manager)
 
         self._namespace_idx = await self._server.register_namespace(self.namespace_uri)
 

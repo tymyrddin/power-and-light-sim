@@ -412,6 +412,12 @@ class SystemState:
         limit: int | None = None,
         device: str | None = None,
         event_type: str | None = None,
+        category: str | None = None,
+        severity: str | None = None,
+        user: str | None = None,
+        action: str | None = None,
+        since: float | None = None,
+        until: float | None = None,
     ) -> list[dict[str, Any]]:
         """
         Query audit log with optional filters.
@@ -420,6 +426,12 @@ class SystemState:
             limit: Maximum number of events to return
             device: Filter by device name
             event_type: Filter by event type (e.g., "MEMORY_WRITE")
+            category: Filter by category (security, safety, audit, alarm, etc.)
+            severity: Filter by severity (CRITICAL, WARNING, etc.)
+            user: Filter by username
+            action: Filter by action (write_memory, config_change, etc.)
+            since: Filter events after this simulation time
+            until: Filter events before this simulation time
 
         Returns:
             List of audit events (most recent first)
@@ -434,6 +446,21 @@ class SystemState:
                 events = [
                     e for e in events if e.get("message", "").startswith(event_type)
                 ]
+            if category:
+                events = [e for e in events if e.get("category") == category]
+            if severity:
+                events = [e for e in events if e.get("severity") == severity]
+            if user:
+                events = [e for e in events if e.get("user") == user]
+            if action:
+                # Action is stored in data dict
+                events = [
+                    e for e in events if e.get("data", {}).get("action") == action
+                ]
+            if since is not None:
+                events = [e for e in events if e.get("simulation_time", 0) >= since]
+            if until is not None:
+                events = [e for e in events if e.get("simulation_time", 0) <= until]
 
             # Most recent first
             events.reverse()

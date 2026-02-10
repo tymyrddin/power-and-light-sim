@@ -9,10 +9,17 @@ Integrates with SystemState for centralised state tracking.
 from __future__ import annotations
 
 import re
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-from components.security.logging_system import get_logger
+from components.security.logging_system import EventSeverity, get_logger
 from components.state.system_state import DeviceState, SystemState
+from config.config_loader import ConfigLoader
+
+if TYPE_CHECKING:
+    from components.security.authentication import (
+        AuthenticationManager,
+        PermissionType,
+    )
 
 # Configure logging
 logger = get_logger(__name__)
@@ -51,13 +58,52 @@ class DataStore:
         r"^[a-z][a-z0-9_]*$"
     )  # Configuration/application addresses
 
-    def __init__(self, system_state: SystemState):
+    def __init__(
+        self,
+        system_state: SystemState,
+        auth_mgr: AuthenticationManager | None = None,
+    ):
         """Initialise data store.
 
         Args:
             system_state: SystemState instance to delegate to
+            auth_mgr: Optional AuthenticationManager for RBAC enforcement
         """
         self.system_state = system_state
+        self.auth_mgr = auth_mgr
+
+        # Load RBAC configuration
+        config = ConfigLoader().load_all()
+        rbac_config = config.get("rbac", {})
+        self.rbac_enabled = rbac_config.get("enforcement_enabled", False)
+        self.rbac_log_denials = rbac_config.get("log_denials", True)
+        self.rbac_require_session = rbac_config.get("require_session", True)
+        self.rbac_address_permissions = rbac_config.get("address_permissions", {})
+
+        # Compile regex patterns for address permissions
+        self._rbac_compiled_patterns: list[tuple[re.Pattern, str]] = []
+        for pattern_str, permission in self.rbac_address_permissions.items():
+            try:
+                compiled = re.compile(pattern_str)
+                self._rbac_compiled_patterns.append((compiled, permission))
+            except re.error as e:
+                logger.warning(
+                    f"Invalid RBAC address pattern '{pattern_str}': {e}. Skipping."
+                )
+
+        # Disable RBAC if no auth_mgr provided
+        if self.rbac_enabled and not self.auth_mgr:
+            logger.warning(
+                "RBAC enforcement disabled - no AuthenticationManager provided to DataStore"
+            )
+            self.rbac_enabled = False
+
+        if self.rbac_enabled:
+            logger.info("RBAC enforcement ENABLED - permission checks active")
+        else:
+            logger.warning(
+                "RBAC enforcement DISABLED - all writes allowed (VULNERABLE)"
+            )
 
     # ----------------------------------------------------------------
     # Device registration
@@ -109,6 +155,121 @@ class DataStore:
     # Memory map access
     # ----------------------------------------------------------------
 
+    async def _check_write_permission(
+        self,
+        address: str,
+        device_name: str,
+        session_id: str | None,
+        value: Any,
+    ) -> bool:
+        """Check if user has permission to write to this address.
+
+        Args:
+            address: Memory address being written
+            device_name: Device being written to
+            session_id: User's session ID (None = system/anonymous)
+            value: Value being written
+
+        Returns:
+            True if authorized, False if denied
+        """
+        # If no session and sessions required, deny
+        if not session_id and self.rbac_require_session:
+            if self.rbac_log_denials:
+                await logger.log_security(
+                    message=f"RBAC DENIED: Write to {device_name}:{address} - no session (anonymous access blocked)",
+                    severity=EventSeverity.WARNING,
+                    source_ip="",
+                    data={
+                        "device": device_name,
+                        "address": address,
+                        "value": str(value),
+                        "reason": "no_session",
+                    },
+                )
+            return False
+
+        # If no session but not required, allow (system write)
+        if not session_id and not self.rbac_require_session:
+            return True
+
+        # Get session
+        session = await self.auth_mgr.get_session(session_id)
+        if not session:
+            if self.rbac_log_denials:
+                await logger.log_security(
+                    message=f"RBAC DENIED: Write to {device_name}:{address} - invalid/expired session",
+                    severity=EventSeverity.WARNING,
+                    source_ip="",
+                    data={
+                        "device": device_name,
+                        "address": address,
+                        "value": str(value),
+                        "session_id": session_id,
+                        "reason": "invalid_session",
+                    },
+                )
+            return False
+
+        user = session.user
+        username = user.username
+        role = user.role
+
+        # Determine required permission for this address
+        required_permission = self._get_required_permission(address)
+
+        # Check authorization
+        authorized = await self.auth_mgr.authorize(
+            session_id=session_id,
+            action=required_permission,
+            resource=f"{device_name}:{address}",
+            reason=f"Write {value}",
+        )
+
+        if not authorized and self.rbac_log_denials:
+            # Log denial (also logged by auth_mgr, but add context)
+            await logger.log_security(
+                message=f"RBAC DENIED: User '{username}' ({role.name}) cannot write {device_name}:{address} - requires {required_permission.value}",
+                severity=EventSeverity.WARNING,
+                user=username,
+                data={
+                    "device": device_name,
+                    "address": address,
+                    "value": str(value),
+                    "username": username,
+                    "role": role.name,
+                    "required_permission": required_permission.value,
+                    "result": "DENIED",
+                },
+            )
+
+        return authorized
+
+    def _get_required_permission(self, address: str):
+        """Determine required permission for a memory address.
+
+        Args:
+            address: Memory address
+
+        Returns:
+            Required PermissionType
+        """
+        from components.security.authentication import PermissionType
+
+        # Match against configured patterns
+        for pattern, permission_str in self._rbac_compiled_patterns:
+            if pattern.match(address):
+                try:
+                    return PermissionType(permission_str)
+                except ValueError:
+                    logger.warning(
+                        f"Invalid permission type '{permission_str}' in RBAC config for pattern '{pattern.pattern}'. Using CONTROL_SETPOINT."
+                    )
+                    return PermissionType.CONTROL_SETPOINT
+
+        # Default: control setpoint (operator-level)
+        return PermissionType.CONTROL_SETPOINT
+
     async def read_memory(self, device_name: str, address: str) -> Any:
         """Read a single memory field from a device.
 
@@ -138,19 +299,29 @@ class DataStore:
         logger.debug(f"Read {device_name}[{address}] = {value}")
         return value
 
-    async def write_memory(self, device_name: str, address: str, value: Any) -> bool:
+    async def write_memory(
+        self,
+        device_name: str,
+        address: str,
+        value: Any,
+        session_id: str | None = None,
+        username: str | None = None,
+    ) -> bool:
         """Write a single memory field.
 
         Args:
             device_name: Device to write to
             address: Memory address (protocol-specific format)
             value: Value to write
+            session_id: Optional session ID for RBAC enforcement
+            username: Optional username (auto-authenticates if session_id not provided)
 
         Returns:
-            True if written successfully, False if device doesn't exist
+            True if written successfully, False if device doesn't exist or permission denied
 
         Raises:
             ValueError: If device_name or address is invalid
+            PermissionError: If RBAC enforcement enabled and user lacks permission
         """
         if not device_name:
             raise ValueError("device_name cannot be empty")
@@ -158,6 +329,26 @@ class DataStore:
             raise ValueError("address cannot be empty")
 
         self._validate_address(address)
+
+        # Check RBAC permissions if enforcement enabled
+        if self.rbac_enabled:
+            # Determine session_id (from parameter or auto-authenticate username)
+            actual_session_id = session_id
+            if not actual_session_id and username:
+                # Auto-authenticate in simulation mode
+                actual_session_id = await self.auth_mgr.authenticate(username)
+
+            # Check permission
+            authorized = await self._check_write_permission(
+                address=address,
+                device_name=device_name,
+                session_id=actual_session_id,
+                value=value,
+            )
+
+            if not authorized:
+                # Permission denied - already logged by _check_write_permission
+                return False
 
         device = await self.system_state.get_device(device_name)
         if device is None:
@@ -200,18 +391,27 @@ class DataStore:
         logger.debug(f"Bulk read {device_name}: {len(device.memory_map)} addresses")
         return device.memory_map.copy()
 
-    async def bulk_write_memory(self, device_name: str, values: dict[str, Any]) -> bool:
+    async def bulk_write_memory(
+        self,
+        device_name: str,
+        values: dict[str, Any],
+        session_id: str | None = None,
+        username: str | None = None,
+    ) -> bool:
         """Write multiple memory fields at once.
 
         Args:
             device_name: Device to write to
             values: Dictionary of address -> value mappings
+            session_id: Optional session ID for RBAC enforcement
+            username: Optional username (auto-authenticates if session_id not provided)
 
         Returns:
-            True if written successfully, False if device doesn't exist
+            True if written successfully, False if device doesn't exist or permission denied
 
         Raises:
             ValueError: If device_name is invalid or values is empty
+            PermissionError: If RBAC enforcement enabled and user lacks permission for any address
         """
         if not device_name:
             raise ValueError("device_name cannot be empty")
@@ -221,6 +421,30 @@ class DataStore:
         # Validate all addresses before writing
         for address in values.keys():
             self._validate_address(address)
+
+        # Check RBAC permissions if enforcement enabled
+        if self.rbac_enabled:
+            # Determine session_id (from parameter or auto-authenticate username)
+            actual_session_id = session_id
+            if not actual_session_id and username:
+                # Auto-authenticate in simulation mode
+                actual_session_id = await self.auth_mgr.authenticate(username)
+
+            # Check permission for each address
+            for address, value in values.items():
+                authorized = await self._check_write_permission(
+                    address=address,
+                    device_name=device_name,
+                    session_id=actual_session_id,
+                    value=value,
+                )
+
+                if not authorized:
+                    # Permission denied for at least one address - fail entire bulk write
+                    logger.warning(
+                        f"Bulk write to {device_name} denied - insufficient permissions for {address}"
+                    )
+                    return False
 
         device = await self.system_state.get_device(device_name)
         if device is None:
@@ -459,6 +683,12 @@ class DataStore:
         limit: int | None = None,
         device: str | None = None,
         event_type: str | None = None,
+        category: str | None = None,
+        severity: str | None = None,
+        user: str | None = None,
+        action: str | None = None,
+        since: float | None = None,
+        until: float | None = None,
     ) -> list[dict[str, Any]]:
         """
         Query central audit log.
@@ -467,6 +697,12 @@ class DataStore:
             limit: Maximum events to return
             device: Filter by device name
             event_type: Filter by event type (e.g., "Memory write")
+            category: Filter by category (security, safety, audit, alarm, etc.)
+            severity: Filter by severity (CRITICAL, WARNING, etc.)
+            user: Filter by username
+            action: Filter by action (write_memory, config_change, etc.)
+            since: Filter events after this simulation time
+            until: Filter events before this simulation time
 
         Returns:
             List of audit events (most recent first)
@@ -477,5 +713,13 @@ class DataStore:
             ...     print(f"{event['message']}: {event['data']}")
         """
         return await self.system_state.get_audit_log(
-            limit=limit, device=device, event_type=event_type
+            limit=limit,
+            device=device,
+            event_type=event_type,
+            category=category,
+            severity=severity,
+            user=user,
+            action=action,
+            since=since,
+            until=until,
         )

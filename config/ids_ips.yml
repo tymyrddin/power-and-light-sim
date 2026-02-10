@@ -1,0 +1,45 @@
+# config/ids_ips.yml
+# IDS/IPS configuration
+#
+# Changes to this file require restart:
+#   python tools/simulator_manager.py
+#
+# For runtime changes (incident response), use API:
+#   await ids_system.block_ip(...)
+
+# IDS vs IPS mode
+# false = IDS (detection only - alerts but doesn't block)
+# true  = IPS (prevention - alerts AND blocks)
+prevention_mode: false  # Start vulnerable for initial exercises
+
+# Auto-block on critical alerts
+# When in IPS mode, automatically block source IPs that trigger CRITICAL alerts
+auto_block_on_critical: true
+
+# Permanent blocked IPs
+# These IPs are blocked on startup and persist across restarts
+# Format: List of IP addresses
+permanent_blocked_ips: []
+  # Example entries:
+  # - "192.168.1.100"  # Known attacker from previous incident
+  # - "10.99.99.99"    # Permanently banned IP
+
+# Detection thresholds
+detection_thresholds:
+  # Number of ports scanned before triggering alert
+  scan_threshold: 5
+
+  # Time window for scan detection (seconds)
+  scan_time_window: 60.0
+
+  # Protocol violations before alert
+  violation_threshold: 3
+
+  # Unauthorized access attempts before alert
+  unauthorized_threshold: 3
+
+  # Traffic multiplier for anomaly detection (e.g., 3.0 = 3x normal)
+  traffic_anomaly_multiplier: 3.0
+
+# Note: Runtime IP blocks added via API (incident response) are NOT saved here
+# To make runtime blocks permanent, add them to permanent_blocked_ips and restart

@@ -64,13 +64,17 @@ class ProtocolSimulator:
         >>> await protocol_sim.start()
     """
 
-    def __init__(self, network: NetworkSimulator):
+    def __init__(self, network: NetworkSimulator, firewall=None, ids_system=None):
         """Initialise protocol simulator.
 
         Args:
             network: NetworkSimulator instance for reachability checks
+            firewall: Optional Firewall device for connection enforcement
+            ids_system: Optional IDS/IPS device for threat blocking
         """
         self.network = network
+        self.firewall = firewall
+        self.ids_system = ids_system
         self.listeners: list[_Listener] = []
         self.logger: ICSLogger = get_logger(__name__, device="protocol_simulator")
 
@@ -121,6 +125,8 @@ class ProtocolSimulator:
             protocol=protocol,
             handler_factory=handler_factory,
             network_sim=self.network,
+            firewall=self.firewall,
+            ids_system=self.ids_system,
         )
 
         self.listeners.append(listener)
@@ -234,6 +240,8 @@ class _Listener:
         protocol: str,
         handler_factory: Callable[[], ProtocolHandler],
         network_sim: NetworkSimulator,
+        firewall=None,
+        ids_system=None,
     ):
         self.node = node
         self.network = network
@@ -241,6 +249,8 @@ class _Listener:
         self.protocol = protocol
         self.handler_factory = handler_factory
         self.network_sim = network_sim
+        self.firewall = firewall
+        self.ids_system = ids_system
 
         self.server: asyncio.AbstractServer | None = None
         self.active_connections = 0
@@ -330,6 +340,64 @@ class _Listener:
             writer.close()
             await writer.wait_closed()
             return
+
+        # Check IDS/IPS blacklist
+        if self.ids_system:
+            source_ip = peername[0] if peername else "unknown"
+            if self.ids_system.is_blocked(source_ip):
+                self.denied_connections += 1
+                await self.logger.log_security(
+                    f"Connection denied by IDS/IPS: {client_addr} -> {self.node}:{self.port} (IP blocked)",
+                    severity=EventSeverity.ALERT,
+                    data={
+                        "source_ip": source_ip,
+                        "client_address": client_addr,
+                        "target_port": self.port,
+                        "protocol": self.protocol,
+                        "reason": "IP blocked by IDS/IPS",
+                    },
+                )
+                writer.close()
+                await writer.wait_closed()
+                return
+
+        # Check Firewall rules
+        if self.firewall:
+            source_ip = peername[0] if peername else "unknown"
+            # Get destination info for firewall check
+            dest_networks = await self.network_sim.get_device_networks(self.node)
+            dest_network = list(dest_networks)[0] if dest_networks else "unknown"
+            dest_zone = self.network_sim.network_to_zone.get(dest_network, "unknown")
+            src_zone = self.network_sim.network_to_zone.get(src_network, "unknown")
+
+            fw_allowed, fw_reason = await self.firewall.check_connection(
+                source_ip=source_ip,
+                source_network=src_network,
+                source_zone=src_zone,
+                dest_ip=self.node,
+                dest_network=dest_network,
+                dest_zone=dest_zone,
+                dest_port=self.port,
+                protocol=self.protocol,
+            )
+
+            if not fw_allowed:
+                self.denied_connections += 1
+                await self.logger.log_security(
+                    f"Connection denied by firewall: {client_addr} -> {self.node}:{self.port} ({fw_reason})",
+                    severity=EventSeverity.WARNING,
+                    data={
+                        "source_ip": source_ip,
+                        "source_zone": src_zone,
+                        "client_address": client_addr,
+                        "target_port": self.port,
+                        "protocol": self.protocol,
+                        "firewall_reason": fw_reason,
+                    },
+                )
+                writer.close()
+                await writer.wait_closed()
+                return
 
         # Connection allowed - delegate to protocol handler
         self.logger.info(

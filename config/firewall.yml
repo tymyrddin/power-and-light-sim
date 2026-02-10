@@ -1,0 +1,39 @@
+# config/firewall.yml
+# Firewall baseline configuration
+#
+# Changes to this file require restart:
+#   python tools/simulator_manager.py
+#
+# For runtime changes (incident response), use API:
+#   await firewall.add_rule(...)
+
+# Default policy for traffic not matching any rule
+# Options: allow, deny
+default_action: allow  # Vulnerable by default for initial exercises
+
+# Baseline firewall rules
+# These are loaded on startup and persist across restarts
+# Priority: Lower number = higher priority (checked first)
+baseline_rules:
+  # Example: Block external access to control zone
+  # - name: "Baseline: Block enterprise to control"
+  #   action: DROP        # DROP (silent) | DENY | REJECT (send RST) | ALLOW
+  #   priority: 100
+  #   source_zone: enterprise_zone
+  #   dest_zone: control_zone
+  #   protocol: ANY       # ANY | modbus_tcp | dnp3 | s7 | opcua | ethernet_ip
+  #   enabled: true
+  #   description: "Defense in depth - no direct enterprise to control access"
+
+  # Example: Allow SCADA to PLCs
+  # - name: "Baseline: Allow SCADA operations"
+  #   action: ALLOW
+  #   priority: 50        # Higher priority than block rules
+  #   source_zone: operations_zone
+  #   dest_zone: control_zone
+  #   protocol: modbus_tcp
+  #   enabled: true
+  #   description: "Normal operations - SCADA must reach PLCs"
+
+# Note: Runtime rules added via API (incident response) are NOT saved here
+# To make runtime rules permanent, add them to this file and restart

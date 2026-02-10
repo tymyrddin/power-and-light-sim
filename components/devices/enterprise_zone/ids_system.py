@@ -139,10 +139,18 @@ class IDSSystem(BaseDevice):
         self.analysis_interval = analysis_interval
         self.alert_history_limit = alert_history_limit
 
+        # IPS (Prevention) mode
+        self.prevention_mode = (
+            False  # False = IDS (detect only), True = IPS (detect + block)
+        )
+        self.blocked_ips: set[str] = set()  # IP addresses blocked by IPS
+        self.auto_block_on_critical = True  # Auto-block on CRITICAL alerts
+
         # Detection state
         self.alerts: list[IDSAlert] = []
         self.total_packets_analyzed = 0
         self.total_alerts_generated = 0
+        self.total_ips_blocked = 0
 
         # Detection rule state tracking
         self.scan_tracker: dict[str, list[tuple[str, float]]] = (
@@ -177,6 +185,57 @@ class IDSSystem(BaseDevice):
         )
 
     # ----------------------------------------------------------------
+    # Configuration Loading
+    # ----------------------------------------------------------------
+
+    async def load_config(self, config: dict[str, Any]) -> None:
+        """
+        Load baseline configuration from config dict.
+
+        Called during start() to load IPS mode and permanent blocks.
+        Config is provided by ConfigLoader (respects layering).
+
+        Args:
+            config: Configuration dict with keys:
+                - prevention_mode: bool (IDS vs IPS mode)
+                - auto_block_on_critical: bool
+                - permanent_blocked_ips: list of IP addresses
+                - detection_thresholds: dict of threshold values
+        """
+        # Load prevention mode
+        self.prevention_mode = config.get("prevention_mode", False)
+        self.auto_block_on_critical = config.get("auto_block_on_critical", True)
+
+        # Load permanent blocked IPs
+        permanent_ips = config.get("permanent_blocked_ips", [])
+        for ip in permanent_ips:
+            self.blocked_ips.add(ip)
+            self.total_ips_blocked += 1
+            self.logger.info(f"Loaded permanent IP block: {ip}")
+
+        # Load detection thresholds if provided
+        thresholds = config.get("detection_thresholds", {})
+        if "scan_threshold" in thresholds:
+            self.scan_threshold = thresholds["scan_threshold"]
+        if "scan_time_window" in thresholds:
+            self.scan_time_window = thresholds["scan_time_window"]
+        if "violation_threshold" in thresholds:
+            self.violation_threshold = thresholds["violation_threshold"]
+        if "unauthorized_threshold" in thresholds:
+            self.unauthorized_threshold = thresholds["unauthorized_threshold"]
+        if "traffic_anomaly_multiplier" in thresholds:
+            self.traffic_anomaly_multiplier = thresholds["traffic_anomaly_multiplier"]
+
+        mode_str = (
+            "IPS (Prevention)" if self.prevention_mode else "IDS (Detection Only)"
+        )
+        self.logger.info(
+            f"IDS/IPS config loaded: mode={mode_str}, "
+            f"permanent_blocks={len(permanent_ips)}, "
+            f"auto_block={self.auto_block_on_critical}"
+        )
+
+    # ----------------------------------------------------------------
     # BaseDevice implementation
     # ----------------------------------------------------------------
 
@@ -197,8 +256,10 @@ class IDSSystem(BaseDevice):
         """Initialize IDS memory map with statistics."""
         self.memory_map.update(
             {
+                "prevention_mode": self.prevention_mode,
                 "total_packets_analyzed": 0,
                 "total_alerts_generated": 0,
+                "total_ips_blocked": 0,
                 "active_alerts": 0,
                 "critical_alerts": 0,
                 "high_alerts": 0,
@@ -630,6 +691,9 @@ class IDSSystem(BaseDevice):
 
         self.logger.warning(f"IDS Alert [{severity.value.upper()}]: {title}")
 
+        # Auto-block if in IPS mode and CRITICAL severity
+        await self._auto_block_on_alert(alert)
+
         return alert
 
     async def update_alert_status(
@@ -925,7 +989,154 @@ class IDSSystem(BaseDevice):
                 "alert_history_size": len(self.alerts),
                 "alert_history_limit": self.alert_history_limit,
             },
+            "ips": {
+                "prevention_mode": self.prevention_mode,
+                "blocked_ips": len(self.blocked_ips),
+                "total_ips_blocked": self.total_ips_blocked,
+                "auto_block_enabled": self.auto_block_on_critical,
+            },
         }
+
+    # ----------------------------------------------------------------
+    # IPS (Intrusion Prevention System) Mode
+    # ----------------------------------------------------------------
+
+    async def set_prevention_mode(self, enabled: bool, user: str = "system") -> None:
+        """
+        Enable or disable IPS (prevention) mode.
+
+        Args:
+            enabled: True to enable IPS mode (active blocking), False for IDS mode (detection only)
+            user: User making the change
+        """
+        old_mode = self.prevention_mode
+        self.prevention_mode = enabled
+        self.memory_map["prevention_mode"] = enabled
+
+        mode_name = "IPS (Prevention)" if enabled else "IDS (Detection Only)"
+
+        await self.logger.log_audit(
+            message=f"IDS '{self.device_name}': Prevention mode {'ENABLED' if enabled else 'DISABLED'} by {user}",
+            user=user,
+            action="set_prevention_mode",
+            data={
+                "old_mode": "IPS" if old_mode else "IDS",
+                "new_mode": "IPS" if enabled else "IDS",
+                "enabled": enabled,
+            },
+        )
+
+        if enabled:
+            await self.logger.log_security(
+                f"IDS '{self.device_name}': IPS mode ENABLED - will actively block threats",
+                severity=EventSeverity.ALERT,
+                data={"mode": mode_name},
+            )
+        else:
+            self.logger.info(f"IDS '{self.device_name}': IDS mode - detection only")
+
+    async def block_ip(
+        self, ip_address: str, reason: str, user: str = "system"
+    ) -> bool:
+        """
+        Block IP address (IPS action).
+
+        Args:
+            ip_address: IP address to block
+            reason: Reason for blocking
+            user: User initiating block
+
+        Returns:
+            True if blocked, False if already blocked
+        """
+        if ip_address in self.blocked_ips:
+            return False
+
+        self.blocked_ips.add(ip_address)
+        self.total_ips_blocked += 1
+        self.memory_map["total_ips_blocked"] = self.total_ips_blocked
+
+        await self.logger.log_security(
+            f"IDS/IPS '{self.device_name}': Blocked IP {ip_address} - {reason}",
+            severity=EventSeverity.ALERT,
+            data={
+                "blocked_ip": ip_address,
+                "reason": reason,
+                "user": user,
+                "prevention_mode": self.prevention_mode,
+            },
+        )
+
+        return True
+
+    async def unblock_ip(self, ip_address: str, user: str = "system") -> bool:
+        """
+        Unblock IP address.
+
+        Args:
+            ip_address: IP address to unblock
+            user: User initiating unblock
+
+        Returns:
+            True if unblocked, False if not blocked
+        """
+        if ip_address not in self.blocked_ips:
+            return False
+
+        self.blocked_ips.remove(ip_address)
+
+        await self.logger.log_audit(
+            message=f"IDS/IPS '{self.device_name}': Unblocked IP {ip_address} by {user}",
+            user=user,
+            action="unblock_ip",
+            data={"unblocked_ip": ip_address},
+        )
+
+        return True
+
+    def is_blocked(self, ip_address: str) -> bool:
+        """
+        Check if IP address is blocked.
+
+        Called by protocol_simulator during connection attempt.
+
+        Args:
+            ip_address: IP address to check
+
+        Returns:
+            True if blocked, False if allowed
+        """
+        return ip_address in self.blocked_ips
+
+    def get_blocked_ips(self) -> list[str]:
+        """Get list of blocked IP addresses."""
+        return list(self.blocked_ips)
+
+    async def _auto_block_on_alert(self, alert: IDSAlert) -> None:
+        """
+        Automatically block source IP when in IPS mode.
+
+        Called after generating CRITICAL alerts.
+
+        Args:
+            alert: The alert that triggered auto-block
+        """
+        if not self.prevention_mode:
+            return  # IDS mode only - no blocking
+
+        if not self.auto_block_on_critical:
+            return  # Auto-block disabled
+
+        if alert.severity != AlertSeverity.CRITICAL:
+            return  # Only auto-block on CRITICAL
+
+        # Block source IP
+        if alert.source_ip and alert.source_ip != "unknown":
+            await self.block_ip(
+                ip_address=alert.source_ip,
+                reason=f"Auto-block: {alert.title}",
+                user="ids_auto",
+            )
 
     def get_summary(self) -> str:
         """

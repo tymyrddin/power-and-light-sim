@@ -95,6 +95,159 @@ class ConfigLoader:
         else:
             config["device_identities"] = {}
 
+        # Load firewall config
+        firewall_path = self.config_dir / "firewall.yml"
+        if firewall_path.exists():
+            with open(firewall_path) as f:
+                firewall_data = yaml.safe_load(f)
+                config["firewall"] = {
+                    "default_action": firewall_data.get("default_action", "allow"),
+                    "baseline_rules": firewall_data.get("baseline_rules", []),
+                }
+        else:
+            config["firewall"] = {
+                "default_action": "allow",
+                "baseline_rules": [],
+            }
+
+        # Load IDS/IPS config
+        ids_ips_path = self.config_dir / "ids_ips.yml"
+        if ids_ips_path.exists():
+            with open(ids_ips_path) as f:
+                ids_data = yaml.safe_load(f)
+                config["ids_ips"] = {
+                    "prevention_mode": ids_data.get("prevention_mode", False),
+                    "auto_block_on_critical": ids_data.get(
+                        "auto_block_on_critical", True
+                    ),
+                    "permanent_blocked_ips": ids_data.get("permanent_blocked_ips", []),
+                    "detection_thresholds": ids_data.get("detection_thresholds", {}),
+                }
+        else:
+            config["ids_ips"] = {
+                "prevention_mode": False,
+                "auto_block_on_critical": True,
+                "permanent_blocked_ips": [],
+                "detection_thresholds": {},
+            }
+        # Load RBAC config
+        rbac_path = self.config_dir / "rbac.yml"
+        if rbac_path.exists():
+            with open(rbac_path) as f:
+                rbac_data = yaml.safe_load(f)
+                config["rbac"] = {
+                    "enforcement_enabled": rbac_data.get("enforcement_enabled", False),
+                    "log_denials": rbac_data.get("log_denials", True),
+                    "require_session": rbac_data.get("require_session", True),
+                    "address_permissions": rbac_data.get("address_permissions", {}),
+                    "default_users": rbac_data.get("default_users", []),
+                }
+        else:
+            config["rbac"] = {
+                "enforcement_enabled": False,
+                "log_denials": True,
+                "require_session": True,
+                "address_permissions": {},
+                "default_users": [],
+            }
+
+        # Load Modbus filtering config
+        modbus_filtering_path = self.config_dir / "modbus_filtering.yml"
+        if modbus_filtering_path.exists():
+            with open(modbus_filtering_path) as f:
+                modbus_data = yaml.safe_load(f)
+                config["modbus_filtering"] = {
+                    "enforcement_enabled": modbus_data.get(
+                        "enforcement_enabled", False
+                    ),
+                    "global_policy": modbus_data.get("global_policy", {}),
+                    "device_policies": modbus_data.get("device_policies", []),
+                    "log_blocked_requests": modbus_data.get(
+                        "log_blocked_requests", True
+                    ),
+                    "log_allowed_requests": modbus_data.get(
+                        "log_allowed_requests", False
+                    ),
+                    "block_mode": modbus_data.get("block_mode", "reject"),
+                }
+        else:
+            config["modbus_filtering"] = {
+                "enforcement_enabled": False,
+                "global_policy": {
+                    "mode": "whitelist",
+                    "allowed_function_codes": [1, 2, 3, 4, 5, 6],
+                    "blocked_function_codes": [],
+                },
+                "device_policies": [],
+                "log_blocked_requests": True,
+                "log_allowed_requests": False,
+                "block_mode": "reject",
+            }
+
+        # Load anomaly detection config
+        anomaly_detection_path = self.config_dir / "anomaly_detection.yml"
+        if anomaly_detection_path.exists():
+            with open(anomaly_detection_path) as f:
+                anomaly_data = yaml.safe_load(f)
+                config["anomaly_detection"] = {
+                    "enabled": anomaly_data.get("enabled", False),
+                    "sigma_threshold": anomaly_data.get("sigma_threshold", 3.0),
+                    "learning_window": anomaly_data.get("learning_window", 1000),
+                    "alarm_flood_threshold": anomaly_data.get(
+                        "alarm_flood_threshold", 10
+                    ),
+                    "alarm_flood_window": anomaly_data.get("alarm_flood_window", 60.0),
+                    "baselines": anomaly_data.get("baselines", []),
+                    "range_limits": anomaly_data.get("range_limits", []),
+                    "rate_limits": anomaly_data.get("rate_limits", []),
+                    "severity_mapping": anomaly_data.get("severity_mapping", {}),
+                    "integration": anomaly_data.get("integration", {}),
+                }
+        else:
+            config["anomaly_detection"] = {
+                "enabled": False,
+                "sigma_threshold": 3.0,
+                "learning_window": 1000,
+                "alarm_flood_threshold": 10,
+                "alarm_flood_window": 60.0,
+                "baselines": [],
+                "range_limits": [],
+                "rate_limits": [],
+                "severity_mapping": {},
+                "integration": {},
+            }
+
+        # Load OPC UA security config
+        opcua_security_path = self.config_dir / "opcua_security.yml"
+        if opcua_security_path.exists():
+            with open(opcua_security_path) as f:
+                opcua_data = yaml.safe_load(f)
+                config["opcua_security"] = {
+                    "enforcement_enabled": opcua_data.get("enforcement_enabled", False),
+                    "security_policy": opcua_data.get(
+                        "security_policy", "Aes256_Sha256_RsaPss"
+                    ),
+                    "cert_dir": opcua_data.get("cert_dir", "certs"),
+                    "validity_hours": opcua_data.get("validity_hours", 8760),
+                    "key_size": opcua_data.get("key_size", 2048),
+                    "allow_anonymous": opcua_data.get("allow_anonymous", False),
+                    "require_authentication": opcua_data.get(
+                        "require_authentication", False
+                    ),
+                    "server_overrides": opcua_data.get("server_overrides", {}),
+                }
+        else:
+            config["opcua_security"] = {
+                "enforcement_enabled": False,
+                "security_policy": "Aes256_Sha256_RsaPss",
+                "cert_dir": "certs",
+                "validity_hours": 8760,
+                "key_size": 2048,
+                "allow_anonymous": False,
+                "require_authentication": False,
+                "server_overrides": {},
+            }
+
         return config
 
     def _create_default_devices(self):

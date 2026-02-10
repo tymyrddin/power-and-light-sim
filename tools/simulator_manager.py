@@ -860,6 +860,52 @@ class SimulatorManager:
                         private_key_path = proto_cfg.get("private_key")
                         allow_anonymous = proto_cfg.get("allow_anonymous", True)
 
+                        # Apply global OPC UA security config
+                        opcua_sec = self.config.get("opcua_security", {})
+
+                        # Authentication enforcement (Challenge 1)
+                        opcua_auth_manager = None
+                        if opcua_sec.get("require_authentication", False):
+                            from components.security.authentication import (
+                                AuthenticationManager,
+                            )
+
+                            opcua_auth_manager = AuthenticationManager()
+                            allow_anonymous = False
+                            logger.info(
+                                f"OPC UA authentication enforcement: {device_name} "
+                                f"(users: {len(opcua_auth_manager.users)})"
+                            )
+
+                        # Encryption enforcement (Challenge 7)
+                        if opcua_sec.get("enforcement_enabled", False):
+                            # Check for per-server overrides first
+                            overrides = opcua_sec.get("server_overrides", {})
+                            server_override = overrides.get(device_name, {})
+
+                            security_policy = server_override.get(
+                                "security_policy",
+                                opcua_sec.get(
+                                    "security_policy", "Aes256_Sha256_RsaPss"
+                                ),
+                            )
+                            allow_anonymous = server_override.get(
+                                "allow_anonymous",
+                                opcua_sec.get("allow_anonymous", False),
+                            )
+
+                            # Use cert paths from device config or generate from cert_dir
+                            cert_dir = opcua_sec.get("cert_dir", "certs")
+                            if not certificate_path:
+                                certificate_path = f"{cert_dir}/{device_name}.crt"
+                            if not private_key_path:
+                                private_key_path = f"{cert_dir}/{device_name}.key"
+
+                            logger.info(
+                                f"OPC UA security enforcement: {device_name} "
+                                f"policy={security_policy}, anonymous={allow_anonymous}"
+                            )
+
                         # Create OPC UA server with optional security
                         server = OPCUAServer(
                             endpoint=endpoint_url,
@@ -867,6 +913,7 @@ class SimulatorManager:
                             certificate_path=certificate_path,
                             private_key_path=private_key_path,
                             allow_anonymous=allow_anonymous,
+                            auth_manager=opcua_auth_manager,
                         )
 
                         # Collect for parallel start

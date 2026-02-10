@@ -72,6 +72,7 @@ class OPCUAServer:
         certificate_path: str | None = None,
         private_key_path: str | None = None,
         allow_anonymous: bool = True,
+        auth_manager=None,
     ):
         """
         Initialize OPC UA server with optional security.
@@ -83,6 +84,7 @@ class OPCUAServer:
             certificate_path: Path to server certificate (PEM format)
             private_key_path: Path to server private key (PEM format)
             allow_anonymous: Allow anonymous connections (True for insecure devices)
+            auth_manager: AuthenticationManager for username/password authentication
         """
         self.endpoint = endpoint
         self.namespace_uri = namespace_uri
@@ -90,6 +92,7 @@ class OPCUAServer:
         self.certificate_path = certificate_path
         self.private_key_path = private_key_path
         self.allow_anonymous = allow_anonymous
+        self.auth_manager = auth_manager
 
         # OPC UA adapter (asyncua library)
         self._adapter: OPCUAAsyncua118Adapter | None = None
@@ -132,6 +135,7 @@ class OPCUAServer:
                     certificate_path=self.certificate_path,
                     private_key_path=self.private_key_path,
                     allow_anonymous=self.allow_anonymous,
+                    auth_manager=self.auth_manager,
                 )
 
                 # Start asyncua server
@@ -266,12 +270,18 @@ class OPCUAServer:
         Get server status information.
 
         Returns:
-            Dictionary with server status and statistics
+            Dictionary with server status, security info, and statistics
         """
+        encrypted = self.security_policy not in ("None", None, "")
         status = {
             "running": self._running,
             "endpoint": self.endpoint,
             "namespace_uri": self.namespace_uri,
+            "security_policy": self.security_policy,
+            "encrypted": encrypted,
+            "certificate_configured": self.certificate_path is not None,
+            "allow_anonymous": self.allow_anonymous,
+            "authentication_enabled": self.auth_manager is not None,
         }
 
         if self._adapter:

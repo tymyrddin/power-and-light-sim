@@ -1,0 +1,78 @@
+# Modbus Function Code Filtering Configuration
+#
+# Controls which Modbus function codes are allowed/blocked at protocol level.
+# Provides defense in depth: Protocol filtering + RBAC + Firewall
+#
+# SECURITY WARNING: Default configuration is VULNERABLE (enforcement disabled)
+# Enable enforcement for production/secure environments
+
+# Enable function code filtering (CHECK ALL MODBUS REQUESTS)
+enforcement_enabled: false  # Set to true to enable filtering
+
+# Global policy (applies to all Modbus devices unless overridden)
+global_policy:
+  mode: whitelist  # whitelist (allow only listed) or blacklist (block only listed)
+
+  # Allowed function codes (whitelist mode)
+  allowed_function_codes:
+    # Read operations (generally safe)
+    - 1   # Read Coils
+    - 2   # Read Discrete Inputs
+    - 3   # Read Holding Registers
+    - 4   # Read Input Registers
+
+    # Single write operations (controlled risk)
+    - 5   # Write Single Coil
+    - 6   # Write Single Register
+
+    # Batch writes (DANGEROUS - commented out by default)
+    # - 15  # Write Multiple Coils
+    # - 16  # Write Multiple Registers
+
+  # Blocked function codes (blacklist mode - not used in whitelist mode)
+  blocked_function_codes: []
+
+# Per-device policy overrides (optional)
+device_policies:
+  # Example: Read-only monitoring PLC
+  # - device_name: "monitoring_plc"
+  #   mode: whitelist
+  #   allowed_function_codes: [1, 2, 3, 4]  # Read only
+
+  # Example: Engineering workstation (full access)
+  # - device_name: "eng_workstation_plc"
+  #   mode: whitelist
+  #   allowed_function_codes: [1, 2, 3, 4, 5, 6, 8, 15, 16, 43]
+
+  # Example: Safety PLC (extremely restricted)
+  # - device_name: "reactor_safety_plc"
+  #   mode: whitelist
+  #   allowed_function_codes: [1, 3, 4]  # Read coils/registers only
+
+# Logging configuration
+log_blocked_requests: true  # Log all blocked function codes to audit trail
+log_allowed_requests: false  # Log allowed requests (verbose, for debugging only)
+
+# Block mode
+block_mode: reject  # reject (send Modbus exception 0x01) or drop (silent)
+
+# Common Modbus function codes reference:
+#
+# READ OPERATIONS (Low Risk):
+#   01 - Read Coils (digital outputs)
+#   02 - Read Discrete Inputs (digital inputs)
+#   03 - Read Holding Registers (analog outputs)
+#   04 - Read Input Registers (analog inputs)
+#
+# WRITE OPERATIONS (High Risk):
+#   05 - Write Single Coil
+#   06 - Write Single Register
+#   15 - Write Multiple Coils (DANGEROUS - batch write)
+#   16 - Write Multiple Registers (DANGEROUS - batch write)
+#
+# DIAGNOSTICS/MANAGEMENT (Critical Risk):
+#   08 - Diagnostics (device control/troubleshooting)
+#   43 - Read Device Identification / MEI (firmware access)
+#
+# Best Practice: Whitelist mode with minimal required function codes
+# Defense in Depth: Combine with RBAC and firewall rules

@@ -1,0 +1,62 @@
+# RBAC (Role-Based Access Control) Configuration
+#
+# Controls permission enforcement for device write operations.
+# Users must have appropriate permissions for their actions.
+#
+# SECURITY WARNING: Default configuration is VULNERABLE (enforcement disabled)
+# Enable enforcement for production/secure environments
+
+# Enable RBAC enforcement (CHECK ALL WRITE OPERATIONS)
+enforcement_enabled: false  # Set to true to enable RBAC checks
+
+# Log all permission denials to audit trail
+log_denials: true
+
+# Require valid session for write operations
+require_session: true
+
+# Map memory address patterns to required permissions
+# Regex patterns matched against address, first match wins
+address_permissions:
+  # Control operations (OPERATOR and above can write)
+  "^(holding_registers|coils)\\[\\d+\\]$": "control_setpoint"
+  "^ns=2;s=(Start|Stop|Enable|Disable).*": "control_start_stop"
+  "^ns=2;s=Mode": "control_mode_change"
+
+  # Configuration operations (ENGINEER and above can write)
+  "^DB\\d+\\..*": "config_program"           # S7 PLC data blocks
+  "^DB\\d+$": "config_program"               # S7 PLC data block creation
+  "^Program:.*": "config_program"            # AB Logix programs
+  "^[A-Z][A-Z0-9_]*_TAG$": "config_program"  # AB Logix tags
+  "^retention_days$": "config_parameter"     # Historian retention
+  "^alarm_setpoint$": "config_parameter"     # Alarm thresholds
+  "^setpoint_.*": "config_parameter"         # General setpoints
+
+  # Safety-critical operations (SUPERVISOR and above can write)
+  "^ns=2;s=Safety.*": "safety_bypass"
+  "^.*_force_.*": "safety_force"
+  "^bypass_.*": "safety_bypass"
+  "^scram$": "emergency_shutdown"
+  "^emergency_.*": "emergency_shutdown"
+
+  # Default: basic control permission for unmapped addresses
+  ".*": "control_setpoint"
+
+# Default role assignments (override in AuthenticationManager if needed)
+# These are applied on startup if not already configured
+default_users:
+  - username: "operator1"
+    role: "OPERATOR"
+    full_name: "John Operator"
+  - username: "engineer1"
+    role: "ENGINEER"
+    full_name: "Jane Engineer"
+  - username: "supervisor1"
+    role: "SUPERVISOR"
+    full_name: "Bob Supervisor"
+  - username: "admin"
+    role: "ADMIN"
+    full_name: "Admin User"
+  - username: "viewer1"
+    role: "VIEWER"
+    full_name: "View Only User"

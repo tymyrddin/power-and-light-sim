@@ -1,0 +1,79 @@
+# config/opcua_security.yml
+# OPC UA Security Configuration (Challenge 7)
+#
+# Controls encryption and authentication for OPC UA SCADA communications.
+# Changes require simulator restart (you cannot swap TLS settings on a live server).
+#
+# For certificate management, use: python tools/blue_team.py opcua <command>
+# For runtime status checks, use: python tools/blue_team.py opcua status
+
+# Enable/disable OPC UA security enforcement globally
+# When true: overrides per-device settings in devices.yml with global policy
+# When false: uses per-device settings from devices.yml unchanged (default)
+enforcement_enabled: false  # Default DISABLED for workshop (students enable as part of challenge)
+
+# Security policy applied when enforcement is enabled
+# Options:
+#   None              - No encryption (insecure, default for legacy systems)
+#   Basic256Sha256    - AES-256 + SHA-256 (minimum recommended)
+#   Aes128_Sha256_RsaOaep - AES-128 with RSA-OAEP (good performance)
+#   Aes256_Sha256_RsaPss  - AES-256 with RSA-PSS (strongest, recommended)
+security_policy: Aes256_Sha256_RsaPss
+
+# Certificate settings
+cert_dir: certs                 # Directory for certificate storage (relative to project root)
+validity_hours: 8760            # Certificate validity period (8760 = 1 year)
+key_size: 2048                  # RSA key size (2048 minimum, 4096 for higher security)
+
+# Anonymous access
+# When enforcement enabled, anonymous access is denied by default
+allow_anonymous: false
+
+# Authentication (Challenge 1)
+# When true: OPC UA clients must provide username/password from the RBAC user database.
+# Uses same users as RBAC: operator1, engineer1, supervisor1, admin, viewer1
+# Works independently of encryption - controls WHO can connect.
+# Requires simulator restart (like encryption settings).
+require_authentication: false  # Default DISABLED (students enable as part of challenge)
+
+# Per-server overrides (optional)
+# Use this to customise security for specific servers when enforcement is enabled.
+# Servers not listed here use the global settings above.
+# server_overrides:
+#   scada_server_backup:
+#     security_policy: Basic256Sha256    # Use different policy
+#     allow_anonymous: false
+#   historian_primary:
+#     security_policy: Aes128_Sha256_RsaOaep  # Lower overhead for bulk data
+server_overrides: {}
+
+# Notes for Workshop Challenge 7:
+#
+# Initial State (vulnerable):
+#   enforcement_enabled: false
+#   All OPC UA servers use per-device settings from devices.yml
+#   scada_server_primary: No encryption, anonymous access allowed
+#   historian_primary: No encryption, anonymous access allowed
+#
+# Step 1 - Attack the cleartext communications:
+#   python scripts/reconnaissance/opcua_probe.py
+#   (Observe: data visible, no authentication required)
+#
+# Step 2 - Generate certificates:
+#   python tools/blue_team.py opcua generate-certs
+#   python tools/blue_team.py opcua list-certs
+#
+# Step 3 - Enable enforcement (edit this file):
+#   enforcement_enabled: true
+#   Restart simulation: python tools/simulator_manager.py
+#
+# Step 4 - Verify protection:
+#   python tools/blue_team.py opcua status
+#   python scripts/reconnaissance/opcua_probe.py
+#   (Observe: connection rejected without valid certificate)
+#
+# Key Difference from Other Challenges:
+#   Unlike firewall rules or RBAC (which can be toggled at runtime),
+#   OPC UA security requires restart. This is realistic - you cannot
+#   change TLS/certificate settings on a live OPC UA server without
+#   restarting the connection. Plan maintenance windows accordingly.
