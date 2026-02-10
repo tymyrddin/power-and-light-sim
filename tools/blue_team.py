@@ -1308,7 +1308,9 @@ class BlueTeamCLI:
 
         enforcement = opcua_sec.get("enforcement_enabled", False)
         require_auth = opcua_sec.get("require_authentication", False)
-        print(f"Encryption Enforcement: {'ENABLED' if enforcement else 'DISABLED (VULNERABLE)'}")
+        print(
+            f"Encryption Enforcement: {'ENABLED' if enforcement else 'DISABLED (VULNERABLE)'}"
+        )
         print(f"Security Policy: {opcua_sec.get('security_policy', 'None')}")
         print(f"Allow Anonymous: {opcua_sec.get('allow_anonymous', True)}")
         print(f"Certificate Directory: {opcua_sec.get('cert_dir', 'certs')}")
@@ -1418,10 +1420,10 @@ class BlueTeamCLI:
         print("OPC UA Authentication Users")
         print("=" * 70)
         print()
-        print(f"{'Username':<16} {'Simulator Role':<14} {'OPC UA Role':<12} {'Status':<10} {'Name'}")
+        print(
+            f"{'Username':<16} {'Simulator Role':<14} {'OPC UA Role':<12} {'Status':<10} {'Name'}"
+        )
         print("-" * 75)
-
-        from asyncua.server.user_managers import UserRole as OPCUAUserRole
 
         for username, user in auth_mgr.users.items():
             opcua_role = user_mgr._map_role(user.role)
@@ -2067,9 +2069,7 @@ To make permanent, edit config/*.yml and restart simulator.
     anomaly_subparsers = anomaly_parser.add_subparsers(dest="subcommand")
 
     # anomaly enable
-    anomaly_subparsers.add_parser(
-        "enable", help="Enable anomaly detection (runtime)"
-    )
+    anomaly_subparsers.add_parser("enable", help="Enable anomaly detection (runtime)")
 
     # anomaly disable
     anomaly_disable_parser = anomaly_subparsers.add_parser(
@@ -2129,14 +2129,10 @@ To make permanent, edit config/*.yml and restart simulator.
     )
 
     # anomaly stats
-    anomaly_subparsers.add_parser(
-        "stats", help="Show anomaly detection statistics"
-    )
+    anomaly_subparsers.add_parser("stats", help="Show anomaly detection statistics")
 
     # anomaly clear
-    anomaly_subparsers.add_parser(
-        "clear", help="Clear anomaly history"
-    )
+    anomaly_subparsers.add_parser("clear", help="Clear anomaly history")
 
     # ================================================================
     # Modbus Commands
@@ -2190,14 +2186,10 @@ To make permanent, edit config/*.yml and restart simulator.
     )
 
     # modbus stats
-    modbus_subparsers.add_parser(
-        "stats", help="Show filter statistics"
-    )
+    modbus_subparsers.add_parser("stats", help="Show filter statistics")
 
     # modbus status
-    modbus_subparsers.add_parser(
-        "status", help="Show filter status"
-    )
+    modbus_subparsers.add_parser("status", help="Show filter status")
 
     # ================================================================
     # Audit Log Commands (Challenge 3)
@@ -2245,9 +2237,7 @@ To make permanent, edit config/*.yml and restart simulator.
     )
 
     # audit stats
-    audit_subparsers.add_parser(
-        "stats", help="Show audit log statistics"
-    )
+    audit_subparsers.add_parser("stats", help="Show audit log statistics")
 
     # audit export
     export_parser = audit_subparsers.add_parser(

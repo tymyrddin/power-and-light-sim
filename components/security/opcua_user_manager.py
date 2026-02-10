@@ -59,7 +59,8 @@ class OPCUAUserManager(UserManager):
         Returns:
             asyncua User with mapped role on success, None to reject
         """
-        from asyncua.server.user_managers import User as OPCUAUser, UserRole as OPCUAUserRole
+        from asyncua.server.user_managers import User as OPCUAUser
+        from asyncua.server.user_managers import UserRole as OPCUAUserRole
 
         self._stats["total_attempts"] += 1
 
@@ -133,10 +134,12 @@ class OPCUAUserManager(UserManager):
             loop = asyncio.get_running_loop()
             loop.create_task(self._log_auth_attempt(username, success, reason))
         except RuntimeError:
-            # No event loop running (e.g. in tests) - log synchronously instead
-            level = "INFO" if success else "WARNING"
+            # No event loop running (e.g. in tests/demos) - log synchronously
             result = "SUCCESS" if success else "DENIED"
-            logger.log(level, f"OPC UA auth {result}: {username} - {reason}")
+            if success:
+                logger.info(f"OPC UA auth {result}: {username} - {reason}")
+            else:
+                logger.warning(f"OPC UA auth {result}: {username} - {reason}")
 
     async def _log_auth_attempt(self, username, success, reason):
         """Log authentication attempt via ICSLogger."""

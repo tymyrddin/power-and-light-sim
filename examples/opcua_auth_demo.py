@@ -55,9 +55,13 @@ def main():
 
     test_users = ["operator1", "engineer1", "supervisor1", "admin", "viewer1"]
     for username in test_users:
-        result = user_mgr.get_user(iserver=None, username=username, password="simulated")
+        result = user_mgr.get_user(
+            iserver=None, username=username, password="simulated"
+        )
         if result:
-            print(f"  {username:<16} -> OPC UA role: {result.name} (role={result.role.name})")
+            print(
+                f"  {username:<16} -> OPC UA role: {result.name} (role={result.role.name})"
+            )
         else:
             print(f"  {username:<16} -> REJECTED")
     print()
@@ -78,7 +82,9 @@ def main():
     print("-" * 70)
     print()
 
-    result = user_mgr.get_user(iserver=None, username="attacker", password="password123")
+    result = user_mgr.get_user(
+        iserver=None, username="attacker", password="password123"
+    )
     print(f"  attacker -> {'ACCEPTED' if result else 'REJECTED (correct)'}")
     print()
 
