@@ -90,7 +90,7 @@ The simulator follows a strict causal layering: higher layers consume, never def
 ```
 ┌─────────────────────────────────────────────────────────────────┐
 │  8. Scenarios & PoCs                                            │
-│     Red team attack scripts │ Blue team defence tools            │
+│     Red team attack scripts │ Blue team defence tools           │
 ├─────────────────────────────────────────────────────────────────┤
 │  7. Adapters & IO                                               │
 │     Real network stacks, protocol libraries, external boundary  │
@@ -389,4 +389,4 @@ If you are unsure whether your use case is commercial, ask. [Ambiguity is solvab
 *"The thing about electricity is, once it's out of the bottle, you can't put it back."*
 — Archchancellor Ridcully (probably)
 
-Last Updated: February 2026
+Last Updated: February 11, 2026
