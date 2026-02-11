@@ -118,11 +118,6 @@ class BlueTeamCLI:
             system_state=self.system_state,
         )
 
-        # Load config if available
-        if "anomaly_detection" in config and config["anomaly_detection"]:
-            # Anomaly detector loads config automatically from ConfigLoader
-            pass
-
     # ================================================================
     # Firewall Commands
     # ================================================================
@@ -528,7 +523,7 @@ class BlueTeamCLI:
         print()
 
         for entry in entries[-50:]:  # Show last 50
-            timestamp = entry.timestamp
+            timestamp = entry.simulation_time
             user = entry.user or "system"
             message = entry.message
             print(f"[{timestamp:.0f}] {user}: {message}")
@@ -1121,7 +1116,6 @@ class BlueTeamCLI:
             parameter=parameter,
             min_value=min_value,
             max_value=max_value,
-            severity=severity,
         )
 
         print(f"✓ Range limit set: {device}/{parameter}")
@@ -1148,7 +1142,6 @@ class BlueTeamCLI:
             device=device,
             parameter=parameter,
             max_rate=max_rate,
-            severity=severity,
         )
 
         print(f"✓ Rate limit set: {device}/{parameter}")
