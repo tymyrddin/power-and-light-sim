@@ -2,7 +2,6 @@
 
 ![Python](https://img.shields.io/badge/python-3.12-blue?logo=python)
 ![Version](https://img.shields.io/badge/status-active%20development-orange)
-
 ![Coffee](https://img.shields.io/badge/coffee-strong-brown)
 ![Fun](https://img.shields.io/badge/fun-yes-orange)
 
@@ -206,9 +205,8 @@ vulnerable state and challenges follow an attack-then-defend pattern: exploit th
 | 7         | Encrypt SCADA communications | Intermediate          | Sniff credentials on the wire         | Deploy TLS on OPC UA with certificates       |
 | 9         | Network segmentation         | Intermediate          | Move laterally across zones           | Implement IEC 62443 zones with firewall      |
 
-Challenges are independent. Start wherever you like. If you prefer to work through them in
-order, Challenge 1 is a gentle introduction. If you want to dive straight into architecture, start
-with 9.
+Challenges are independent. Start wherever you like. If you prefer to work through them in order, Challenge 1 is a 
+gentle introduction. If you want to dive straight into architecture, start with 9.
 
 Red team scripts live in `scripts/` (organised by attack phase). Blue team defences are managed through `tools/blue_team.py`.
 
@@ -386,7 +384,6 @@ If you are unsure whether your use case is commercial, ask. [Ambiguity is solvab
 
 ---
 
-*"The thing about electricity is, once it's out of the bottle, you can't put it back."*
-— Archchancellor Ridcully (probably)
+*"The thing about electricity is, once it's out of the bottle, you can't put it back."* ~ Archchancellor Ridcully (probably)
 
-Last Updated: February 11, 2026
+Last Updated: February, 2026
