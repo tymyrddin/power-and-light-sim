@@ -9,7 +9,7 @@
 *"Ankh-Morpork's quietly indispensable utility, operating from repurposed university basements and one building that 
 insists it was never meant to be a building at all."*
 
-Welcome to the [Unseen University Power & Light Co.](https://red.tymyrddin.dev/docs/power/territory/company) simulator.
+Welcome to the [Unseen University Power & Light Co.](https://red.tymyrddin.dev/docs/power/territory/company) company and simulator.
 
 This is a causally correct, layered, and testable simulation of an industrial control system (ICS) environment,
 designed for developing convincing security proofs-of-concept *without risking production systems*.
