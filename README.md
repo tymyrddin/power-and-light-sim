@@ -12,26 +12,24 @@ Welcome to the [Unseen University Power & Light Co.](https://red.tymyrddin.dev/d
 This is a causally correct, layered, and testable simulation of an industrial control system (ICS) environment,
 designed for developing convincing security proofs-of-concept *without risking production systems*.
 
-## Why this exists
-
 Real ICS/SCADA environments are:
-- **Fragile**: a misplaced packet can cause physical consequences
-- **Legacy-ridden**: decades-old systems with no security considerations
-- **High-stakes**: blackouts, floods, or worse
+- Fragile: a misplaced packet can cause physical consequences
+- Legacy-ridden: decades-old systems with no security considerations
+- High-stakes: blackouts, floods, or worse
 
 This simulator lets you explore attack paths, test detection mechanisms, and develop PoCs against a realistic
 OT environment that won't leave a city in the dark.
 
-## What we're simulating
+## Components
 
 The [UU P&L infrastructure](https://red.tymyrddin.dev/docs/power/territory/components) includes:
 
-| System                     | Description                                                         | Control Hardware                          |
-|----------------------------|---------------------------------------------------------------------|-------------------------------------------|
-| **Hex Steam Turbine**      | Main power generation with hardwired logic and polling loops        | Allen-Bradley ControlLogix (1998)         |
-| **Alchemical Reactor**     | Volatile energy conversion with chemical and metaphysical variables | Siemens S7-400 (2003)                     |
-| **Library Environmental**  | Temperature, humidity, and magical stability control                | Schneider Modicon (1987) + Modbus gateway |
-| **City-Wide Distribution** | SCADA managing substations across Ankh-Morpork                      | RTUs via DNP3, Wonderware HMI             |
+| System                 | Description                                                         | Control Hardware                          |
+|------------------------|---------------------------------------------------------------------|-------------------------------------------|
+| Hex Steam Turbine      | Main power generation with hardwired logic and polling loops        | Allen-Bradley ControlLogix (1998)         |
+| Alchemical Reactor     | Volatile energy conversion with chemical and metaphysical variables | Siemens S7-400 (2003)                     |
+| Library Environmental  | Temperature, humidity, and magical stability control                | Schneider Modicon (1987) + Modbus gateway |
+| City-Wide Distribution | SCADA managing substations across Ankh-Morpork                      | RTUs via DNP3, Wonderware HMI             |
 
 Plus the supporting cast: historians storing 10+ years of operational data, safety PLCs with redundant sensors,
 protective relays, PMUs, and yes, a Windows 98 machine that's been collecting turbine data for 25 years.
@@ -40,14 +38,14 @@ protective relays, PMUs, and yes, a Windows 98 machine that's been collecting tu
 
 This simulator provides:
 
-- **Physics-aware devices**: PLCs, RTUs, and safety controllers with realistic scan cycles (25-100ms)
-- **Time-synchronised behaviour**: deterministic stepping for reproducible scenarios
-- **Real network attack surfaces**: Protocol servers on actual TCP/IP ports for external tool access
-- **OT protocols**: Modbus TCP/RTU, DNP3, IEC 60870-5-104, IEC 61850, OPC UA, S7comm
-- **Network segmentation**: control zones, DMZs, and firewall simulation
-- **Security layers**: authentication, logging, and anomaly detection
-- **External attack tools**: Use mbtget, nmap, Metasploit against running simulation
-- **Scenario framework**: both white-box internal tests and black-box external PoCs
+- Physics-aware devices: PLCs, RTUs, and safety controllers with realistic scan cycles (25-100ms)
+- Time-synchronised behaviour: deterministic stepping for reproducible scenarios
+- Real network attack surfaces: Protocol servers on actual TCP/IP ports for external tool access
+- OT protocols: Modbus TCP/RTU, DNP3, IEC 60870-5-104, IEC 61850, OPC UA, S7comm
+- Network segmentation: control zones, DMZs, and firewall simulation
+- Security layers: authentication, logging, and anomaly detection
+- Use mbtget, nmap, Metasploit and scripts against running simulation
+- Red team attack scripts and blue team defence tool
 
 ## Project structure
 
@@ -62,32 +60,35 @@ This simulator provides:
 │   ├── state/         # Shared state fabric and data store
 │   └── time/          # Deterministic time orchestration
 ├── config/            # YAML device configs, network topologies, SCADA tag databases
-├── scripts/
-│   ├── assessment/    # Internal white-box scenario scripts
-│   └── recon/         # External black-box PoC tools
+├── scripts/           # Red team attack scripts (external)
+│   ├── recon/         # Reconnaissance and footprinting
+│   ├── discovery/     # Device enumeration and memory mapping
+│   ├── vulns/         # Vulnerability probes (OPC UA, S7, Modbus)
+│   ├── exploitation/  # Attack demonstrations and PoCs
+│   ├── analysis/      # Post-collection data analysis
+│   └── assessment/    # Security assessment demonstrations
 ├── tests/
 │   ├── unit/          # Component-level tests
 │   ├── integration/   # Cross-component tests
 │   └── scenario/      # End-to-end scenario validation
-├── tools/             # Simulator manager, test clients
-└── docs/              # Architecture documentation, wiring guides
+└── tools/             # Simulator manager, Blue Team CLI (internal defence)
 ```
 
-Think of this as an engineer's workbench where:
+Like an engineer's workbench where:
 
-- **Devices** behave according to real industrial logic and timing
-- **Physics** models drive actual state changes (not just data)
-- **Protocols** translate interactions into proper network semantics
-- **Security** observes and constrains without hiding underlying behaviour
+- Devices behave according to real industrial logic and timing
+- Physics models drive actual state changes (not just data)
+- Protocols translate interactions into proper network semantics
+- Security observes and constrains without hiding underlying behaviour
 
 ## Architecture
 
-The simulator follows a strict **causal layering**: higher layers consume, never define, lower layers:
+The simulator follows a strict causal layering: higher layers consume, never define, lower layers:
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
 │  8. Scenarios & PoCs                                            │
-│     Internal scripts (white-box) │ External tools (black-box)   │
+│     Red team attack scripts │ Blue team defence tools            │
 ├─────────────────────────────────────────────────────────────────┤
 │  7. Adapters & IO                                               │
 │     Real network stacks, protocol libraries, external boundary  │
@@ -112,12 +113,12 @@ The simulator follows a strict **causal layering**: higher layers consume, never
 └─────────────────────────────────────────────────────────────────┘
 ```
 
-This maps roughly to the Purdue Model levels you'd find in real ICS environments: from Level 0 field devices
+This maps roughly to the Purdue Model levels used in real ICS environments: from Level 0 field devices
 up through control, operations, and enterprise zones.
 
-### Network Attack Surface
+### Network attack surface
 
-The simulator exposes **real network services** on TCP/IP ports that external tools can target:
+The simulator exposes real network services on TCP/IP ports that external tools can target:
 
 ```
 ┌────────────────────────────────────────────────────────┐
@@ -151,13 +152,11 @@ The simulator exposes **real network services** on TCP/IP ports that external to
 └────────────────────────────────────────────────────────┘
 ```
 
-This architecture allows **realistic attack demonstrations** where:
+This architecture allows realistic attack demonstrations where:
 1. Simulation runs in Terminal 1 with exposed services
 2. Attacker tools run in Terminal 2 using standard ICS tooling
 3. Attacks have observable impact on simulated physical processes
-
-For detailed testing strategy, see [tests/README.md](tests/README.md).
-For SCADA wiring documentation, see [docs/SCADA_WIRING.md](docs/scada_wiring.md).
+4. Defender tools run in Terminal 3
 
 ## Getting started
 
@@ -184,16 +183,38 @@ pytest tests/integration             # Cross-component tests
 Configuration files in `config/` define:
 - Device definitions and control zones (`devices.yml`)
 - Network topology and segmentation (`network.yml`)
-- Protocol bindings and behavior (`protocols.yml`)
+- Protocol bindings and behaviour (`protocols.yml`)
 - SCADA tag databases (`scada_tags.yml`)
 - HMI screen configurations (`hmi_screens.yml`)
 - Simulation parameters (`simulation.yml`)
 
+## Workshop challenges
+
+The simulator ships with a set of red team scripts and blue team challenges. The simulator starts with the system in a 
+vulnerable state and challenges follow an attack-then-defend pattern: exploit the weakness first, then close the door.
+
+| Challenge | Topic                        | Difficulty            | Red team (attack)                     | Blue team (defend)                           |
+|-----------|------------------------------|-----------------------|---------------------------------------|----------------------------------------------|
+| 1         | Password protect the SCADA   | Beginner              | Connect anonymously, read/write SCADA | Enable OPC UA authentication                 |
+| 2         | Role-based access control    | Beginner-Intermediate | Abuse authenticated access            | Enforce RBAC so roles limit operations       |
+| 3         | Logging and auditing         | Beginner              | Act without leaving traces            | Query and analyse security audit logs        |
+| 4         | Anomaly detection            | Intermediate          | Inject out-of-range values            | Deploy statistical and range-based detection |
+| 5         | Function code filtering      | Intermediate          | Use dangerous Modbus function codes   | Filter and block unsafe function codes       |
+| 6         | Dual authorisation           | Intermediate          | Bypass single-user safety controls    | Require two-person approval for safety ops   |
+| 7         | Encrypt SCADA communications | Intermediate          | Sniff credentials on the wire         | Deploy TLS on OPC UA with certificates       |
+| 9         | Network segmentation         | Intermediate          | Move laterally across zones           | Implement IEC 62443 zones with firewall      |
+
+Challenges are independent. Start wherever you like. If you prefer to work through them in
+order, Challenge 1 is a gentle introduction. If you want to dive straight into architecture, start
+with 9.
+
+Red team scripts live in `scripts/` (organised by attack phase). Blue team defences are managed through `tools/blue_team.py`.
+
 ## Example use cases
 
-### External Attack Simulation (Two Terminal Approach)
+### External attack simulation (two terminal approach)
 
-**Terminal 1: Run the simulation**
+Terminal 1: Run the simulation
 ```bash
 $ python tools/simulator_manager.py
 
@@ -206,7 +227,7 @@ Protocol servers running: 7
   ...
 ```
 
-**Terminal 2: Reconnaissance with real ICS tools**
+Terminal 2: Reconnaissance with real ICS tools
 ```bash
 # Scan for exposed services
 $ nmap -p 10500-10600 localhost
@@ -218,7 +239,7 @@ $ mbtget -r -a 0 -n 10 localhost:10502  # Read turbine PLC registers
 $ nmap -sV -p 10502 localhost
 ```
 
-**Terminal 2: Malicious write attack**
+Terminal 2: Malicious write attack
 ```bash
 # Trigger emergency trip on turbine
 $ mbtget -w -a 1 -v 1 localhost:10502  # Write to coil[1] = Emergency trip
@@ -228,7 +249,8 @@ $ mbtget -w -a 1 -v 1 localhost:10502  # Write to coil[1] = Emergency trip
 # [SIM: 5.23s] [CRITICAL] TurbineSafetyPLC: FORCING SAFE STATE
 ```
 
-**Terminal 2: Python-based attack script**
+Terminal 2: Python-based attack script
+
 ```python
 # Custom attack using pymodbus
 from pymodbus.client import AsyncModbusTcpClient
@@ -244,16 +266,38 @@ print(f"Turbine speed: {speed.registers[0]} RPM")
 await client.write_register(0, 5000)  # Dangerous overspeed setpoint
 ```
 
-### Internal Assessment Scripts
+### Red team attack scripts
 
-**Detection testing**: Validate that anomaly detection catches unauthorized writes:
+The `scripts/` directory contains external attack tools organised by phase:
+
 ```bash
-pytest tests/scenario/test_unauthorized_write_detection.py
+# Reconnaissance: footprint exposed services
+python scripts/recon/turbine_recon.py
+
+# Vulnerability probing: test for unauthenticated access
+python scripts/vulns/opcua_readonly_probe.py
+python scripts/vulns/modbus_coil_register_snapshot.py
+
+# Exploitation: demonstrate impact
+python scripts/exploitation/turbine_overspeed_attack.py
+python scripts/exploitation/turbine_emergency_stop.py
 ```
 
-**Protocol exploitation**: Test Modbus function code abuse:
+### Blue team defence
+
+The Blue Team CLI (`tools/blue_team.py`) provides runtime security operations:
+
 ```bash
-python scripts/assessment/modbus_fc_test.py --device hex_turbine_plc
+# Check overall security posture
+python tools/blue_team.py status
+
+# Query audit logs for attack evidence
+python tools/blue_team.py audit query --category security --severity WARNING
+
+# Deploy defences
+python tools/blue_team.py anomaly enable
+python tools/blue_team.py modbus enable
+python tools/blue_team.py firewall add-rule --name "Block attacker" --action deny --source-ip 10.0.0.99
 ```
 
 ## Status
@@ -269,15 +313,14 @@ This project is under active development. Current implementation status:
 | Network attack surfaces            | ✅ Functional   | Real TCP ports           |
 | Modbus TCP/RTU protocol            | ✅ Functional   | mbtget, pymodbus         |
 | IEC 60870-5-104 protocol           | ✅ Functional   | IEC 104 clients          |
-| S7 protocol                        | 🔄 Partial     | Not exposed yet          |
-| DNP3 protocol                      | 🔄 In progress | Not exposed yet          |
+| S7 protocol                        | ✅ Functional   | python-snap7             |
+| DNP3 protocol                      | ✅ Functional   | DNP3 clients             |
 | Physics engines (turbine, reactor) | ✅ Functional   | Via device PLCs          |
 | Security logging (ICSLogger)       | ✅ Functional   | IEC 62443, ISA 18.2      |
 | ICS audit trails & alarms          | ✅ Functional   | All devices integrated   |
-| External tool testing              | ✅ Ready        | nmap, mbtget, Metasploit |
-| Test coverage                      | ✅ 1386 tests   | Unit + Integration       |
+| Test coverage                      | ✅ 1570 tests   | Unit + Integration       |
 
-**Legend:** ✅ = Complete, 🔄 = In Progress, ❌ = Not Started
+Legend: ✅ = Complete, 🔄 = In Progress, ❌ = Not Started
 
 ## Contributing
 
@@ -305,8 +348,6 @@ make sure you have explicit written permission and understand the physical conse
 
 This project is licensed under the [Polyform Noncommercial License](LICENSE).
 
-### What this means in practice
-
 You are welcome to use this software for:
 
 - Learning and experimentation
@@ -316,7 +357,7 @@ You are welcome to use this software for:
 - Incident response exercises
 - Non-commercial red/blue team simulations
 
-You may **not** use this software for:
+You may not use this software for:
 
 - Paid workshops or training
 - Consultancy or advisory services
@@ -325,8 +366,6 @@ You may **not** use this software for:
 
 If you want to use this project in a paid or commercial context, a commercial license is required.  
 See [COMMERCIAL-LICENSE.md](COMMERCIAL-LICENSE.md) for details.
-
-### Why this license exists
 
 This project is actively developed and maintained to support realistic security research and training.  
 The license ensures that:
