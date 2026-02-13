@@ -31,6 +31,7 @@ from pymodbus.datastore.simulator import ModbusSimulatorContext
 from pymodbus.pdu.device import ModbusDeviceIdentification
 from pymodbus.server import StartAsyncTcpServer
 
+from components.network.servers.base_server import BaseProtocolServer
 from components.security.logging_system import get_logger
 
 if TYPE_CHECKING:
@@ -40,7 +41,7 @@ if TYPE_CHECKING:
 logger = get_logger(__name__)
 
 
-class ModbusTCPServer:
+class ModbusTCPServer(BaseProtocolServer):
     """
     Modbus TCP server using pymodbus simulator.
 
@@ -50,7 +51,7 @@ class ModbusTCPServer:
 
     def __init__(
         self,
-        host: str = "0.0.0.0",
+        host: str = "127.0.0.1",
         port: int = 502,
         unit_id: int = 1,
         num_coils: int = 64,
@@ -61,8 +62,7 @@ class ModbusTCPServer:
         modbus_filter: "ModbusFilter | None" = None,
         device_name: str = "unknown",
     ):
-        self.host = host
-        self.port = port
+        super().__init__(host, port)
         self.unit_id = unit_id
 
         # Memory sizes
@@ -229,9 +229,7 @@ class ModbusTCPServer:
                         context=self._context,
                         identity=self._identity,
                         address=(self.host, self.port),
-                        trace_pdu=(
-                            self._filter_function_code if self.modbus_filter else None
-                        ),
+                        trace_pdu=self._filter_function_code,
                     )
                 )
 

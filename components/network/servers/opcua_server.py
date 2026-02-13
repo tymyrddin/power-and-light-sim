@@ -42,10 +42,12 @@ except ImportError:
     OPCUA_AVAILABLE = False
     OPCUAAsyncua118Adapter = None
 
+from components.network.servers.base_server import BaseProtocolServer
+
 logger = get_logger(__name__)
 
 
-class OPCUAServer:
+class OPCUAServer(BaseProtocolServer):
     """
     OPC UA server using asyncua library.
 
@@ -66,7 +68,7 @@ class OPCUAServer:
 
     def __init__(
         self,
-        endpoint: str = "opc.tcp://0.0.0.0:4840/",
+        endpoint: str = "opc.tcp://127.0.0.1:4840/",
         namespace_uri: str = "urn:simulator:opcua",
         security_policy: str = "None",
         certificate_path: str | None = None,
@@ -86,6 +88,10 @@ class OPCUAServer:
             allow_anonymous: Allow anonymous connections (True for insecure devices)
             auth_manager: AuthenticationManager for username/password authentication
         """
+        from urllib.parse import urlparse
+
+        parsed = urlparse(endpoint)
+        super().__init__(host=parsed.hostname or "127.0.0.1", port=parsed.port or 4840)
         self.endpoint = endpoint
         self.namespace_uri = namespace_uri
         self.security_policy = security_policy

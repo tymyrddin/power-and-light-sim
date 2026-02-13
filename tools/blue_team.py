@@ -17,6 +17,7 @@ Usage:
   python tools/blue_team.py ids enable-ips
   python tools/blue_team.py rbac list-users
   python tools/blue_team.py opcua status
+  python tools/blue_team.py connections list
   python tools/blue_team.py status
 """
 
@@ -36,6 +37,7 @@ from components.devices.enterprise_zone import (
     PolicyMode,
     RuleAction,
 )
+from components.network.connection_registry import ConnectionRegistry
 from components.security.authentication import AuthenticationManager, UserRole
 from components.state.data_store import DataStore
 from components.state.system_state import SystemState
@@ -52,6 +54,7 @@ class BlueTeamCLI:
         self.auth_mgr = None
         self.modbus_filter = None
         self.anomaly_detector = None
+        self.connection_registry = None
 
     async def initialize(self):
         """Initialize simulation components."""
@@ -117,6 +120,9 @@ class BlueTeamCLI:
             data_store=self.data_store,
             system_state=self.system_state,
         )
+
+        # Connection registry (singleton)
+        self.connection_registry = ConnectionRegistry()
 
     # ================================================================
     # Firewall Commands
@@ -1704,6 +1710,135 @@ class BlueTeamCLI:
         return 0
 
     # ================================================================
+    # Connection Commands
+    # ================================================================
+
+    async def connections_list(self, args):
+        """List active connections."""
+        device = getattr(args, "device", None)
+        protocol = getattr(args, "protocol", None)
+
+        connections = await self.connection_registry.get_active_connections(
+            target_device=device,
+            protocol=protocol,
+        )
+
+        if not connections:
+            print("No active connections.")
+            return 0
+
+        print(f"Active Connections ({len(connections)}):")
+        print()
+        print(
+            f"{'Session':<14} {'Source IP':<18} {'Source Device':<25} "
+            f"{'Target Device':<25} {'Proto':<8} {'Port':<7} {'Duration':<10} {'User'}"
+        )
+        print("-" * 140)
+
+        for conn in connections:
+            duration = conn["duration"]
+            if duration >= 3600:
+                dur_str = f"{duration / 3600:.1f}h"
+            elif duration >= 60:
+                dur_str = f"{duration / 60:.1f}m"
+            else:
+                dur_str = f"{duration:.0f}s"
+
+            user = conn.get("username", "") or "-"
+
+            print(
+                f"{conn['session_id']:<14} {conn['source_ip']:<18} "
+                f"{conn['source_device']:<25} {conn['target_device']:<25} "
+                f"{conn['protocol']:<8} {conn['port']:<7} {dur_str:<10} {user}"
+            )
+
+        print()
+        return 0
+
+    async def connections_kill(self, args):
+        """Force-close a connection by session ID."""
+        session_id = args.session_id
+        reason = getattr(args, "reason", "Killed by defender")
+
+        # Try partial match
+        conn = self.connection_registry.get_connection(session_id)
+        if not conn:
+            # Search for partial match
+            active = await self.connection_registry.get_active_connections()
+            matches = [c for c in active if c["session_id"].startswith(session_id)]
+            if len(matches) == 1:
+                session_id = matches[0]["session_id"]
+            elif len(matches) > 1:
+                print(f"Ambiguous session ID '{session_id}' - multiple matches:")
+                for m in matches:
+                    print(f"  {m['session_id']}  {m['source_ip']} -> {m['target_device']}")
+                return 1
+            else:
+                print(f"Session not found: {session_id}")
+                return 1
+
+        success = await self.connection_registry.kill_connection(
+            session_id=session_id,
+            reason=reason,
+        )
+
+        if success:
+            print(f"Connection killed: {session_id}")
+            print(f"  Reason: {reason}")
+            return 0
+        else:
+            print(f"Session not found: {session_id}")
+            return 1
+
+    async def connections_history(self, args):
+        """View closed connection history for forensics."""
+        limit = getattr(args, "limit", 50)
+        device = getattr(args, "device", None)
+
+        history = await self.connection_registry.get_connection_history(
+            limit=limit,
+            target_device=device,
+        )
+
+        if not history:
+            print("No connection history.")
+            return 0
+
+        print(f"Connection History ({len(history)} entries):")
+        print()
+        print(
+            f"{'Session':<14} {'Source IP':<18} {'Target Device':<25} "
+            f"{'Proto':<8} {'Duration':<10} {'Closed By':<12} {'User'}"
+        )
+        print("-" * 120)
+
+        for entry in history:
+            duration = entry.get("duration", 0)
+            if duration >= 3600:
+                dur_str = f"{duration / 3600:.1f}h"
+            elif duration >= 60:
+                dur_str = f"{duration / 60:.1f}m"
+            else:
+                dur_str = f"{duration:.0f}s"
+
+            closed_by = entry.get("closed_by", "unknown")
+            user = entry.get("username", "") or "-"
+
+            print(
+                f"{entry['session_id']:<14} {entry['source_ip']:<18} "
+                f"{entry['target_device']:<25} {entry['protocol']:<8} "
+                f"{dur_str:<10} {closed_by:<12} {user}"
+            )
+
+            # Show reason if killed by defender
+            reason = entry.get("reason", "")
+            if reason:
+                print(f"  Reason: {reason}")
+
+        print()
+        return 0
+
+    # ================================================================
     # General Commands
     # ================================================================
 
@@ -1793,6 +1928,14 @@ class BlueTeamCLI:
         print(f"  Policy: {opcua_policy}")
         print(f"  Servers: {len(opcua_servers)}")
         print(f"  Certificates: {certs_found}/{len(opcua_servers)}")
+        print()
+
+        # Connection tracking
+        active_conns = await self.connection_registry.get_active_connections()
+        history = await self.connection_registry.get_connection_history(limit=10000)
+        print("Connections:")
+        print(f"  Active: {len(active_conns)}")
+        print(f"  History: {len(history)} closed connections")
         print()
 
         print("=" * 70)
@@ -2299,6 +2442,39 @@ To make permanent, edit config/*.yml and restart simulator.
     validate_cert_parser.add_argument("name", help="Server name to validate")
 
     # ================================================================
+    # Connection Commands
+    # ================================================================
+    conn_parser = subparsers.add_parser(
+        "connections", help="Connection tracking and forensics"
+    )
+    conn_subparsers = conn_parser.add_subparsers(dest="subcommand")
+
+    # connections list
+    conn_list_parser = conn_subparsers.add_parser(
+        "list", help="List active connections"
+    )
+    conn_list_parser.add_argument("--device", help="Filter by target device name")
+    conn_list_parser.add_argument("--protocol", help="Filter by protocol (smb, modbus, etc.)")
+
+    # connections kill
+    conn_kill_parser = conn_subparsers.add_parser(
+        "kill", help="Force-close a connection by session ID"
+    )
+    conn_kill_parser.add_argument("session_id", help="Session ID (full or partial)")
+    conn_kill_parser.add_argument(
+        "--reason", default="Killed by defender", help="Reason for killing connection"
+    )
+
+    # connections history
+    conn_history_parser = conn_subparsers.add_parser(
+        "history", help="View closed connection history for forensics"
+    )
+    conn_history_parser.add_argument(
+        "--limit", type=int, default=50, help="Maximum entries to show (default: 50)"
+    )
+    conn_history_parser.add_argument("--device", help="Filter by target device name")
+
+    # ================================================================
     # General Commands
     # ================================================================
     subparsers.add_parser("status", help="Show overall security status")
@@ -2437,6 +2613,16 @@ async def main():
                 return await cli.opcua_validate_cert(args)
             else:
                 parser.parse_args(["opcua", "--help"])
+
+        elif args.command == "connections":
+            if args.subcommand == "list":
+                return await cli.connections_list(args)
+            elif args.subcommand == "kill":
+                return await cli.connections_kill(args)
+            elif args.subcommand == "history":
+                return await cli.connections_history(args)
+            else:
+                parser.parse_args(["connections", "--help"])
 
         elif args.command == "status":
             return await cli.status(args)

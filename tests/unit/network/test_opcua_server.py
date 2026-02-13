@@ -50,7 +50,9 @@ class TestOPCUAServerInitialization:
         """
         server = OPCUAServer()
 
-        assert server.endpoint == "opc.tcp://0.0.0.0:4840/"
+        assert server.endpoint == "opc.tcp://127.0.0.1:4840/"
+        assert server.host == "127.0.0.1"
+        assert server.port == 4840
         assert server.namespace_uri == "urn:simulator:opcua"
         assert server.security_policy == "None"
         assert server.allow_anonymous is True
@@ -71,6 +73,8 @@ class TestOPCUAServerInitialization:
         )
 
         assert server.endpoint == "opc.tcp://127.0.0.1:4841/"
+        assert server.host == "127.0.0.1"
+        assert server.port == 4841
         assert server.namespace_uri == "urn:custom:opcua"
         assert server.security_policy == "Basic256Sha256"
         assert server.certificate_path == "/path/to/cert.pem"

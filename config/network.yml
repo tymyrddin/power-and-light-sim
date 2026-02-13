@@ -14,11 +14,23 @@
 # ================================================================
 segmentation:
   # Toggle network segmentation enforcement
+  # When enabled, attackers must pivot through dual-homed devices to reach
+  # other zones. Active sessions in ConnectionRegistry determine which
+  # devices the attacker is "on", and the gateway checks if that position
+  # provides a path to the target.
+  # Defenders can kill sessions (blue_team.py connections kill) to revoke access.
   enabled: false  # false = all doors open (good for students/learning)
                   # true = enforce segmentation based on mode
 
   # Segmentation mode (only applies when enabled: true)
   mode: "none"  # Options: none, strict, common, custom
+
+  # Zones reachable from outside (no foothold required)
+  # These are the internet-facing entry points the attacker can reach directly.
+  # All other zones require pivoting through a compromised device.
+  externally_reachable_zones:
+    - enterprise_zone
+    - dmz
 
   # Mode descriptions (reference only):
   # - none: No enforcement, all devices can reach each other
@@ -124,6 +136,10 @@ connections:
     - device: hex_turbine_safety_plc
       ip: 10.10.1.11
       description: Safety instrumented system
+    - device: legacy_data_collector
+      ip: 10.10.1.50
+      description: Legacy Win98 box - second NIC (dual-homed since 2001)
+      notes: "Nobody remembers plugging this in. Bridge between enterprise and control."
 
   # Reactor Control Network (isolated)
   reactor_network:

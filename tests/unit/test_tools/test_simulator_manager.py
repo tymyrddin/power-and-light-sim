@@ -599,7 +599,7 @@ class TestSCADAConfiguration:
         """Test successful SCADA server configuration."""
         mock_scada = Mock()
         mock_scada.add_poll_target = Mock()
-        mock_scada.add_tag = Mock()
+        mock_scada.add_tag = AsyncMock()
         manager.device_instances = {"scada1": mock_scada}
 
         config = {

@@ -78,6 +78,7 @@ class TestBlueTeamCLIInit:
         assert bt.auth_mgr is None
         assert bt.modbus_filter is None
         assert bt.anomaly_detector is None
+        assert bt.connection_registry is None
 
     @pytest.mark.asyncio
     async def test_initialize_creates_components(self, cli):
@@ -89,6 +90,7 @@ class TestBlueTeamCLIInit:
         assert cli.ids_system is not None
         assert cli.modbus_filter is not None
         assert cli.anomaly_detector is not None
+        assert cli.connection_registry is not None
 
     @pytest.mark.asyncio
     async def test_initialize_auth_manager_has_default_users(self, cli):
@@ -1470,6 +1472,7 @@ class TestStatusCommand:
         assert "RBAC:" in captured.out
         assert "Modbus Filter:" in captured.out
         assert "OPC UA Security:" in captured.out
+        assert "Connections:" in captured.out
 
     @pytest.mark.asyncio
     async def test_status_with_active_rules(self, cli, capsys):
@@ -1505,3 +1508,324 @@ class TestStatusCommand:
         assert result == 0
         captured = capsys.readouterr()
         assert "Active Rules: 1" in captured.out
+
+
+# ================================================================
+# CONNECTION COMMAND TESTS
+# ================================================================
+
+
+class TestConnectionCommands:
+    """Test connections list, kill, history commands."""
+
+    @pytest.fixture(autouse=True)
+    def reset_registry(self):
+        """Reset ConnectionRegistry singleton between tests."""
+        from components.network.connection_registry import ConnectionRegistry
+
+        ConnectionRegistry.reset_singleton()
+        yield
+        ConnectionRegistry.reset_singleton()
+
+    @pytest.mark.asyncio
+    async def test_connections_list_empty(self, cli, capsys):
+        """List with no active connections."""
+        result = await cli.connections_list(make_args(device=None, protocol=None))
+        assert result == 0
+        captured = capsys.readouterr()
+        assert "No active connections" in captured.out
+
+    @pytest.mark.asyncio
+    async def test_connections_list_with_connections(self, cli, capsys):
+        """List shows active connections."""
+        registry = cli.connection_registry
+        await registry.connect(
+            source_ip="10.40.99.10",
+            source_device="legacy_data_collector",
+            target_device="hex_turbine_plc",
+            protocol="smb",
+            port=10445,
+            username="guest",
+        )
+
+        result = await cli.connections_list(make_args(device=None, protocol=None))
+        assert result == 0
+        captured = capsys.readouterr()
+        assert "Active Connections (1)" in captured.out
+        assert "10.40.99.10" in captured.out
+        assert "legacy_data_collector" in captured.out
+        assert "hex_turbine_plc" in captured.out
+        assert "smb" in captured.out
+        assert "guest" in captured.out
+
+    @pytest.mark.asyncio
+    async def test_connections_list_filter_by_device(self, cli, capsys):
+        """List filters by target device."""
+        registry = cli.connection_registry
+        await registry.connect(
+            source_ip="10.40.99.10",
+            source_device="legacy_data_collector",
+            target_device="hex_turbine_plc",
+            protocol="smb",
+            port=10445,
+        )
+        await registry.connect(
+            source_ip="10.20.1.50",
+            source_device="hmi_workstation",
+            target_device="boiler_plc",
+            protocol="modbus",
+            port=10502,
+        )
+
+        result = await cli.connections_list(
+            make_args(device="hex_turbine_plc", protocol=None)
+        )
+        assert result == 0
+        captured = capsys.readouterr()
+        assert "Active Connections (1)" in captured.out
+        assert "hex_turbine_plc" in captured.out
+        assert "boiler_plc" not in captured.out
+
+    @pytest.mark.asyncio
+    async def test_connections_list_filter_by_protocol(self, cli, capsys):
+        """List filters by protocol."""
+        registry = cli.connection_registry
+        await registry.connect(
+            source_ip="10.40.99.10",
+            source_device="legacy_data_collector",
+            target_device="hex_turbine_plc",
+            protocol="smb",
+            port=10445,
+        )
+        await registry.connect(
+            source_ip="10.20.1.50",
+            source_device="hmi_workstation",
+            target_device="boiler_plc",
+            protocol="modbus",
+            port=10502,
+        )
+
+        result = await cli.connections_list(
+            make_args(device=None, protocol="modbus")
+        )
+        assert result == 0
+        captured = capsys.readouterr()
+        assert "Active Connections (1)" in captured.out
+        assert "modbus" in captured.out
+        assert "smb" not in captured.out
+
+    @pytest.mark.asyncio
+    async def test_connections_kill_success(self, cli, capsys):
+        """Kill an active connection."""
+        registry = cli.connection_registry
+        session_id = await registry.connect(
+            source_ip="10.40.99.10",
+            source_device="legacy_data_collector",
+            target_device="hex_turbine_plc",
+            protocol="smb",
+            port=10445,
+        )
+
+        result = await cli.connections_kill(
+            make_args(session_id=session_id, reason="Suspicious activity")
+        )
+        assert result == 0
+        captured = capsys.readouterr()
+        assert "Connection killed" in captured.out
+        assert "Suspicious activity" in captured.out
+
+        # Verify connection is gone
+        assert not registry.is_connected(session_id)
+
+    @pytest.mark.asyncio
+    async def test_connections_kill_partial_match(self, cli, capsys):
+        """Kill with partial session ID."""
+        registry = cli.connection_registry
+        session_id = await registry.connect(
+            source_ip="10.40.99.10",
+            source_device="legacy_data_collector",
+            target_device="hex_turbine_plc",
+            protocol="smb",
+            port=10445,
+        )
+
+        # Use first 6 chars as partial match
+        partial = session_id[:6]
+        result = await cli.connections_kill(
+            make_args(session_id=partial, reason="test kill")
+        )
+        assert result == 0
+        captured = capsys.readouterr()
+        assert "Connection killed" in captured.out
+
+    @pytest.mark.asyncio
+    async def test_connections_kill_not_found(self, cli, capsys):
+        """Kill non-existent session returns error."""
+        result = await cli.connections_kill(
+            make_args(session_id="nonexistent", reason="test")
+        )
+        assert result == 1
+        captured = capsys.readouterr()
+        assert "Session not found" in captured.out
+
+    @pytest.mark.asyncio
+    async def test_connections_history_empty(self, cli, capsys):
+        """History with no closed connections."""
+        result = await cli.connections_history(make_args(limit=50, device=None))
+        assert result == 0
+        captured = capsys.readouterr()
+        assert "No connection history" in captured.out
+
+    @pytest.mark.asyncio
+    async def test_connections_history_shows_closed(self, cli, capsys):
+        """History shows disconnected connections."""
+        registry = cli.connection_registry
+        session_id = await registry.connect(
+            source_ip="10.40.99.10",
+            source_device="legacy_data_collector",
+            target_device="hex_turbine_plc",
+            protocol="smb",
+            port=10445,
+            username="admin",
+        )
+        await registry.disconnect(session_id)
+
+        result = await cli.connections_history(make_args(limit=50, device=None))
+        assert result == 0
+        captured = capsys.readouterr()
+        assert "Connection History (1 entries)" in captured.out
+        assert "10.40.99.10" in captured.out
+        assert "hex_turbine_plc" in captured.out
+        assert "client" in captured.out
+
+    @pytest.mark.asyncio
+    async def test_connections_history_shows_killed(self, cli, capsys):
+        """History shows killed connections with reason."""
+        registry = cli.connection_registry
+        session_id = await registry.connect(
+            source_ip="10.40.99.10",
+            source_device="legacy_data_collector",
+            target_device="hex_turbine_plc",
+            protocol="smb",
+            port=10445,
+        )
+        await registry.kill_connection(session_id, reason="Malicious activity")
+
+        result = await cli.connections_history(make_args(limit=50, device=None))
+        assert result == 0
+        captured = capsys.readouterr()
+        assert "defender" in captured.out
+        assert "Malicious activity" in captured.out
+
+    @pytest.mark.asyncio
+    async def test_connections_history_filter_by_device(self, cli, capsys):
+        """History filters by target device."""
+        registry = cli.connection_registry
+        s1 = await registry.connect(
+            source_ip="10.40.99.10",
+            source_device="legacy_data_collector",
+            target_device="hex_turbine_plc",
+            protocol="smb",
+            port=10445,
+        )
+        s2 = await registry.connect(
+            source_ip="10.20.1.50",
+            source_device="hmi_workstation",
+            target_device="boiler_plc",
+            protocol="modbus",
+            port=10502,
+        )
+        await registry.disconnect(s1)
+        await registry.disconnect(s2)
+
+        result = await cli.connections_history(
+            make_args(limit=50, device="hex_turbine_plc")
+        )
+        assert result == 0
+        captured = capsys.readouterr()
+        assert "hex_turbine_plc" in captured.out
+        assert "boiler_plc" not in captured.out
+
+    @pytest.mark.asyncio
+    async def test_connections_history_limit(self, cli, capsys):
+        """History respects limit parameter."""
+        registry = cli.connection_registry
+        for i in range(5):
+            s = await registry.connect(
+                source_ip=f"10.0.0.{i}",
+                source_device="attacker",
+                target_device="target",
+                protocol="smb",
+                port=10445,
+            )
+            await registry.disconnect(s)
+
+        result = await cli.connections_history(make_args(limit=2, device=None))
+        assert result == 0
+        captured = capsys.readouterr()
+        assert "Connection History (2 entries)" in captured.out
+
+
+# ================================================================
+# CONNECTION PARSER TESTS
+# ================================================================
+
+
+class TestConnectionParser:
+    """Test connections command parser setup."""
+
+    def test_connections_list_parser(self):
+        """Parser handles connections list."""
+        parser = create_parser()
+        args = parser.parse_args(["connections", "list"])
+        assert args.command == "connections"
+        assert args.subcommand == "list"
+
+    def test_connections_list_with_device_filter(self):
+        """Parser handles connections list --device."""
+        parser = create_parser()
+        args = parser.parse_args(["connections", "list", "--device", "hex_turbine_plc"])
+        assert args.device == "hex_turbine_plc"
+
+    def test_connections_list_with_protocol_filter(self):
+        """Parser handles connections list --protocol."""
+        parser = create_parser()
+        args = parser.parse_args(["connections", "list", "--protocol", "smb"])
+        assert args.protocol == "smb"
+
+    def test_connections_kill_parser(self):
+        """Parser handles connections kill."""
+        parser = create_parser()
+        args = parser.parse_args(["connections", "kill", "abc123"])
+        assert args.command == "connections"
+        assert args.subcommand == "kill"
+        assert args.session_id == "abc123"
+
+    def test_connections_kill_with_reason(self):
+        """Parser handles connections kill --reason."""
+        parser = create_parser()
+        args = parser.parse_args(
+            ["connections", "kill", "abc123", "--reason", "Malicious"]
+        )
+        assert args.reason == "Malicious"
+
+    def test_connections_history_parser(self):
+        """Parser handles connections history."""
+        parser = create_parser()
+        args = parser.parse_args(["connections", "history"])
+        assert args.command == "connections"
+        assert args.subcommand == "history"
+
+    def test_connections_history_with_limit(self):
+        """Parser handles connections history --limit."""
+        parser = create_parser()
+        args = parser.parse_args(["connections", "history", "--limit", "100"])
+        assert args.limit == 100
+
+    def test_connections_history_with_device(self):
+        """Parser handles connections history --device."""
+        parser = create_parser()
+        args = parser.parse_args(
+            ["connections", "history", "--device", "hex_turbine_plc"]
+        )
+        assert args.device == "hex_turbine_plc"

@@ -105,8 +105,9 @@ class SimulatorManager:
         # Device instances (PLCs, RTUs, etc.)
         self.device_instances: dict[str, Any] = {}
 
-        # Protocol servers
+        # Protocol servers (bind to loopback, gateways handle external ports)
         self.protocol_servers: dict[str, Any] = {}
+        self.protocol_sim = None  # ProtocolSimulator (gateway manager)
 
         # Simulation state
         self._running = False
@@ -166,6 +167,9 @@ class SimulatorManager:
             # 5. Create device instances (PLCs, RTUs, etc.)
             logger.info("Creating device instances...")
             await self._create_devices(config)
+
+            # 5b. Set initial operating conditions (turbine at rated speed)
+            await self._set_initial_operating_conditions()
 
             # 6. Configure SCADA servers with poll targets and tags
             logger.info("Configuring SCADA servers...")
@@ -470,6 +474,61 @@ class SimulatorManager:
                     exc_info=True,
                 )
 
+    async def _set_initial_operating_conditions(self) -> None:
+        """Set initial operating conditions so the plant starts in equilibrium.
+
+        A real power plant doesn't start from cold — the turbine is spinning,
+        the generator is synchronised, and the grid is balanced. Without this,
+        the grid sees 0MW generation vs 80MW load and frequency immediately drops.
+
+        Sets turbine to rated speed with governor enabled, then re-runs
+        grid aggregation so generation matches load at startup.
+        """
+        for device_name, turbine in self.turbine_physics.items():
+            device = self.device_instances.get(device_name)
+            if not device:
+                continue
+
+            rated_speed = turbine.params.rated_speed_rpm
+
+            # Set turbine physics state to rated operating conditions
+            turbine.state.shaft_speed_rpm = float(rated_speed)
+            turbine.state.steam_pressure_psi = 1800.0
+            turbine.state.steam_temperature_c = 482.0  # ~900F
+            turbine.state.bearing_temperature_c = 79.0
+            turbine._update_power_output()
+            turbine._update_vibration()
+
+            # Set governor enabled and speed setpoint in device memory map
+            # so the PLC logic maintains the state during simulation
+            device.memory_map["coils[0]"] = True  # Governor enable
+            device.memory_map["holding_registers[0]"] = rated_speed & 0xFFFF  # Low word
+            device.memory_map["holding_registers[1]"] = (rated_speed >> 16) & 0xFFFF  # High word
+
+            # Set the physics control cache (both friendly names and address keys)
+            # update() reads address-based keys, set_*() writes friendly names
+            turbine.set_governor_enabled(True)
+            turbine.set_speed_setpoint(float(rated_speed))
+            turbine._control_cache["holding_registers[10]"] = float(rated_speed)
+            turbine._control_cache["coils[10]"] = True
+            turbine._control_cache["coils[11]"] = False
+
+            # Write telemetry to memory map (power output, temperatures, etc.)
+            await turbine.write_telemetry()
+
+            logger.info(
+                f"Initial conditions: {device_name} at {rated_speed} RPM, "
+                f"{turbine.state.power_output_mw:.1f}MW"
+            )
+
+        # Re-aggregate generation so grid sees the turbine output
+        if self.grid_physics:
+            await self.grid_physics.update_from_devices()
+            logger.info(
+                f"Grid equilibrium: {self.grid_physics.state.total_gen_mw:.1f}MW gen, "
+                f"{self.grid_physics.state.total_load_mw:.1f}MW load"
+            )
+
     async def _configure_scada_servers(self, config: dict[str, Any]) -> None:
         """Configure SCADA servers with poll targets and tags from config.
 
@@ -525,7 +584,7 @@ class SimulatorManager:
                     logger.warning(f"Invalid tag config: {tag_cfg}")
                     continue
 
-                scada_device.add_tag(
+                await scada_device.add_tag(
                     tag_name=tag_name,
                     device_name=device_name,
                     address_type=address_type,
@@ -670,32 +729,38 @@ class SimulatorManager:
         return engine_getter
 
     async def _expose_services(self, config: dict[str, Any]) -> None:
-        """Start protocol servers for devices based on config.
+        """Start protocol servers and network gateways.
 
-        Creates network-accessible attack surfaces for external tools.
-        Protocol servers open real TCP/IP ports that can be targeted
-        from another terminal using tools like mbtget, nmap, Metasploit.
-
-        Servers are started in PARALLEL for fast initialization.
+        Protocol servers bind to 127.0.0.1 (loopback, not externally accessible).
+        ProtocolSimulator creates gateways on 0.0.0.0 that virtualise network
+        connectivity: per-connection enforcement, then TCP pipe to loopback.
 
         Args:
             config: Loaded configuration dictionary
         """
+        from components.network.protocol_simulator import (
+            INTERNAL_PORT_OFFSET,
+            ProtocolSimulator,
+        )
         from components.network.servers import (
             DNP3TCPServer,
             IEC104TCPServer,
             ModbusTCPServer,
             OPCUAServer,
             S7TCPServer,
+            SMBServer,
         )
 
         devices = config.get("devices", [])
 
         # Separate Modbus servers (sequential) from others (parallel)
         # Modbus uses pymodbus ModbusDeviceIdentification which has shared class attributes
-        modbus_servers = []  # List of (device_name, proto_name, server_obj, port)
+        modbus_servers = []  # List of (device_name, proto_name, server_obj, external_port, internal_port)
         other_server_tasks = []  # Tasks for parallel execution
         other_server_metadata = []  # Metadata for other servers
+
+        # Gateway registrations (after servers start)
+        gateway_registrations = []  # List of (node, network, external_port, protocol)
 
         for device_cfg in devices:
             device_name = device_cfg.get("name")
@@ -712,30 +777,33 @@ class SimulatorManager:
                     "iec61850",
                     "ethernet_ip",
                     "iec104",
+                    "smb",
                 ]:
                     continue
 
-                port = proto_cfg.get("port")
+                external_port = proto_cfg.get("port")
 
-                if not port:
+                if not external_port:
                     continue
 
                 # Convert port to int if needed (skip if not numeric)
                 try:
-                    port = int(port) if isinstance(port, str) else port
+                    external_port = int(external_port) if isinstance(external_port, str) else external_port
                 except ValueError:
                     logger.warning(
-                        f"Invalid port '{port}' for {device_name}:{proto_name}, skipping"
+                        f"Invalid port '{external_port}' for {device_name}:{proto_name}, skipping"
                     )
                     continue
 
-                # Expose service in network simulator (topology)
-                await self.network_sim.expose_service(device_name, proto_name, port)
+                internal_port = external_port + INTERNAL_PORT_OFFSET
 
-                # Create protocol server (will be started in parallel later)
+                # Get primary network for this device (for gateway registration)
+                device_networks = await self.network_sim.get_device_networks(device_name)
+                primary_network = next(iter(device_networks), "unknown")
+
+                # Create protocol server on loopback with internal port
                 if proto_name == "modbus":
                     try:
-                        host = proto_cfg.get("host", "0.0.0.0")
                         unit_id = proto_cfg.get("unit_id", 1)
 
                         # Get device identity from config for realistic fingerprinting
@@ -745,20 +813,22 @@ class SimulatorManager:
                             device_type, device_identities.get("default", {})
                         )
 
-                        # Create Modbus TCP server with pymodbus simulator
                         server = ModbusTCPServer(
-                            host=host,
-                            port=port,
+                            host="127.0.0.1",
+                            port=internal_port,
                             unit_id=unit_id,
                             num_coils=64,
                             num_discrete_inputs=64,
                             num_holding_registers=256,
                             num_input_registers=256,
                             device_identity=device_identity,
+                            device_name=device_name,
                         )
 
-                        # Collect Modbus servers for sequential start (not parallel)
-                        modbus_servers.append((device_name, proto_name, server, port))
+                        modbus_servers.append((device_name, proto_name, server, external_port, internal_port))
+                        gateway_registrations.append(
+                            (device_name, primary_network, external_port, proto_name)
+                        )
 
                     except Exception as e:
                         logger.error(
@@ -767,26 +837,26 @@ class SimulatorManager:
 
                 elif proto_name == "s7":
                     try:
-                        host = proto_cfg.get("host", "0.0.0.0")
                         rack = proto_cfg.get("rack", 0)
                         slot = proto_cfg.get("slot", 2)
 
-                        # Create S7 TCP server with snap7
                         server = S7TCPServer(
-                            host=host,
-                            port=port,
+                            host="127.0.0.1",
+                            port=internal_port,
                             rack=rack,
                             slot=slot,
-                            db1_size=256,  # Input registers
-                            db2_size=256,  # Holding registers
-                            db3_size=64,  # Discrete inputs
-                            db4_size=64,  # Coils
+                            db1_size=256,
+                            db2_size=256,
+                            db3_size=64,
+                            db4_size=64,
                         )
 
-                        # Collect for parallel start
                         other_server_tasks.append(server.start())
                         other_server_metadata.append(
-                            (device_name, proto_name, server, port)
+                            (device_name, proto_name, server, external_port, internal_port)
+                        )
+                        gateway_registrations.append(
+                            (device_name, primary_network, external_port, proto_name)
                         )
 
                     except Exception as e:
@@ -796,16 +866,14 @@ class SimulatorManager:
 
                 elif proto_name == "dnp3":
                     try:
-                        host = proto_cfg.get("host", "0.0.0.0")
                         master_address = proto_cfg.get("master_address", 1)
                         outstation_address = proto_cfg.get(
                             "outstation_address", device_id
                         )
 
-                        # Create DNP3 TCP server (outstation)
                         server = DNP3TCPServer(
-                            host=host,
-                            port=port,
+                            host="127.0.0.1",
+                            port=internal_port,
                             master_address=master_address,
                             outstation_address=outstation_address,
                             num_binary_inputs=64,
@@ -813,10 +881,12 @@ class SimulatorManager:
                             num_counters=16,
                         )
 
-                        # Collect for parallel start
                         other_server_tasks.append(server.start())
                         other_server_metadata.append(
-                            (device_name, proto_name, server, port)
+                            (device_name, proto_name, server, external_port, internal_port)
+                        )
+                        gateway_registrations.append(
+                            (device_name, primary_network, external_port, proto_name)
                         )
 
                     except Exception as e:
@@ -826,20 +896,20 @@ class SimulatorManager:
 
                 elif proto_name == "iec104":
                     try:
-                        host = proto_cfg.get("host", "0.0.0.0")
                         common_address = proto_cfg.get("common_address", 1)
 
-                        # Create IEC 104 TCP server
                         server = IEC104TCPServer(
-                            host=host,
-                            port=port,
+                            host="127.0.0.1",
+                            port=internal_port,
                             common_address=common_address,
                         )
 
-                        # Collect for parallel start
                         other_server_tasks.append(server.start())
                         other_server_metadata.append(
-                            (device_name, proto_name, server, port)
+                            (device_name, proto_name, server, external_port, internal_port)
+                        )
+                        gateway_registrations.append(
+                            (device_name, primary_network, external_port, proto_name)
                         )
 
                     except Exception as e:
@@ -849,10 +919,8 @@ class SimulatorManager:
 
                 elif proto_name == "opcua":
                     try:
-                        endpoint_url = proto_cfg.get(
-                            "endpoint",
-                            f"opc.tcp://{proto_cfg.get('host', '0.0.0.0')}:{port}/",
-                        )
+                        # OPC UA endpoint on loopback with internal port
+                        endpoint_url = f"opc.tcp://127.0.0.1:{internal_port}/"
 
                         # Security configuration (optional)
                         security_policy = proto_cfg.get("security_policy", "None")
@@ -861,7 +929,7 @@ class SimulatorManager:
                         allow_anonymous = proto_cfg.get("allow_anonymous", True)
 
                         # Apply global OPC UA security config
-                        opcua_sec = self.config.get("opcua_security", {})
+                        opcua_sec = config.get("opcua_security", {})
 
                         # Authentication enforcement (Challenge 1)
                         opcua_auth_manager = None
@@ -879,7 +947,6 @@ class SimulatorManager:
 
                         # Encryption enforcement (Challenge 7)
                         if opcua_sec.get("enforcement_enabled", False):
-                            # Check for per-server overrides first
                             overrides = opcua_sec.get("server_overrides", {})
                             server_override = overrides.get(device_name, {})
 
@@ -894,7 +961,6 @@ class SimulatorManager:
                                 opcua_sec.get("allow_anonymous", False),
                             )
 
-                            # Use cert paths from device config or generate from cert_dir
                             cert_dir = opcua_sec.get("cert_dir", "certs")
                             if not certificate_path:
                                 certificate_path = f"{cert_dir}/{device_name}.crt"
@@ -906,7 +972,6 @@ class SimulatorManager:
                                 f"policy={security_policy}, anonymous={allow_anonymous}"
                             )
 
-                        # Create OPC UA server with optional security
                         server = OPCUAServer(
                             endpoint=endpoint_url,
                             security_policy=security_policy,
@@ -916,10 +981,12 @@ class SimulatorManager:
                             auth_manager=opcua_auth_manager,
                         )
 
-                        # Collect for parallel start
                         other_server_tasks.append(server.start())
                         other_server_metadata.append(
-                            (device_name, proto_name, server, port)
+                            (device_name, proto_name, server, external_port, internal_port)
+                        )
+                        gateway_registrations.append(
+                            (device_name, primary_network, external_port, proto_name)
                         )
 
                     except Exception as e:
@@ -927,10 +994,53 @@ class SimulatorManager:
                             f"Failed to create {proto_name} server for {device_name}: {e}"
                         )
 
+                elif proto_name == "smb":
+                    try:
+                        server_name = proto_cfg.get("server_name", device_name)
+                        allow_anonymous = proto_cfg.get("allow_anonymous", True)
+
+                        server = SMBServer(
+                            host="127.0.0.1",
+                            port=internal_port,
+                            server_name=server_name,
+                            device_name=device_name,
+                            allow_anonymous=allow_anonymous,
+                        )
+
+                        # Wire filesystem from device instance
+                        device_instance = self.device_instances.get(device_name)
+                        if device_instance and hasattr(device_instance, "filesystem"):
+                            server.set_filesystem(
+                                device_instance.filesystem,
+                                shares={
+                                    "TURBINE_DATA": "C:/TURBINE/DATA",
+                                    "BACKUP": "C:/BACKUP",
+                                    "C$": "C:/",
+                                },
+                            )
+
+                            other_server_tasks.append(server.start())
+                            other_server_metadata.append(
+                                (device_name, proto_name, server, external_port, internal_port)
+                            )
+                            gateway_registrations.append(
+                                (device_name, primary_network, external_port, proto_name)
+                            )
+                        else:
+                            logger.warning(
+                                f"SMB server for {device_name}: no filesystem found, skipping"
+                            )
+
+                    except Exception as e:
+                        logger.error(
+                            f"Failed to create {proto_name} server for {device_name}: {e}"
+                        )
+
                 else:
-                    # Protocol not yet implemented
+                    # Protocol not yet implemented — expose in network sim only
+                    await self.network_sim.expose_service(device_name, proto_name, external_port)
                     logger.info(
-                        f"Exposed {proto_name} service (server not implemented): {device_name}:{port}"
+                        f"Exposed {proto_name} service (server not implemented): {device_name}:{external_port}"
                     )
 
         # Start Modbus servers SEQUENTIALLY (pymodbus class attribute workaround)
@@ -938,22 +1048,23 @@ class SimulatorManager:
             logger.info(
                 f"Starting {len(modbus_servers)} Modbus servers sequentially..."
             )
-            for device_name, proto_name, server, port in modbus_servers:
+            for device_name, proto_name, server, external_port, internal_port in modbus_servers:
                 try:
                     result = await server.start()
                     if result:
                         server_key = f"{device_name}:{proto_name}"
                         self.protocol_servers[server_key] = server
                         logger.info(
-                            f"Started {proto_name} server: {device_name}:{port}"
+                            f"Started {proto_name} server: {device_name} "
+                            f"(127.0.0.1:{internal_port} → gateway :{external_port})"
                         )
                     else:
                         logger.warning(
-                            f"{proto_name} server for {device_name}:{port} failed to start"
+                            f"{proto_name} server for {device_name}:{external_port} failed to start"
                         )
                 except Exception as e:
                     logger.error(
-                        f"Failed to start {proto_name} server for {device_name}:{port}: {e}"
+                        f"Failed to start {proto_name} server for {device_name}:{external_port}: {e}"
                     )
 
         # Start other servers in PARALLEL for fast initialization
@@ -962,28 +1073,44 @@ class SimulatorManager:
                 f"Starting {len(other_server_tasks)} other protocol servers in parallel..."
             )
 
-            # Run all server.start() calls concurrently
             results = await asyncio.gather(*other_server_tasks, return_exceptions=True)
 
-            # Process results and store successful servers
-            for i, (device_name, proto_name, server, port) in enumerate(
+            for i, (device_name, proto_name, server, external_port, internal_port) in enumerate(
                 other_server_metadata
             ):
                 result = results[i]
 
                 if isinstance(result, Exception):
-                    logger.error(
-                        f"Failed to start {proto_name} server for {device_name}:{port}: {result}"
-                    )
-                elif result:  # Server started successfully
-                    server_key = f"{device_name}:{proto_name}"
-                    self.protocol_servers[server_key] = server
-                    logger.info(f"Started {proto_name} server: {device_name}:{port}")
-                else:
                     logger.warning(
-                        f"{proto_name} server for {device_name}:{port} failed to start - "
+                        f"{proto_name} server for {device_name}:{external_port} failed to start - "
                         "library may not be installed or port unavailable"
                     )
+                elif result is False:
+                    logger.warning(
+                        f"{proto_name} server for {device_name}:{external_port} failed to start - "
+                        "library may not be installed or port unavailable"
+                    )
+                else:
+                    server_key = f"{device_name}:{proto_name}"
+                    self.protocol_servers[server_key] = server
+                    logger.info(
+                        f"Started {proto_name} server: {device_name} "
+                        f"(127.0.0.1:{internal_port} → gateway :{external_port})"
+                    )
+
+        # Create and start network gateways (external ports → loopback protocol servers)
+        self.protocol_sim = ProtocolSimulator(self.network_sim)
+        for node, network, ext_port, protocol in gateway_registrations:
+            server_key = f"{node}:{protocol}"
+            if server_key in self.protocol_servers:
+                await self.protocol_sim.register(
+                    node=node,
+                    network=network,
+                    port=ext_port,
+                    protocol=protocol,
+                )
+
+        await self.protocol_sim.start()
 
     async def _log_summary(self) -> None:
         """Log initialisation summary."""

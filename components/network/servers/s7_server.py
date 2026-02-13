@@ -45,15 +45,17 @@ except ImportError:
     SrvArea = None
     c_uint8 = None
 
+from components.network.servers.base_server import BaseProtocolServer
+
 logger = get_logger(__name__)
 
-# snap7 server status codes (from snap7.server.server_statuses)
-SRV_STOPPED = 0
-SRV_RUNNING = 1
-SRV_ERROR = 2
+# snap7 server status strings (get_status() returns tuple of strings)
+SRV_STOPPED = "SrvStopped"
+SRV_RUNNING = "SrvRunning"
+SRV_ERROR = "SrvError"
 
 
-class S7TCPServer:
+class S7TCPServer(BaseProtocolServer):
     """
     S7 TCP server using snap7 library.
 
@@ -69,7 +71,7 @@ class S7TCPServer:
 
     def __init__(
         self,
-        host: str = "0.0.0.0",
+        host: str = "127.0.0.1",
         port: int = 102,
         rack: int = 0,
         slot: int = 2,
@@ -79,8 +81,7 @@ class S7TCPServer:
         db3_size: int = 64,  # Discrete inputs
         db4_size: int = 64,  # Coils
     ):
-        self.host = host
-        self.port = port
+        super().__init__(host, port)
         self.rack = rack
         self.slot = slot
 
@@ -138,24 +139,22 @@ class S7TCPServer:
 
                 # Start server in background thread
                 def _start_server():
-                    # Note: snap7 library binds to port 102 (privileged) and doesn't support
-                    # custom ports without recompiling the library. Requires root or CAP_NET_BIND_SERVICE.
-                    # start() takes no arguments - port is hardcoded in snap7 library.
-                    self._server.start()
-                    return self._server.get_status() == SRV_RUNNING
+                    # snap7 Server.start() accepts tcp_port parameter
+                    # (calls set_param(Parameter.LocalPort, tcp_port) internally when != 102)
+                    self._server.start_to(self.host, tcp_port=self.port)
+                    status, _, _ = self._server.get_status()
+                    return status == SRV_RUNNING
 
                 # Await the server start and check result
                 started = await asyncio.to_thread(_start_server)
 
                 # Check if server started successfully
-                if (
-                    started
-                    and self._server
-                    and self._server.get_status() == SRV_RUNNING
-                ):
-                    self._running = True
-                    logger.info(f"S7 server started on {self.host}:{self.port}")
-                    return True
+                if started and self._server:
+                    status, _, _ = self._server.get_status()
+                    if status == SRV_RUNNING:
+                        self._running = True
+                        logger.info(f"S7 server started on {self.host}:{self.port}")
+                        return True
 
                 # Server didn't start, cleanup and retry
                 if self._server:
@@ -171,10 +170,20 @@ class S7TCPServer:
                     )  # Exponential backoff
 
             except Exception as e:
-                logger.warning(
-                    f"Failed to start S7 server on {self.host}:{self.port} "
-                    f"(attempt {attempt + 1}/{max_retries}): {e}"
-                )
+                error_msg = str(e)
+                is_permission = "Permission denied" in error_msg
+
+                if is_permission:
+                    logger.warning(
+                        f"S7 server on port {self.port} requires root privileges "
+                        f"(attempt {attempt + 1}/{max_retries}). "
+                        f"Run with: sudo python tools/simulator_manager.py"
+                    )
+                else:
+                    logger.warning(
+                        f"Failed to start S7 server on {self.host}:{self.port} "
+                        f"(attempt {attempt + 1}/{max_retries}): {e}"
+                    )
 
                 # Cleanup on error
                 if self._server:
@@ -188,10 +197,16 @@ class S7TCPServer:
                 if attempt < max_retries - 1:
                     await asyncio.sleep(retry_delay * (attempt + 1))
                 else:
-                    logger.error(
-                        f"Failed to start S7 server on {self.host}:{self.port} "
-                        f"after {max_retries} attempts"
-                    )
+                    if is_permission:
+                        logger.warning(
+                            f"S7 server on port {self.port} skipped (privileged port). "
+                            f"S7 protocol requires root. Other protocols unaffected."
+                        )
+                    else:
+                        logger.error(
+                            f"Failed to start S7 server on {self.host}:{self.port} "
+                            f"after {max_retries} attempts"
+                        )
                     return False
 
         return False

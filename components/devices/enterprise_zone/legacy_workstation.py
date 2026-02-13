@@ -27,6 +27,7 @@ from pathlib import Path
 from typing import Any
 
 from components.devices.core.base_device import BaseDevice
+from components.devices.device_filesystem import DeviceFilesystem
 from components.security.logging_system import (
     AlarmPriority,
     AlarmState,
@@ -208,11 +209,14 @@ class LegacyWorkstation(BaseDevice):
         }
 
         # Network configuration (the scary part)
-        self.ip_address = "192.168.100.98"  # Static IP since 1998
+        # Primary NIC: legacy_network (enterprise_zone)
+        self.ip_address = "10.40.99.10"  # Static IP since 1998
+        # Second NIC: turbine_network (control_zone) - this is the dual-homed bridge
+        self.ip_address_ot = "10.10.1.50"  # Plugged in "temporarily" in 2001
         self.subnet_mask = "255.255.255.0"
-        self.gateway = "192.168.100.1"
-        self.dns_servers = ["192.168.100.1"]  # Probably doesn't resolve anymore
-        self.connected_networks = ["ot_network", "corporate_network"]  # Dual-homed!
+        self.gateway = "10.40.99.1"
+        self.dns_servers = ["10.40.99.1"]  # Probably doesn't resolve anymore
+        self.connected_networks = ["legacy_network", "turbine_network"]  # Dual-homed!
 
         # SMB shares (wide open)
         self.smb_shares = {
@@ -302,9 +306,276 @@ class LegacyWorkstation(BaseDevice):
         self.serial_failure_alarm_raised = False
         self.serial_failure_count = 0
 
+        # Simulated filesystem (Windows 98 - case-insensitive)
+        self.filesystem = DeviceFilesystem(case_sensitive=False)
+        self._populate_filesystem()
+
         self.logger.info(
             f"LegacyWorkstation '{device_name}' initialised "
             f"(OS={self.os_version}, installed={self.installed_date})"
+        )
+
+    # ----------------------------------------------------------------
+    # Filesystem population
+    # ----------------------------------------------------------------
+
+    def _populate_filesystem(self) -> None:
+        """Populate the simulated filesystem with realistic artefacts."""
+        fs = self.filesystem
+
+        # TurbineLink configuration - THE credential goldmine
+        fs.add_file(
+            "C:/TURBINE/config.ini",
+            (
+                "[TurbineLink]\n"
+                "Version=2.1\n"
+                "InstallDate=1998-01-15\n"
+                "\n"
+                "[Serial]\n"
+                "Port=COM1\n"
+                "Baud=9600\n"
+                "DataBits=8\n"
+                "StopBits=1\n"
+                "Parity=None\n"
+                "\n"
+                "[Network]\n"
+                "; PLC connection for direct setpoint writing\n"
+                "PLCAddress=10.10.1.10\n"
+                "PLCPort=10502\n"
+                "PLCUsername=engineer\n"
+                "PLCPassword=turbine98\n"
+                "\n"
+                "[Registers]\n"
+                "; Input registers (read-only telemetry from PLC)\n"
+                "IR0=Speed,RPM\n"
+                "IR1=Power Output,MW,10\n"
+                "IR2=Steam Pressure,PSI\n"
+                "IR3=Steam Temp,°C\n"
+                "IR4=Bearing Temp,°C\n"
+                "IR5=Vibration,mils,10\n"
+                "IR6=Overspeed Time,s\n"
+                "IR7=Damage Level,%%\n"
+                "; Holding registers (writable setpoints)\n"
+                "HR0=Speed Setpoint Lo,RPM\n"
+                "HR1=Speed Setpoint Hi,RPM\n"
+                "; Coils (digital outputs)\n"
+                "COIL0=Governor Enable\n"
+                "COIL1=Emergency Trip\n"
+                "COIL2=Trip Reset\n"
+                "; Discrete inputs (read-only status)\n"
+                "DI0=Turbine Running\n"
+                "DI1=Governor Online\n"
+                "DI2=Trip Active\n"
+                "DI3=Overspeed\n"
+                "DI6=High Vibration\n"
+                "DI7=High Bearing Temp\n"
+                "\n"
+                "[Logging]\n"
+                "LogPath=C:\\TURBINE\\DATA\\\n"
+                "LogInterval=5\n"
+                "MaxLogSize=10000\n"
+            ),
+            modified="2001-09-15",
+            security_relevant=True,
+        )
+
+        # SCADA connection config
+        fs.add_file(
+            "C:/TURBINE/scada.cfg",
+            (
+                "# SCADA Server Connection\n"
+                "# Updated by vendor 1998-03-20\n"
+                "SCADA_HOST=10.20.1.10\n"
+                "SCADA_PORT=4840\n"
+                "SCADA_USER=datalink\n"
+                "SCADA_PASS=d@t@1998\n"
+                "POLL_INTERVAL=10\n"
+                "RETRY_COUNT=3\n"
+            ),
+            modified="1998-03-20",
+            security_relevant=True,
+        )
+
+        # Vendor support file
+        fs.add_file(
+            "C:/TURBINE/vendor.txt",
+            (
+                "TurboDynamics Inc. Support Contact\n"
+                "===================================\n"
+                "Phone: 1-800-TURBO (discontinued)\n"
+                "Email: support@turbodynamics.com (domain expired 2004)\n"
+                "\n"
+                "Remote Support Login:\n"
+                "  Username: turbodynamics\n"
+                "  Password: support123\n"
+                "\n"
+                "Note: Vendor went bankrupt in 2003.\n"
+                "      No more updates available.\n"
+                "      DO NOT LOSE THE INSTALL DISKS.\n"
+            ),
+            modified="1998-01-15",
+            security_relevant=True,
+        )
+
+        # Vendor manual
+        fs.add_file(
+            "C:/TURBINE/vendor_manual.pdf",
+            "[Binary: TurboDynamics TurbineLink Pro 2.1 Manual - 234 pages - Coffee stains on pages 45-48]",
+            modified="1998-01-15",
+        )
+
+        # CSV data directory (recent entries populated dynamically)
+        fs.add_directory("C:/TURBINE/DATA", modified="2026-02-12")
+        fs.add_file(
+            "C:/TURBINE/DATA/turbine_log.csv",
+            (
+                "TIMESTAMP,SPEED_RPM,POWER_MW,BEARING_C,VIB_MMS,GOV_POS\n"
+                "# 25 years of continuous logging\n"
+                "# Oldest entries on backup tapes\n"
+                "# Recent entries in memory\n"
+            ),
+            modified="2026-02-12",
+            metadata={"dynamic": True, "records": "25+ years"},
+        )
+
+        # Passwords file - the classic
+        fs.add_file(
+            "C:/My Documents/passwords.txt",
+            (
+                "System Passwords - DO NOT DELETE\n"
+                "================================\n"
+                "Updated: 1999-03-15\n"
+                "\n"
+                "Windows Admin: (blank)\n"
+                "TurbineLink: engineer / turbine98\n"
+                "SCADA: datalink / d@t@1998\n"
+                "SCADA operator: operator / operator\n"
+                "Vendor remote: turbodynamics / support123\n"
+                "pcAnywhere: (no password set)\n"
+                "\n"
+                "Note from Dave (1999):\n"
+                "  Don't change these. The software breaks.\n"
+            ),
+            modified="1999-03-15",
+            security_relevant=True,
+        )
+
+        # System backup from 1999
+        fs.add_file(
+            "C:/BACKUP/full_backup_1999.zip",
+            "[Binary: WinZip archive - 47MB - Contains full system backup from March 1999]",
+            modified="1999-03-15",
+            security_relevant=True,
+            metadata={"contains": ["configs", "credentials", "TurbineLink install"]},
+        )
+
+        # pcAnywhere configuration
+        fs.add_file(
+            "C:/Program Files/pcAnywhere/hosts.txt",
+            (
+                "# pcAnywhere Host Connections\n"
+                "# Last connection: 2019-03-15 from 10.40.1.20\n"
+                "#   (someone from IT tried to check on the machine)\n"
+                "\n"
+                "HOST=TURBINE-DATA\n"
+                "PORT=5631\n"
+                "AUTHENTICATION=NONE\n"
+                "ENCRYPTION=NONE\n"
+            ),
+            modified="2019-03-15",
+            security_relevant=True,
+        )
+
+        # IE cache
+        fs.add_file(
+            "C:/Windows/Temporary Internet Files/history.dat",
+            (
+                "1999-06-15 http://www.yahoo.com\n"
+                "1999-06-15 http://www.turbodynamics.com/support\n"
+                "1999-07-02 http://www.download.com/winzip\n"
+                "2000-01-05 http://www.symantec.com/pcanywhere\n"
+            ),
+            modified="2000-01-05",
+        )
+
+        # Network configuration (ipconfig output)
+        fs.add_file(
+            "C:/Windows/system.ini",
+            (
+                "[boot]\n"
+                "shell=Explorer.exe\n"
+                "network.drv=vredir.vxd\n"
+                "\n"
+                "[Network]\n"
+                "ComputerName=TURBINE-DATA\n"
+                "Workgroup=PLANT\n"
+            ),
+            modified="1998-01-15",
+        )
+
+        # Network adapter configs showing dual-homed
+        fs.add_file(
+            "C:/Windows/network.txt",
+            (
+                "Windows IP Configuration\n"
+                "========================\n"
+                "\n"
+                "Ethernet adapter 1 (3Com EtherLink III):\n"
+                f"   IP Address. . . . . . : {self.ip_address}\n"
+                f"   Subnet Mask . . . . . : {self.subnet_mask}\n"
+                f"   Default Gateway . . . : {self.gateway}\n"
+                "   Description . . . . . : Corporate/Legacy network\n"
+                "\n"
+                "Ethernet adapter 2 (3Com EtherLink III #2):\n"
+                f"   IP Address. . . . . . : {self.ip_address_ot}\n"
+                "   Subnet Mask . . . . . : 255.255.255.0\n"
+                "   Default Gateway . . . : 10.10.1.1\n"
+                "   Description . . . . . : Turbine control network\n"
+                "   Note: Added 2001-09-15 for 'temporary' direct PLC access\n"
+            ),
+            modified="2001-09-15",
+            security_relevant=True,
+        )
+
+        # Autoexec.bat
+        fs.add_file(
+            "C:/AUTOEXEC.BAT",
+            (
+                "@echo off\n"
+                "SET PATH=C:\\WINDOWS;C:\\TURBINE\n"
+                "SET TEMP=C:\\WINDOWS\\TEMP\n"
+                'echo "Starting TurbineLink Data Collection..."\n'
+                "C:\\TURBINE\\TURBLINK.EXE /AUTO /LOG\n"
+            ),
+            modified="1998-01-15",
+        )
+
+        # Connection log (forensic artefact - updated during simulation)
+        fs.add_file(
+            "C:/TURBINE/connection.log",
+            (
+                "TurbineLink Connection Log\n"
+                "==========================\n"
+                "1998-01-15 14:30 Serial COM1 connected - Turbine online\n"
+                "2003-08-14 09:15 Serial COM1 error - Power outage\n"
+                "2003-08-14 09:22 Serial COM1 reconnected\n"
+                "2019-08-15 16:45 Serial COM1 error - Power outage\n"
+                "2019-08-15 17:01 Serial COM1 reconnected\n"
+            ),
+            modified="2019-08-15",
+            metadata={"dynamic": True},
+        )
+
+        # SMB access log (forensic artefact - will be appended to)
+        fs.add_file(
+            "C:/Windows/smblog.txt",
+            (
+                "SMB Access Log\n"
+                "==============\n"
+                "2019-03-15 10:23 \\\\TURBINE-DATA\\C$ accessed from 10.40.1.20 (IT check)\n"
+            ),
+            modified="2019-03-15",
+            metadata={"dynamic": True},
         )
 
     # ----------------------------------------------------------------
@@ -579,6 +850,15 @@ class LegacyWorkstation(BaseDevice):
                 "path": share["path"],
                 "authentication_required": False,
             },
+        )
+
+        # Forensic artefact: append to SMB access log
+        from components.time.simulation_time import SimulationTime
+        sim_time = SimulationTime()
+        self.filesystem.append_to_file(
+            "C:/Windows/smblog.txt",
+            f"{sim_time.now():.0f} \\\\{self.computer_name}\\{share_name} "
+            f"accessed by {username or 'anonymous'}\n",
         )
 
         return {

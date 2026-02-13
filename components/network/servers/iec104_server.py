@@ -42,10 +42,12 @@ except ImportError:
     IEC104_AVAILABLE = False
     IEC104C104Adapter = None
 
+from components.network.servers.base_server import BaseProtocolServer
+
 logger = get_logger(__name__)
 
 
-class IEC104TCPServer:
+class IEC104TCPServer(BaseProtocolServer):
     """
     IEC 60870-5-104 TCP server using c104 library.
 
@@ -66,7 +68,7 @@ class IEC104TCPServer:
 
     def __init__(
         self,
-        host: str = "0.0.0.0",
+        host: str = "127.0.0.1",
         port: int = 2404,
         common_address: int = 1,
     ):
@@ -78,8 +80,7 @@ class IEC104TCPServer:
             port: TCP port (default 2404 for IEC 104)
             common_address: Common address of controlled station
         """
-        self.host = host
-        self.port = port
+        super().__init__(host, port)
         self.common_address = common_address
 
         # IEC 104 adapter (c104 library)

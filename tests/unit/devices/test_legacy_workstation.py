@@ -227,8 +227,8 @@ class TestLegacyWorkstationSecurity:
 
         WHY: Perfect pivot point.
         """
-        assert "ot_network" in test_legacy.connected_networks
-        assert "corporate_network" in test_legacy.connected_networks
+        assert "turbine_network" in test_legacy.connected_networks
+        assert "legacy_network" in test_legacy.connected_networks
         assert len(test_legacy.connected_networks) >= 2
 
     def test_enumerate_smb_shares_no_auth(self, test_legacy):

@@ -282,6 +282,11 @@ devices:
       serial:
         port: COM1
         baud: 9600
+      smb:
+        host: 0.0.0.0
+        port: 10445
+        server_name: TURBINE-DATA
+        allow_anonymous: true
 
   - name: finance_workstation
     type: enterprise_workstation

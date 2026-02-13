@@ -41,10 +41,12 @@ except ImportError:
     CPPPO_AVAILABLE = False
     proxy = None
 
+from components.network.servers.base_server import BaseProtocolServer
+
 logger = get_logger(__name__)
 
 
-class EtherNetIPServer:
+class EtherNetIPServer(BaseProtocolServer):
     """
     EtherNet/IP (CIP) server for Allen-Bradley protocol simulation.
 
@@ -78,8 +80,7 @@ class EtherNetIPServer:
         port: int = 44818,
         slot: int = 0,
     ):
-        self.host = host
-        self.port = port
+        super().__init__(host, port)
         self.slot = slot
 
         # Server state

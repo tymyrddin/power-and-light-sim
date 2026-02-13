@@ -38,10 +38,12 @@ except ImportError:
     DNP3_AVAILABLE = False
     DNP3Adapter = None
 
+from components.network.servers.base_server import BaseProtocolServer
+
 logger = get_logger(__name__)
 
 
-class DNP3TCPServer:
+class DNP3TCPServer(BaseProtocolServer):
     """
     DNP3 TCP server using dnp3py library.
 
@@ -58,7 +60,7 @@ class DNP3TCPServer:
 
     def __init__(
         self,
-        host: str = "0.0.0.0",
+        host: str = "127.0.0.1",
         port: int = 20000,
         master_address: int = 1,
         outstation_address: int = 100,
@@ -67,8 +69,7 @@ class DNP3TCPServer:
         num_analog_inputs: int = 32,
         num_counters: int = 16,
     ):
-        self.host = host
-        self.port = port
+        super().__init__(host, port)
         self.master_address = master_address
         self.outstation_address = outstation_address
 

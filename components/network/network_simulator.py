@@ -66,6 +66,7 @@ class NetworkSimulator:
         # Network segmentation control
         self.segmentation_enabled: bool = False
         self.segmentation_mode: str = "none"
+        self.externally_reachable_zones: set[str] = {"enterprise_zone", "dmz"}
 
         self._lock = asyncio.Lock()
         self._loaded = False
@@ -92,6 +93,9 @@ class NetworkSimulator:
                 seg_config = config.get("segmentation", {})
                 self.segmentation_enabled = seg_config.get("enabled", False)
                 self.segmentation_mode = seg_config.get("mode", "none")
+                self.externally_reachable_zones = set(
+                    seg_config.get("externally_reachable_zones", ["enterprise_zone", "dmz"])
+                )
 
                 self.logger.info(
                     f"Network segmentation: enabled={self.segmentation_enabled}, "

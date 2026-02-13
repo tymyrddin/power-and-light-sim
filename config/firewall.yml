@@ -15,17 +15,19 @@ default_action: allow  # Vulnerable by default for initial exercises
 # These are loaded on startup and persist across restarts
 # Priority: Lower number = higher priority (checked first)
 baseline_rules:
-  # Example: Block external access to control zone
-  # - name: "Baseline: Block enterprise to control"
-  #   action: DROP        # DROP (silent) | DENY | REJECT (send RST) | ALLOW
-  #   priority: 100
-  #   source_zone: enterprise_zone
-  #   dest_zone: control_zone
-  #   protocol: ANY       # ANY | modbus_tcp | dnp3 | s7 | opcua | ethernet_ip
-  #   enabled: true
-  #   description: "Defense in depth - no direct enterprise to control access"
+  # Purdue Model segmentation: block direct enterprise → control zone traffic
+  # Enable via: blue_team.py firewall enable-rule <id>
+  # Or set enabled: true here and restart the simulator
+  - name: "Segmentation: Block enterprise to control"
+    action: DROP
+    priority: 100
+    source_zone: enterprise_zone
+    dest_zone: control_zone
+    protocol: ANY
+    enabled: false  # Disabled by default (vulnerable for initial exercises)
+    description: "Purdue Model - no direct enterprise to control zone access"
 
-  # Example: Allow SCADA to PLCs
+  # Example: Allow SCADA to PLCs (uncomment when blocking enterprise→control)
   # - name: "Baseline: Allow SCADA operations"
   #   action: ALLOW
   #   priority: 50        # Higher priority than block rules

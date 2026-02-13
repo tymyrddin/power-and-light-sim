@@ -20,6 +20,7 @@ Example Attack:
     $ mbtget -w -a 1 -v 1 localhost:10502  # Trigger trip
 """
 
+from components.network.servers.base_server import BaseProtocolServer
 from components.network.servers.dnp3_server import DNP3TCPServer
 from components.network.servers.ethernet_ip_server import EtherNetIPServer
 from components.network.servers.iec104_server import IEC104TCPServer
@@ -27,8 +28,10 @@ from components.network.servers.modbus_rtu_server import ModbusRTUServer
 from components.network.servers.modbus_tcp_server import ModbusTCPServer
 from components.network.servers.opcua_server import OPCUAServer
 from components.network.servers.s7_server import S7TCPServer
+from components.network.servers.smb_server import SMBServer
 
 __all__ = [
+    "BaseProtocolServer",
     "ModbusTCPServer",
     "ModbusRTUServer",
     "S7TCPServer",
@@ -36,4 +39,5 @@ __all__ = [
     "IEC104TCPServer",
     "OPCUAServer",
     "EtherNetIPServer",
+    "SMBServer",
 ]

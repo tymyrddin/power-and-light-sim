@@ -347,7 +347,7 @@ make sure you have explicit written permission and understand the physical conse
 
 ## License and usage
 
-This project is licensed under the [Polyform Noncommercial License](LICENSE).
+This project is licensed under the [Polyform Noncommercial Licence](LICENSE).
 
 You are welcome to use this software for:
 
@@ -365,11 +365,11 @@ You may not use this software for:
 - Internal corporate training
 - Commercial product development
 
-If you want to use this project in a paid or commercial context, a commercial license is required.  
+If you want to use this project in a paid or commercial context, a commercial licence is required.  
 See [COMMERCIAL-LICENSE.md](COMMERCIAL-LICENSE.md) for details.
 
 This project is actively developed and maintained to support realistic security research and training.  
-The license ensures that:
+The licence ensures that:
 
 - Security research remains accessible
 - Defensive knowledge can spread
@@ -387,4 +387,4 @@ If you are unsure whether your use case is commercial, ask. [Ambiguity is solvab
 
 *"The thing about electricity is, once it's out of the bottle, you can't put it back."* ~ Archchancellor Ridcully (probably)
 
-Last Updated: February, 2026
+Last Updated: February 2026
